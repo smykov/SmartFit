@@ -65,16 +65,36 @@ class DailyDiet(BaseModel):
     estimated_total_price: Optional[float] = None
     tips: Optional[str] = None
 
+class DietPlanVersion(str, Enum):
+    SHORT = "short"  # Краткая версия для согласования
+    FULL = "full"    # Полная версия с рецептами
+
+class DietPlanStatus(str, Enum):
+    PENDING = "pending"    # Ожидает согласования
+    APPROVED = "approved"  # Согласован, ждет полной версии
+    IN_PROGRESS = "in_progress" # В процессе генерации полного плана
+    ACTIVE = "active"      # Активный план (полная версия)
+    ARCHIVED = "archived"  # Архивный план
+
+class WeekDay(str, Enum):
+    MONDAY = "monday"
+    TUESDAY = "tuesday"
+    WEDNESDAY = "wednesday"
+    THURSDAY = "thursday"
+    FRIDAY = "friday"
+    SATURDAY = "saturday"
+    SUNDAY = "sunday"
 
 class DietPlan(BaseModel):
-    """Модель плана диеты на неделю"""
+    """Модель плана диеты на неделю по дням недели"""
     user_id: str
-    start_date: date
-    end_date: date
+    version: DietPlanVersion = DietPlanVersion.SHORT
+    status: DietPlanStatus = DietPlanStatus.PENDING
     daily_plans: Dict[str, DailyDiet]  # ключ - дата в формате строки
 
     # Метаданные
     created_at: datetime = Field(default_factory=get_current_datetime)
+    updated_at: datetime = Field(default_factory=get_current_datetime)
     budget_limit: Optional[float] = None
     estimated_weekly_price: Optional[float] = None
     general_recommendations: Optional[str] = None

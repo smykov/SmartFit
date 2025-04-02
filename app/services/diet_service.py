@@ -4,6 +4,9 @@ from datetime import datetime, date, timedelta
 import pytz
 import json
 from app.services.mock_diet_service import mock_diet_service
+from app.services.progressive_diet_generator import ProgressiveDietGenerator
+from app.templates.prompts import create_short_diet_system_prompt, create_short_diet_user_prompt, \
+    create_full_diet_system_prompt, create_full_diet_user_prompt
 
 from config import settings
 from app.db.firebase import firebase_client
@@ -20,126 +23,260 @@ from app.models.diet import DietPlan, DailyDiet, Meal, Product, ShoppingList, Sh
 
 logger = logging.getLogger(__name__)
 
+
 class DietService:
     """Сервис для работы с диетами"""
 
-    async def generate_diet_plan(self, user_id: str, days: int = 7) -> Optional[Dict[str, Any]]:
+    async def generate_short_diet_plan(self, user_id: str) -> Optional[Dict[str, Any]]:
         """
-        Генерирует план диеты для пользователя
+        Генерирует краткую версию плана диеты для согласования
 
         Args:
             user_id: ID пользователя
-            days: Количество дней для плана (по умолчанию 7)
 
         Returns:
-            Optional[Dict[str, Any]]: План диеты или None в случае ошибки
+            Optional[Dict[str, Any]]: Краткий план диеты или None в случае ошибки
         """
         try:
-            logger.info(f"Запуск генерации персонализированной диеты для пользователя {user_id}")
+            logger.info(f"Генерация краткой версии плана для пользователя {user_id}")
 
-            # Используем заглушку вместо OpenAI API
+            # Получаем данные пользователя
+            user_data = firebase_client.get_document("users", user_id)
+            if not user_data:
+                logger.error(f"User {user_id} not found")
+                return None
+
+            # Используем LLM для генерации краткого плана
             if settings.USE_MOCK_SERVICES:
-                # Используем заглушку
-                diet_plan = await mock_diet_service.generate_diet_plan(user_id, days)
+                # Используем заглушку для тестирования
+                short_plan = await mock_diet_service.generate_short_diet_plan(user_data)
             else:
-                # Получаем данные пользователя
-                user_data = firebase_client.get_document("users", user_id)
-
-                if not user_data:
-                    logger.error(f"User {user_id} not found")
-                    return None
-
                 # Получаем список доступных продуктов
                 products = firebase_client.get_all_documents("products")
 
-                # Генерируем план диеты через LLM
-                diet_plan = await llm_service.generate_diet_plan(user_data, days, products)
+                # Создаем системный и пользовательский промпты для LLM
+                system_prompt = create_short_diet_system_prompt(products)
+                user_prompt = create_short_diet_user_prompt(user_data)
 
-                if not diet_plan or "error" in diet_plan:
-                    logger.error(f"Failed to generate diet plan: {diet_plan.get('error', 'Unknown error')}")
+                # Используем LLM для генерации
+                response = await llm_service.generate_completion(system_prompt, user_prompt)
+
+                try:
+                    short_plan = json.loads(response)
+                except json.JSONDecodeError:
+                    logger.error(f"Failed to parse JSON from LLM response: {response}")
                     return None
 
-                # Добавляем ID пользователя
-                diet_plan["user_id"] = user_id
+            if not short_plan or "error" in short_plan:
+                logger.error(f"Failed to generate short diet plan: {short_plan.get('error', 'Unknown error')}")
+                return None
 
-                # Проверяем наличие дат начала и окончания
-                if "start_date" not in diet_plan:
-                    diet_plan["start_date"] = datetime.now(pytz.timezone(settings.TIMEZONE)).date().isoformat()
+            # Добавляем метаданные
+            short_plan["user_id"] = user_id
+            short_plan["version"] = "short"
+            short_plan["status"] = "pending"
+            short_plan["created_at"] = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+            short_plan["updated_at"] = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
 
-                if "end_date" not in diet_plan:
-                    start_date = datetime.strptime(diet_plan["start_date"], "%Y-%m-%d").date()
-                    diet_plan["end_date"] = (start_date + timedelta(days=days - 1)).isoformat()
+            # Проверяем структуру плана
+            if "daily_plans" not in short_plan:
+                short_plan["daily_plans"] = {}
 
-                # Сохраняем план в базу данных
-                plan_id = firebase_client.add_document("diet_plans", diet_plan)
+            # Сохраняем план в базу данных
+            plan_id = firebase_client.add_document("diet_plans", short_plan)
+            if not plan_id:
+                logger.error("Failed to save short diet plan to database")
+                return None
 
-                if not plan_id:
-                    logger.error("Failed to save diet plan to database")
-                    return None
-
-                # Добавляем ID в план
-                diet_plan["id"] = plan_id
-
+            short_plan["id"] = plan_id
             # Выполняем постобработку для улучшения пользовательского опыта
-            await self._post_process_diet_plan(diet_plan)
+            await self._post_process_diet_plan(short_plan)
 
-            return diet_plan
+            return short_plan
 
         except Exception as e:
-            logger.error(f"Error generating diet plan: {str(e)}")
+            logger.error(f"Error generating short diet plan: {str(e)}")
             return {"error": str(e)}
 
-    async def _post_process_diet_plan(self, diet_plan: Dict[str, Any]) -> None:
+    async def generate_full_diet_plan(self, short_plan_id: str) -> Optional[Dict[str, Any]]:
         """
-        Выполняет постобработку плана диеты для улучшения пользовательского опыта
+        Генерирует полную версию плана диеты на основе согласованного краткого плана
 
         Args:
-            diet_plan: План диеты
+            short_plan_id: ID краткого плана диеты
+
+        Returns:
+            Optional[Dict[str, Any]]: Полный план диеты или None в случае ошибки
         """
         try:
-            # Убедимся, что у всех блюд есть релевантность, если её нет
-            if "daily_plans" in diet_plan:
-                for date_key, day_plan in diet_plan["daily_plans"].items():
-                    if "meals" in day_plan:
-                        for i, meal in enumerate(day_plan["meals"]):
-                            # Добавим значение релевантности, если оно отсутствует
-                            if "relevance_score" not in meal or not meal["relevance_score"]:
-                                meal["relevance_score"] = 7  # Значение по умолчанию
+            # Получаем краткий план
+            short_plan = firebase_client.get_document("diet_plans", short_plan_id)
+            if not short_plan:
+                logger.error(f"Short plan {short_plan_id} not found")
+                return None
 
-                            # Добавим объяснение, почему блюдо рекомендовано, если оно отсутствует
-                            if "why_recommended" not in meal or not meal["why_recommended"]:
-                                meal[
-                                    "why_recommended"] = "Это блюдо соответствует вашим целям по питанию и калорийности."
+            # Проверяем, что план согласован
+            if short_plan.get("status") != "approved":
+                logger.error(f"Short plan {short_plan_id} is not approved yet")
+                return {"error": "Short plan not approved yet"}
 
-                            # Обновим блюдо в плане
-                            day_plan["meals"][i] = meal
+            # Получаем данные пользователя
+            user_id = short_plan.get("user_id")
+            user_data = firebase_client.get_document("users", user_id)
+            if not user_data:
+                logger.error(f"User {user_id} not found")
+                return None
 
-            # Убедимся, что есть персонализированное обращение
-            if "personalized_note" not in diet_plan or not diet_plan["personalized_note"]:
-                # Получим данные пользователя
-                user_id = diet_plan.get("user_id")
-                if user_id:
-                    user_data = firebase_client.get_document("users", user_id)
-                    if user_data:
-                        name = user_data.get("name", "")
-                        target_weight = user_data.get("target_weight", "")
-                        current_weight = user_data.get("current_weight", "")
+            # Генерируем полный план
+            if settings.USE_MOCK_SERVICES:
+                # Используем заглушку для тестирования
+                return await mock_diet_service.generate_full_diet_plan(user_data, short_plan)
 
-                        # Создадим базовое персонализированное обращение
-                        if name and target_weight and current_weight:
-                            weight_diff = float(current_weight) - float(target_weight)
-                            diet_plan["personalized_note"] = (
-                                f"Привет, {name}! Этот план питания создан специально для тебя, "
-                                f"чтобы помочь достичь твоей цели веса в {target_weight} кг. "
-                                f"При текущем весе {current_weight} кг тебе нужно {'снизить вес на' if weight_diff > 0 else 'набрать'} "
-                                f"{abs(weight_diff):.1f} кг. План учитывает твои предпочтения и обеспечивает "
-                                f"необходимый {'дефицит' if weight_diff > 0 else 'профицит'} калорий."
-                            )
+
+            # Используем прогрессивную генерацию плана
+            progressive_generator = ProgressiveDietGenerator(
+                llm_service=llm_service,
+                short_plan_id=short_plan_id,
+                user_data=user_data
+            )
+
+            # Запускаем генерацию
+            full_plan = await progressive_generator.generate_full_plan()
+
+            if not full_plan:
+                logger.error("Failed to generate full diet plan")
+                return None
+
+            # Обновляем статус краткого плана после успешной генерации
+            if all(day in full_plan["daily_plans"] for day in progressive_generator.DAYS_OF_WEEK):
+                firebase_client.update_document(
+                    "diet_plans",
+                    short_plan_id,
+                    {"status": "archived"}
+                )
+
+            # Выполняем постобработку для улучшения пользовательского опыта
+            return full_plan
+
         except Exception as e:
-            logger.error(f"Error in post-processing diet plan: {str(e)}")
+            logger.error(f"Error generating full diet plan: {str(e)}")
+            return {"error": str(e)}
+
+    async def approve_short_diet_plan(self, plan_id: str) -> bool:
+        """
+        Отмечает краткий план диеты как согласованный пользователем
+
+        Args:
+            plan_id: ID плана диеты
+
+        Returns:
+            bool: Результат операции
+        """
+        try:
+            # Получаем план
+            plan = firebase_client.get_document("diet_plans", plan_id)
+            if not plan:
+                logger.error(f"Plan {plan_id} not found")
+                return False
+
+            # Проверяем, что это краткий план
+            if plan.get("version") != "short":
+                logger.error(f"Plan {plan_id} is not a short version")
+                return False
+
+            # Обновляем статус плана
+            result = firebase_client.update_document(
+                "diet_plans",
+                plan_id,
+                {
+                    "status": "approved",
+                    "updated_at": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+                }
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Error approving short diet plan: {str(e)}")
+            return False
+
+    async def update_short_diet_plan(self, plan_id: str, updated_days: Dict[str, Any], comment: str = None) -> Tuple[
+        bool, Dict[str, Any]]:
+        """
+        Обновляет краткую версию плана питания на основе запроса пользователя
+
+        Args:
+            plan_id: ID плана диеты
+            updated_days: Словарь {день_недели: данные_на_день}
+            comment: Комментарий по изменению
+
+        Returns:
+            Tuple[bool, Dict[str, Any]]: (успех, обновленный план)
+        """
+        try:
+            # Получаем план диеты
+            diet_plan = firebase_client.get_document("diet_plans", plan_id)
+
+            if not diet_plan:
+                logger.error(f"План с ID {plan_id} не найден")
+                return False, {"error": "План питания не найден"}
+
+            # Проверяем, что это краткая версия
+            if diet_plan.get("version") != "short":
+                logger.error(f"План {plan_id} не является краткой версией")
+                return False, {"error": "План не является краткой версией"}
+
+            # Обновляем только указанные дни недели
+            if "daily_plans" not in diet_plan:
+                diet_plan["daily_plans"] = {}
+
+            for weekday, day_data in updated_days.items():
+                diet_plan["daily_plans"][weekday] = day_data
+
+                # Для краткой версии достаточно обновить total_calories, если его нет
+                if "meals" in day_data and "total_calories" not in day_data:
+                    total_calories = sum(meal.get("calories", 0) for meal in day_data["meals"])
+                    diet_plan["daily_plans"][weekday]["total_calories"] = total_calories
+
+            # Сохраняем комментарий к изменению
+            if comment:
+                last_modification = {
+                    "timestamp": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat(),
+                    "comment": comment
+                }
+
+                if "modifications_history" not in diet_plan:
+                    diet_plan["modifications_history"] = []
+
+                diet_plan["modifications_history"].append(last_modification)
+
+            # Обновляем дату обновления
+            diet_plan["updated_at"] = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+
+            # Обновляем план в базе данных
+            success = firebase_client.update_document(
+                "diet_plans",
+                plan_id,
+                {
+                    "daily_plans": diet_plan["daily_plans"],
+                    "modifications_history": diet_plan.get("modifications_history", []),
+                    "updated_at": diet_plan["updated_at"]
+                }
+            )
+
+            if success:
+                logger.info(f"Краткий план питания {plan_id} успешно обновлен")
+                return True, diet_plan
+            else:
+                logger.error(f"Не удалось обновить краткий план питания {plan_id}")
+                return False, {"error": "Не удалось обновить план питания"}
+
+        except Exception as e:
+            logger.error(f"Ошибка при обновлении краткого плана диеты: {str(e)}")
+            return False, {"error": str(e)}
 
     async def update_diet_plan_partially(self, diet_plan_id: str, updated_days: Dict[str, Any], comment: str = None) -> \
-    Tuple[bool, Dict[str, Any]]:
+            Tuple[bool, Dict[str, Any]]:
         """
         Обновляет частично план питания, изменяя только указанные дни
 
@@ -215,7 +352,7 @@ class DietService:
 
     async def get_current_diet(self, user_id: str) -> Optional[Dict[str, Any]]:
         """
-        Получает текущий план диеты пользователя
+        Получает текущий активный план диеты пользователя
 
         Args:
             user_id: ID пользователя
@@ -224,61 +361,58 @@ class DietService:
             Optional[Dict[str, Any]]: Текущий план диеты или None, если план не найден
         """
         try:
-            # Получаем текущую дату
-            today = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
-
-            # Ищем план диеты, который включает текущую дату
+            # Ищем активный план диеты
             diet_plans = firebase_client.query_documents("diet_plans", "user_id", "==", user_id)
 
-            current_plan = None
-            for plan in diet_plans:
-                start_date = datetime.strptime(plan.get("start_date", "2000-01-01"), "%Y-%m-%d").date()
-                end_date = datetime.strptime(plan.get("end_date", "2000-01-01"), "%Y-%m-%d").date()
+            # Сначала ищем полную версию с активным статусом
+            active_plans = [plan for plan in diet_plans if
+                            plan.get("status") == "active" and plan.get("version") == "full"]
 
-                if start_date <= today <= end_date:
-                    current_plan = plan
-                    break
+            if active_plans:
+                # Сортируем по дате создания (от новых к старым)
+                return sorted(active_plans, key=lambda p: p.get("created_at", ""), reverse=True)[0]
 
-            return current_plan
+            # Если нет активных полных планов, ищем согласованный краткий план
+            approved_plans = [plan for plan in diet_plans if
+                              plan.get("status") == "approved" and plan.get("version") == "short"]
+
+            if approved_plans:
+                # Сортируем по дате создания (от новых к старым)
+                return sorted(approved_plans, key=lambda p: p.get("created_at", ""), reverse=True)[0]
+
+            # Если нет ни активных полных, ни согласованных кратких, возвращаем последний план в ожидании согласования
+            pending_plans = [plan for plan in diet_plans if plan.get("status") == "pending"]
+
+            if pending_plans:
+                # Сортируем по дате создания (от новых к старым)
+                return sorted(pending_plans, key=lambda p: p.get("created_at", ""), reverse=True)[0]
+
+            return None
 
         except Exception as e:
             logger.error(f"Error getting current diet: {str(e)}")
             return None
 
-    async def get_diet_for_day(self, user_id: str, day_date: date = None) -> Optional[Dict[str, Any]]:
+    async def get_today_diet(self, user_id: str) -> Optional[Dict[str, Any]]:
         """
-        Получает план диеты на конкретный день
+        Получает план диеты на сегодняшний день
 
         Args:
             user_id: ID пользователя
-            day_date: Дата, на которую нужен план (по умолчанию сегодня)
 
         Returns:
-            Optional[Dict[str, Any]]: План на день или None, если план не найден
+            Optional[Dict[str, Any]]: План на сегодня или None, если план не найден
         """
         try:
-            # Если дата не указана, используем сегодняшнюю
-            if not day_date:
-                day_date = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
+            # Определяем текущий день недели
+            today = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
+            weekday = get_day_of_week(self, today)
 
-            # Получаем текущий план диеты
-            current_plan = await self.get_current_diet(user_id)
-
-            if not current_plan:
-                return None
-
-            # Получаем план на конкретный день
-            daily_plans = current_plan.get("daily_plans", {})
-            day_str = day_date.isoformat()
-
-            # Если плана на указанный день нет, возвращаем None
-            if day_str not in daily_plans:
-                return None
-
-            return daily_plans[day_str]
+            # Получаем план на текущий день недели
+            return await get_diet_for_weekday(self, user_id, weekday)
 
         except Exception as e:
-            logger.error(f"Error getting diet for day: {str(e)}")
+            logger.error(f"Error getting today's diet: {str(e)}")
             return None
 
     async def generate_shopping_list(self, diet_plan_id: str) -> dict[str, str] | dict[
@@ -377,6 +511,77 @@ class DietService:
             logger.error(f"Error generating shopping list: {str(e)}")
             return {"error": str(e)}
 
+    def get_short_diet_summary(self, diet_plan: Dict[str, Any]) -> str:
+        """
+        Создает сводку краткой версии плана диеты для согласования
+
+        Args:
+            diet_plan: План диеты
+
+        Returns:
+            str: Отформатированная сводка плана
+        """
+        try:
+            summary = f"*📋 ПЛАН ПИТАНИЯ НА НЕДЕЛЮ (краткая версия)*\n\n"
+
+            # Добавляем персонализированное обращение
+            personalized_note = diet_plan.get("personalized_note", "")
+            if personalized_note:
+                summary += f"{personalized_note}\n\n"
+
+            # Информация о плане
+            summary += "Это краткая версия плана для согласования. После вашего подтверждения я подготовлю полную версию с подробными рецептами и списком покупок.\n\n"
+
+            # Формируем план по дням недели
+            weekday_names = {
+                "monday": "Понедельник",
+                "tuesday": "Вторник",
+                "wednesday": "Среда",
+                "thursday": "Четверг",
+                "friday": "Пятница",
+                "saturday": "Суббота",
+                "sunday": "Воскресенье"
+            }
+
+            if "daily_plans" in diet_plan:
+                for weekday, day_plan in diet_plan["daily_plans"].items():
+                    weekday_name = weekday_names.get(weekday, weekday.capitalize())
+                    summary += f"*📅 {weekday_name}*\n"
+
+                    # Добавляем информацию о калориях
+                    if "total_calories" in day_plan:
+                        summary += f"Всего калорий: {day_plan['total_calories']} ккал\n"
+
+                    # Добавляем приемы пищи
+                    if "meals" in day_plan:
+                        for meal in day_plan["meals"]:
+                            meal_type = translate_meal_type(meal.get("type", ""))
+                            title = meal.get("title", "")
+                            calories = meal.get("calories", "")
+                            emoji = create_meal_emoji(meal.get("type", ""))
+
+                            summary += f"{emoji} *{meal_type}*: {title}"
+                            if calories:
+                                summary += f" ({calories} ккал)"
+                            summary += "\n"
+
+                    summary += "\n"
+
+            # Добавляем информацию о следующих шагах
+            summary += "*👆 Это краткая версия плана. В полной версии будут:*\n"
+            summary += "• Подробные рецепты и инструкции по приготовлению\n"
+            summary += "• Информация о питательных веществах для каждого блюда\n"
+            summary += "• Объяснения, почему каждое блюдо рекомендовано именно вам\n"
+            summary += "• Список покупок с учетом того, что у вас уже есть\n\n"
+
+            summary += "Пожалуйста, подтвердите план или запросите изменения."
+
+            return format_diet_message_for_whatsapp(summary)
+
+        except Exception as e:
+            logger.error(f"Error creating short diet summary: {str(e)}")
+            return "План питания создан. Пожалуйста, подтвердите его или запросите изменения."
+
     def get_diet_summary(self, diet_plan: Dict[str, Any]) -> Tuple[str, str]:
         """
         Создает сводку плана диеты и отдельное сообщение с командами
@@ -432,7 +637,7 @@ class DietService:
                     day_plan = diet_plan["daily_plans"][day_key]
 
                     # Получаем день недели и форматируем дату
-                    day_date = datetime.strptime(day_key, "%Y-%m-%d").date()
+                    day_date = self.get_nearest_date_for_weekday(day_key)
                     day_name = translate_day_name(day_date.strftime("%A"))
                     date_formatted = day_date.strftime("%d.%m.%Y")
 
@@ -460,7 +665,9 @@ class DietService:
 
         except Exception as e:
             logger.error(f"Error creating diet summary: {str(e)}")
-            return format_diet_message_for_whatsapp("План питания создан. Напишите 'план' для получения подробной информации."), format_diet_message_for_whatsapp(commands_message),
+            return format_diet_message_for_whatsapp(
+                "План питания создан. Напишите 'план' для получения подробной информации."), format_diet_message_for_whatsapp(
+                commands_message),
 
     def get_full_diet_plan(self, diet_plan: Dict[str, Any]) -> List[str]:
         """
@@ -510,8 +717,8 @@ class DietService:
                 for day_key in sorted_dates:
                     day_plan = diet_plan["daily_plans"][day_key]
 
-                    # Получаем день недели и форматируем дату
-                    day_date = datetime.strptime(day_key, "%Y-%m-%d").date()
+                    # Это день недели, получаем ближайшую дату
+                    day_date = self.get_nearest_date_for_weekday(day_key)
                     day_name = translate_day_name(day_date.strftime("%A"))
                     date_formatted = day_date.strftime("%d.%m.%Y")
 
@@ -572,6 +779,52 @@ class DietService:
             logger.error(f"Error creating full diet plan: {str(e)}")
             return ["Ошибка при создании полного плана питания. Попробуйте позже."]
 
+    def get_nearest_date_for_weekday(self, weekday_name: str) -> date:
+        """
+        Преобразует название дня недели в дату ближайшего такого дня недели
+
+        Args:
+            weekday_name: Название дня недели на английском (monday, tuesday и т.д.)
+
+        Returns:
+            date: Дата ближайшего дня недели
+        """
+        # Словарь для преобразования названия дня недели в число (0 - понедельник, 6 - воскресенье)
+        weekday_mapping = {
+            "monday": 0,
+            "tuesday": 1,
+            "wednesday": 2,
+            "thursday": 3,
+            "friday": 4,
+            "saturday": 5,
+            "sunday": 6
+        }
+
+        # Получаем текущую дату
+        today = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
+
+        # Получаем номер текущего дня недели (0 - понедельник, 6 - воскресенье)
+        today_weekday = today.weekday()
+
+        # Получаем номер целевого дня недели
+        target_weekday = weekday_mapping.get(weekday_name.lower())
+
+        if target_weekday is None:
+            # Если передано некорректное название дня недели, возвращаем текущую дату
+            return today
+
+        # Вычисляем разницу в днях
+        days_diff = (target_weekday - today_weekday) % 7
+
+        # Если разница 0 (тот же день) и нужен следующий такой день, добавляем 7 дней
+        if days_diff == 0:
+            days_diff = 7
+
+        # Вычисляем дату ближайшего дня недели
+        nearest_date = today + timedelta(days=days_diff)
+
+        return nearest_date
+
     def get_day_diet_plan(self, diet_plan: Dict[str, Any], day_date: date = None) -> str:
         """
         Создает детальный план диеты на конкретный день
@@ -589,7 +842,7 @@ class DietService:
                 day_date = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
 
             # Преобразуем в строку
-            day_key = day_date.isoformat()
+            day_key = get_day_of_week(self, day_date)
 
             # Проверяем, есть ли план на указанный день
             if "daily_plans" not in diet_plan or day_key not in diet_plan["daily_plans"]:
@@ -791,6 +1044,64 @@ async def notify_shopping_list_generation(self, user_id: str) -> None:
 
     except Exception as e:
         logger.error(f"Ошибка при отправке уведомления о генерации списка покупок: {str(e)}")
+
+
+def get_day_of_week(self, date_val: date = None) -> str:
+    """
+    Возвращает день недели для указанной даты в формате 'monday', 'tuesday' и т.д.
+
+    Args:
+        date_val: Дата (по умолчанию сегодня)
+
+    Returns:
+        str: День недели
+    """
+    if not date_val:
+        date_val = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
+
+    # Получаем номер дня недели (0 - понедельник, 6 - воскресенье)
+    weekday = date_val.weekday()
+
+    # Преобразуем в строковое представление
+    days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+    return days[weekday]
+
+
+async def get_diet_for_weekday(self, user_id: str, weekday: str = None) -> Optional[Dict[str, Any]]:
+    """
+    Получает план диеты на конкретный день недели
+
+    Args:
+        user_id: ID пользователя
+        weekday: День недели ('monday', 'tuesday', и т.д., по умолчанию - сегодня)
+
+    Returns:
+        Optional[Dict[str, Any]]: План на день или None, если план не найден
+    """
+    try:
+        # Если день недели не указан, используем сегодняшний
+        if not weekday:
+            weekday = get_day_of_week(self)
+
+        # Получаем текущий активный план диеты
+        current_plan = await self.get_current_diet(user_id)
+
+        if not current_plan:
+            return None
+
+        # Получаем план на конкретный день недели
+        daily_plans = current_plan.get("daily_plans", {})
+
+        # Если плана на указанный день нет, возвращаем None
+        if weekday not in daily_plans:
+            return None
+
+        return daily_plans[weekday]
+
+    except Exception as e:
+        logger.error(f"Error getting diet for weekday: {str(e)}")
+        return None
+
 
 # Создаем экземпляр сервиса для диет
 diet_service = DietService()

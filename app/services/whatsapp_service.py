@@ -43,6 +43,7 @@ class MessageType(str, Enum):
 
 class WhatsAppService:
     """Сервис для работы с WhatsApp API"""
+
     # TODO провести рефактор сервиса и отделить команды, уведомления и тп
 
     def __init__(self):
@@ -905,7 +906,7 @@ class WhatsAppService:
                 user_id = user["id"]
 
             current_step = user.get("onboarding_step", "welcome")
-
+            phone_number = user.get('phone_number')
             # Определяем следующий шаг
             next_step = self._get_next_onboarding_step(current_step)
 
@@ -988,7 +989,7 @@ class WhatsAppService:
                 )
 
                 # Прямой запуск генерации диеты
-                await self._generate_diet_directly(user_id)
+                await self.start_short_diet_generation(phone_number, user_id)
 
                 return {
                     "success": True,
@@ -1031,7 +1032,7 @@ class WhatsAppService:
             Dict[str, Any]: Результат обработки
         """
         try:
-            # ИСПРАВЛЕНИЕ: Проверяем наличие ID пользователя и получаем его правильно
+            # Проверяем наличие ID пользователя и получаем его правильно
             if "id" not in user:
                 # Если id отсутствует, попробуем найти пользователя по номеру телефона
                 users = firebase_client.query_documents("users", "phone_number", "==", user.get("phone_number"))
@@ -1244,8 +1245,16 @@ class WhatsAppService:
                         today = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
 
                         # Отправляем детальный план на сегодня
-                        day_plan = diet_service.get_day_diet_plan(diet_plan, today)
-                        await self.send_message(phone_number, day_plan)
+                        formatted_plan = diet_service.get_day_diet_plan(diet_plan, today)
+                        if not formatted_plan:
+                            await self.send_message(
+                                phone_number,
+                                "У вас пока нет плана питания на сегодня. Напишите 'диета' для создания плана."
+                            )
+                            return {"success": False, "action": "no_diet_for_today"}
+
+                        # Отправляем план
+                        await self.send_message(phone_number, formatted_plan)
                         return {"success": True, "action": "diet_day_plan_sent"}
 
                     elif command_type == "tomorrow":
@@ -1292,7 +1301,6 @@ class WhatsAppService:
                             )
                             return {"success": False, "action": "shopping_list_error"}
 
-            # Команда для изменения плана питания (используем более широкий паттерн)
             # Команда для изменения плана питания (используем более широкий паттерн)
             update_diet_match = re.match(
                 r'^(измени|поменяй|обнови|замени|скорректируй)\s+(план|меню|рацион|питание)(.*)$', message_text.lower())
@@ -1388,6 +1396,97 @@ class WhatsAppService:
                     )
                     return {"success": False, "error": str(e)}
 
+            # Обработка команд согласования плана
+            # Находим последний несогласованный план
+            pending_plans = firebase_client.query_documents(
+                "diet_plans",
+                "user_id", "==", user_id
+            )
+            # Фильтруем и находим последний план со статусом pending
+            pending_plans = [p for p in pending_plans if p.get("status") == "pending"]
+
+            if pending_plans:
+                # Берем самый последний план
+                last_pending_plan = max(pending_plans, key=lambda p: p.get("created_at", ""))
+                # Обработка подтверждения которкого плана
+                if message_text.lower() in ["согласен", "согласна", "подтверждаю", "ок", "да", "хорошо", "все ок"]:
+
+                    # Согласуем план
+                    success = await diet_service.approve_short_diet_plan(last_pending_plan["id"])
+
+                    if success:
+                        await self.send_message(
+                            phone_number,
+                            "✅ Отлично! Я начинаю готовить для вас полную версию плана питания с подробными рецептами и списком покупок. Это займет несколько минут."
+                        )
+
+                        # Запускаем генерацию полного плана
+                        asyncio.create_task(self._generate_full_diet_plan(user_id, last_pending_plan["id"]))
+
+                        return {"success": True, "action": "plan_approved"}
+                    else:
+                        await self.send_message(
+                            phone_number,
+                            "Извините, произошла ошибка при согласовании плана. Попробуйте позже."
+                        )
+                        return {"success": False, "action": "approval_failed"}
+
+                # Команда для отклонения плана или запроса изменений краткого плана
+                elif any(keyword in message_text.lower() for keyword in
+                         ["измени", "поменяй", "замени", "не хочу", "не нравится", "добавь"]):
+
+                    # Обрабатываем запрос на изменение
+                    # Отправляем сообщение в LLM с запросом на изменение
+                    update_result = await llm_service.update_short_diet_plan(
+                        diet_plan=last_pending_plan,
+                        update_request=message_text
+                    )
+
+                    if "error" in update_result:
+                        await self.send_message(
+                            phone_number,
+                            "Извините, не удалось обработать ваш запрос на изменение плана. Пожалуйста, попробуйте более конкретное указание, например: 'Замени обед в понедельник на курицу'."
+                        )
+                        return {"success": False, "action": "update_error"}
+
+                    if "updated_days" in update_result and update_result["updated_days"]:
+                        # Обновляем план в базе данных
+                        # TODO Доработать обновление отдельно для кратких планов тут используется для обновлении полных планов
+                        success, updated_plan = await diet_service.update_short_diet_plan(
+                            last_pending_plan["id"],
+                            update_result["updated_days"],
+                            update_result.get("comment", "Изменения внесены по запросу пользователя")
+                        )
+
+                        if success:
+                            # Отправляем подтверждение изменений
+                            confirmation = f"✅ План питания обновлен согласно вашему запросу.\n\n"
+
+                            if "comment" in update_result:
+                                confirmation += f"{update_result['comment']}\n\n"
+
+                            confirmation += "Пожалуйста, оцените обновленный план и напишите 'согласен', если вас всё устраивает."
+
+                            await self.send_message(phone_number, confirmation)
+
+                            # Отправляем обновленную сводку плана
+                            summary = diet_service.get_short_diet_summary(updated_plan)
+                            await self.send_message(phone_number, summary)
+
+                            return {"success": True, "action": "plan_updated"}
+                        else:
+                            await self.send_message(
+                                phone_number,
+                                "Извините, произошла ошибка при обновлении плана. Попробуйте позже."
+                            )
+                            return {"success": False, "action": "update_failed"}
+                    else:
+                        await self.send_message(
+                            phone_number,
+                            "Извините, не удалось внести изменения в план. Пожалуйста, попробуйте более конкретное указание, например: 'Замени обед в понедельник на курицу'."
+                        )
+                        return {"success": False, "action": "no_updates"}
+
             # Команда для отметки купленных продуктов
             bought_match = re.match(r'^купил[а]?\s+(.+)$', message_text.lower())
             if bought_match:
@@ -1458,14 +1557,9 @@ class WhatsAppService:
                     return {"success": False, "action": "product_not_found"}
             # Команда для генерации диеты
             if "диета" in message_text.lower():
-                await self.send_message(
-                    phone_number,
-                    "🥗 Я начинаю создавать для тебя новый персонализированный план питания. Это займет несколько минут."
-                )
+                await self.start_short_diet_generation(phone_number, user_id)
 
-                # Запускаем прямую генерацию диеты
-                await self._generate_diet_directly(user_id)
-                return {"success": True, "action": "diet_generation_started"}
+                return {"success": True, "action": "short_diet_generation_started"}
 
             # Команда для получения статистики
             if "статистика" in message_text.lower() or "прогресс" in message_text.lower():
@@ -1555,48 +1649,90 @@ class WhatsAppService:
             })
             return {"success": False, "error": str(e)}
 
-    async def _generate_diet_directly(self, user_id: str, days: int = 1, retries=1) -> None:
+    async def start_short_diet_generation(self, phone_number, user_id):
+        await self.send_message(
+            phone_number,
+            "🥗 Я начинаю создавать для вас краткую версию персонализированного плана питания на неделю. Это займет несколько минут."
+        )
+        await self.send_message(
+            phone_number,
+            "После того, как я покажу вам план, вы сможете согласовать его или запросить изменения. После согласования я подготовлю полную версию с подробными рецептами и списком покупок."
+        )
+        # Генерируем краткий план
+        short_plan = await diet_service.generate_short_diet_plan(user_id)
+        if short_plan and "error" not in short_plan:
+            # Отправляем сводку плана для согласования
+            summary = diet_service.get_short_diet_summary(short_plan)
+            await self.send_message(phone_number, summary)
+
+            # Отправляем инструкции по согласованию
+            instructions = """
+                    👆 Это краткая версия вашего персонализированного плана питания на неделю.
+
+                    Пожалуйста, подтвердите план или запросите изменения:
+                    • Напишите "согласен", "ок" или "да", чтобы подтвердить план
+                    • Или укажите, что именно вы хотели бы изменить, например:
+                      "Замени обед во вторник"
+                      "Не хочу рыбу в понедельник"
+                      "Больше белка в завтраках"
+
+                    После вашего подтверждения я подготовлю полную версию плана с подробными рецептами и списком покупок!
+                    """
+            await self.send_message(phone_number, instructions)
+        else:
+            error_msg = short_plan.get("error",
+                                       "Неизвестная ошибка") if short_plan else "Не удалось создать план диеты"
+            logger.error(f"Error generating short diet plan: {error_msg}")
+
+            await self.send_message(
+                phone_number,
+                "К сожалению, не удалось создать план диеты. Пожалуйста, попробуйте позже или обратитесь в поддержку."
+            )
+
+    # Добавим метод для фоновой генерации полного плана
+    async def _generate_full_diet_plan(self, user_id: str, short_plan_id: str):
         """
-        Напрямую запускает генерацию диеты без использования фоновых задач
+        Фоновая задача для генерации полного плана диеты
 
         Args:
             user_id: ID пользователя
+            short_plan_id: ID короткого плана
         """
         try:
-            logger.info(f"Прямой запуск генерации диеты для пользователя {user_id}")
-
             # Получаем данные пользователя
             user = firebase_client.get_document("users", user_id)
             if not user:
-                logger.error(f"Пользователь {user_id} не найден")
+                logger.error(f"User {user_id} not found")
                 return
 
-            # Запускаем генерацию плана с механизмом повторных попыток
-            diet_plan = await self._retry_with_backoff(
-                diet_service.generate_diet_plan,
-                user_id=user_id,
-                days=days,
-                max_retries=retries
-            )
+            phone_number = user.get("phone_number")
 
-            # Обрабатываем результат
-            if diet_plan and "error" not in diet_plan:
-                # Отправляем сводку диеты
-                diet_summary, commands = diet_service.get_diet_summary(diet_plan)
-                await self.send_message(user["phone_number"], diet_summary)
-                await self.send_message(user["phone_number"], commands)
+            # Генерируем полный план
+            full_plan = await diet_service.generate_full_diet_plan(short_plan_id)
 
+            if full_plan and "error" not in full_plan:
+                # Отправляем уведомление пользователю
+                await self.send_message(
+                    phone_number,
+                    "🎉 Полная версия вашего плана питания готова! Вы можете посмотреть детальную информацию о каждом дне, рецепты и сформировать список покупок."
+                )
+
+                # Отправляем сводку плана
+                diet_summary, commands = diet_service.get_diet_summary(full_plan)
+                await self.send_message(phone_number, diet_summary)
+                await self.send_message(phone_number, commands)
             else:
-                error_msg = diet_plan.get("error",
-                                          "Неизвестная ошибка") if diet_plan else "Не удалось создать план диеты"
-                logger.error(f"Ошибка при генерации диеты: {error_msg}")
+                error_msg = full_plan.get("error",
+                                          "Неизвестная ошибка") if full_plan else "Не удалось создать полный план диеты"
+                logger.error(f"Error generating full diet plan: {error_msg}")
 
                 await self.send_message(
-                    user["phone_number"],
-                    "К сожалению, не удалось создать план диеты. Напиши 'диета' для повторной попытки."
+                    phone_number,
+                    "К сожалению, произошла ошибка при создании полной версии плана. Пожалуйста, попробуйте позже или обратитесь в поддержку."
                 )
+
         except Exception as e:
-            self._log_error_with_context("Ошибка при прямом запуске генерации диеты", e, {"user_id": user_id})
+            logger.error(f"Error in _generate_full_diet_plan: {str(e)}")
 
     def _get_next_onboarding_step(self, current_step: str) -> str:
         """Возвращает следующий шаг онбординга"""
@@ -1903,6 +2039,65 @@ class WhatsAppService:
             request_info["data_preview"] = data_preview
 
         logger.debug(f"Network request: {json.dumps(request_info, ensure_ascii=False)}")
+
+    async def send_plan_approval_reminders(self):
+        """Отправляет напоминания о необходимости согласования плана питания"""
+        try:
+            # Получаем текущее время
+            now = datetime.now(pytz.timezone(settings.TIMEZONE))
+            current_hour = now.hour
+
+            # Не отправляем напоминания ночью (22:00 - 8:00)
+            if 22 <= current_hour or current_hour < 8:
+                return
+
+            # Получаем планы со статусом pending
+            pending_plans = firebase_client.query_documents("diet_plans", "status", "==", "pending")
+
+            for plan in pending_plans:
+                user_id = plan.get("user_id")
+
+                # Получаем пользователя
+                user = firebase_client.get_document("users", user_id)
+                if not user or "phone_number" not in user:
+                    continue
+
+                phone_number = user["phone_number"]
+
+                # Проверяем, когда был создан план
+                created_at = datetime.fromisoformat(plan.get("created_at", "2000-01-01T00:00:00"))
+
+                # Рассчитываем, сколько времени прошло с момента создания
+                hours_passed = (now - created_at).total_seconds() / 3600
+
+                # Проверяем, можно ли отправить напоминание
+                if await self._can_send_reminder(phone_number, "plan_approval_reminder", 14400):  # 4 часа
+                    # Отправляем напоминание с учетом того, сколько времени прошло
+                    if hours_passed < 4:
+                        # Первое напоминание
+                        await self.send_message(
+                            phone_number,
+                            "Не забудьте просмотреть и согласовать ваш новый план питания. Напишите 'согласен' для подтверждения или укажите, что хотели бы изменить."
+                        )
+                    elif hours_passed < 24:
+                        # Напоминание в первый день
+                        await self.send_message(
+                            phone_number,
+                            "📝 Ваш план питания все еще ожидает согласования. Пожалуйста, подтвердите его или запросите изменения, чтобы я мог подготовить полную версию с рецептами."
+                        )
+                    else:
+                        # Напоминание на следующий день и позже
+                        days_passed = int(hours_passed / 24)
+                        await self.send_message(
+                            phone_number,
+                            f"⏰ Прошло уже {days_passed} дней, а ваш план питания все еще ожидает согласования. Пожалуйста, просмотрите его и напишите 'согласен' для подтверждения или укажите, какие изменения вы хотели бы внести."
+                        )
+
+                    # Записываем информацию об отправленном напоминании
+                    await self._record_reminder_sent(phone_number, "plan_approval_reminder")
+
+        except Exception as e:
+            logger.error(f"Error sending plan approval reminders: {str(e)}")
 
     async def send_onboarding_reminders(self):
         """Отправляет напоминания пользователям с незавершенным онбордингом"""

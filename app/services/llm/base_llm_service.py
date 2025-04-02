@@ -47,6 +47,22 @@ class BaseLLMService(ABC):
         pass
 
     @abstractmethod
+    async def update_short_diet_plan(self,
+                                     diet_plan: Dict[str, Any],
+                                     update_request: str) -> Dict[str, Any]:
+        """
+        Обновляет краткий план диеты на основе запроса пользователя
+
+        Args:
+            diet_plan: Текущий краткий план диеты
+            update_request: Текст запроса пользователя на изменение
+
+        Returns:
+            Dict[str, Any]: Обновленные дни плана и комментарий
+        """
+        pass
+
+    @abstractmethod
     async def update_diet_plan(self,
                                diet_plan: Dict[str, Any],
                                update_request: str) -> Dict[str, Any]:

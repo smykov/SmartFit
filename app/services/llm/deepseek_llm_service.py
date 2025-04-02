@@ -12,7 +12,8 @@ from app.db.firebase import firebase_client
 from app.services.llm.base_llm_service import BaseLLMService
 from app.templates.formatting_helpers import clean_json_from_markdown
 from app.templates.prompts import create_diet_system_prompt, create_diet_user_prompt, create_shopping_list_prompt, \
-    create_nutrition_question_prompt, get_bot_commands_prompt, update_diet_user_prompt
+    create_nutrition_question_prompt, get_bot_commands_prompt, update_diet_user_prompt, create_short_diet_system_prompt, \
+    update_short_diet_user_prompt
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -347,6 +348,62 @@ class DeepSeekLLMService(BaseLLMService):
                 metadata = diet_plan["diet_generation_metadata"]
                 # Создаем упрощенную версию плана диеты для истории сообщений
                 simplified_diet_plan = self.create_simplified_diet_plan(diet_plan)
+
+                history_messages = [
+                    # {"role": "system", "content": metadata["system_prompt"]},
+                    {"role": "user", "content": metadata["user_prompt"]},
+                    # {"role": "assistant", "content": metadata["response"]},
+                    {"role": "assistant", "content": json.dumps(simplified_diet_plan, ensure_ascii=False)},
+                ]
+
+            response = await self.generate_completion(system_prompt, user_prompt, history_messages, 1.5)
+
+            # Очищаем ответ от маркдауна, если есть
+            response = clean_json_from_markdown(response)
+
+            # Парсим JSON-ответ
+            try:
+                updates = json.loads(response)
+
+                # Проверяем корректность формата ответа
+                if "updated_days" not in updates:
+                    logger.error(f"Некорректный формат ответа от ИИ: {response}")
+                    return {"error": "Некорректный формат ответа"}
+
+                return updates
+            except json.JSONDecodeError:
+                logger.error(f"Не удалось распарсить ответ ИИ как JSON: {response}")
+                return {"error": "Ошибка при обработке ответа", "raw_response": response}
+
+        except Exception as e:
+            logger.error(f"Ошибка при обновлении плана диеты: {str(e)}")
+            return {"error": str(e)}
+
+    async def update_short_diet_plan(self,
+                               short_diet_plan: Dict[str, Any],
+                               update_request: str) -> Dict[str, Any]:
+        """
+        Обновляет краткий план диеты на основе запроса пользователя
+
+        Args:
+            short_diet_plan: Текущий краткий план диеты
+            update_request: Запрос пользователя на изменение плана
+
+        Returns:
+            Dict[str, Any]: Обновленные дни плана и комментарий
+        """
+        try:
+            system_prompt = create_short_diet_system_prompt()
+            user_prompt = update_short_diet_user_prompt(update_request, short_diet_plan)
+
+            history_messages = []
+
+            # Проверяем наличие метаданных генерации
+            if "diet_generation_metadata" in short_diet_plan and all(key in short_diet_plan["diet_generation_metadata"]
+                                                               for key in ["system_prompt", "user_prompt", "response"]):
+                metadata = short_diet_plan["diet_generation_metadata"]
+                # Создаем упрощенную версию плана диеты для истории сообщений
+                simplified_diet_plan = self.create_simplified_diet_plan(short_diet_plan)
 
                 history_messages = [
                     # {"role": "system", "content": metadata["system_prompt"]},

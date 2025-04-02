@@ -124,14 +124,18 @@ async def get_diet_for_day(
 ):
     """Получает план диеты на конкретный день"""
     try:
-        # Преобразуем строку даты в объект date
-        try:
-            day_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
-
-        # Получаем план на день через сервис
-        day_plan = await diet_service.get_diet_for_day(user_id, day_date)
+        # Вместо проверки конкретной даты, используем новую логику
+        if date_str == "today" or date_str == datetime.now(pytz.timezone(settings.TIMEZONE)).date().isoformat():
+            # Получаем план на сегодня с учетом дня недели
+            day_plan = await diet_service.get_today_diet(user_id)
+        else:
+            # Если нужна конкретная дата, преобразуем её в день недели
+            try:
+                day_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+                weekday = diet_service.get_day_of_week(day_date)
+                day_plan = await diet_service.get_diet_for_weekday(user_id, weekday)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
 
         if not day_plan:
             return {"message": "No diet plan found for the specified date"}
