@@ -79,14 +79,11 @@ def create_reminder_templates():
     """
     return {
         "welcome": "👋 ¡Hola! Bienvenido a GuateFit - tu asistente personal para perder peso. Te ayudaré a crear un plan de alimentación adaptado a ti, teniendo en cuenta los productos locales y tu presupuesto. ¡Comencemos con la configuración! ¿Cómo te llamas?",
-        
         "diet_created": "🎉 ¡Tu plan de alimentación está listo! He seleccionado platos teniendo en cuenta tus parámetros y preferencias. Revisa el plan y hazme saber si quieres cambiar algo.",
-        
         "weight_reminder": "⚖️ ¡Hola! No olvides registrar tu peso hoy. Esto ayudará a seguir tu progreso. Simplemente escribe 'peso XX', donde XX es tu peso en kilogramos.",
-        
         "water_reminder": "💧 ¡No olvides beber agua! Envía 'agua X', donde X es el número de vasos que has bebido.",
-        
-        "weekly_report": "📊 Aquí está tu informe semanal:\n{progress}\n\n¡Excelente trabajo! ¡Sigue así! 💪"
+        "weekly_report": "📊 Aquí está tu informe semanal:\n{progress}\n\n¡Excelente trabajo! ¡Sigue así! 💪",
+        "onboarding_complete": "🎉 ¡Felicidades! Has completado la configuración. Ahora puedes usar comandos como 'plan', 'estadísticas', 'peso XX', 'agua X' para interactuar con GuateFit."
     }
 
 def create_progress_message_template():

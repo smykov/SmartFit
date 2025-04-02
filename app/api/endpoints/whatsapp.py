@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, Form
+from fastapi import APIRouter, Depends, HTTPException, Request, Form, BackgroundTasks, Query
 from fastapi.responses import JSONResponse
 from typing import Dict, Any, Optional
 import json
 import logging
 
 from app.services.whatsapp_service import whatsapp_service
+from config import settings
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -126,3 +127,31 @@ async def send_template_message(
     except Exception as e:
         logger.error(f"Ошибка при отправке шаблонного сообщения WhatsApp: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error sending template message: {str(e)}")
+
+
+@router.post("/admin/send-reminders")
+async def send_reminders_manually(
+        background_tasks: BackgroundTasks,
+        admin_key: str = Query(..., description="Ключ администратора для подтверждения операции"),
+        reminder_type: str = Query(..., description="Тип напоминания (onboarding, tracking, all)")
+):
+    """Вручную запускает отправку напоминаний"""
+    try:
+        # Проверяем ключ администратора
+        if admin_key != settings.ADMIN_API_KEY:
+            raise HTTPException(status_code=401, detail="Invalid admin key")
+
+        # Запускаем отправку напоминаний в фоновом режиме
+        if reminder_type == "onboarding" or reminder_type == "all":
+            background_tasks.add_task(whatsapp_service.send_onboarding_reminders)
+
+        if reminder_type == "tracking" or reminder_type == "all":
+            background_tasks.add_task(whatsapp_service.send_tracking_reminders)
+
+        return {"success": True, "message": f"Started sending {reminder_type} reminders"}
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Error in manual reminder sending: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")

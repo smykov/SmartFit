@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   api:
     build: .
@@ -15,9 +13,17 @@ services:
     environment:
       - DEBUG=True
       - FIREBASE_CREDENTIALS=/app/firebase-credentials.json
+      - USE_MOCK_SERVICES=${USE_MOCK_SERVICES:-False}
+      - LLM_PROVIDER=${LLM_PROVIDER:-deepseek}
+      - LLM_TASK_MAPPING=${LLM_TASK_MAPPING:-"{}"}
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     networks:
       - guatefit-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   # Для разработки локально
   ngrok:

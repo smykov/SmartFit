@@ -1,14 +1,15 @@
 # Web Framework
 fastapi>=0.95.0
 uvicorn>=0.21.1
-pydantic>=1.10.7
+pydantic<2.0.0  # Используем Pydantic v1.x для совместимости
 python-dotenv>=1.0.0
+email-validator>=2.0.0  # Для валидации электронной почты
 
 # Firebase
 firebase-admin>=6.1.0
 
 # OpenAI
-openai>=0.27.8
+openai>=1.0.0
 
 # WhatsApp
 twilio>=8.0.0  # Для интеграции с WhatsApp Business API через Twilio

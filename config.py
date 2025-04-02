@@ -1,4 +1,6 @@
 import os
+import json
+from typing import Dict, Any
 from pydantic import BaseSettings
 from dotenv import load_dotenv
 
@@ -10,26 +12,50 @@ class Settings(BaseSettings):
     APP_NAME: str = "GuateFit"
     APP_VERSION: str = "0.1.0"
     DEBUG: bool = os.getenv("DEBUG", "False").lower() == "true"
-    
+
     # Настройки Firebase
     FIREBASE_CREDENTIALS: str = os.getenv("FIREBASE_CREDENTIALS", "")
     FIREBASE_DATABASE_URL: str = os.getenv("FIREBASE_DATABASE_URL", "")
-    
+
     # Настройки OpenAI
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
-    
+
     # Настройки WhatsApp (через Twilio)
     TWILIO_ACCOUNT_SID: str = os.getenv("TWILIO_ACCOUNT_SID", "")
     TWILIO_AUTH_TOKEN: str = os.getenv("TWILIO_AUTH_TOKEN", "")
     TWILIO_PHONE_NUMBER: str = os.getenv("TWILIO_PHONE_NUMBER", "")
     WHATSAPP_WEBHOOK_URL: str = os.getenv("WHATSAPP_WEBHOOK_URL", "")
-    
+
     # Временная зона для Гватемалы
     TIMEZONE: str = "America/Guatemala"
-    
+
+    # Настройки для тестирования и разработки
+    USE_MOCK_SERVICES: bool = os.getenv("USE_MOCK_SERVICES", "False").lower() == "true"
+
+    # LLM настройки
+    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "deepseek")  # openai, deepseek или hybrid
+
+    # Маппинг задач для гибридного режима, в формате JSON
+    # {"diet_plan": "openai", "nutrition_question": "deepseek", "shopping_list": "deepseek"}
+    _LLM_TASK_MAPPING: str = os.getenv("LLM_TASK_MAPPING",
+                                       '{"diet_plan": "deepseek", "nutrition_question": "deepseek", "shopping_list": "deepseek"}')
+
+    @property
+    def LLM_TASK_MAPPING(self) -> Dict[str, str]:
+        try:
+            return json.loads(self._LLM_TASK_MAPPING)
+        except json.JSONDecodeError:
+            return {}
+
+    # DeepSeek
+    DEEPSEEK_API_KEY: str = os.getenv("DEEPSEEK_API_KEY", "")
+    DEEPSEEK_MODEL: str = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+    DEEPSEEK_API_BASE: str = os.getenv("DEEPSEEK_API_BASE", "https://api.deepseek.com/v1")
+
     class Config:
         env_file = ".env"
+
 
 # Создаем экземпляр настроек
 settings = Settings()

@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 import logging
 
 from app.api.router import api_router
+from app.services import whatsapp_service
 from config import settings
 
 # Настройка логирования
@@ -13,7 +14,9 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
-
+# Отключение логов Twilio - установка уровня ERROR или CRITICAL
+logging.getLogger('twilio').setLevel(logging.ERROR)
+logging.getLogger('twilio.http_client').setLevel(logging.ERROR)
 # Создание FastAPI приложения
 app = FastAPI(
     title=settings.APP_NAME,
@@ -61,3 +64,11 @@ if __name__ == "__main__":
         port=8000,
         reload=settings.DEBUG
     )
+
+
+# код для запуска инициализации при старте приложения
+@app.on_event("startup")
+async def startup_event():
+    # Запускаем процесс отправки неотправленных сообщений при старте
+    await whatsapp_service.initialize()
+    logger.info("WhatsApp service initialized")

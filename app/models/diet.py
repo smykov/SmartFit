@@ -6,11 +6,18 @@ from enum import Enum
 
 from config import settings
 
+
+# Функция для получения текущего времени с учетом временной зоны
+def get_current_datetime():
+    return datetime.now(pytz.timezone(settings.TIMEZONE))
+
+
 class MealType(str, Enum):
     BREAKFAST = "breakfast"
     LUNCH = "lunch"
     DINNER = "dinner"
     SNACK = "snack"
+
 
 class Product(BaseModel):
     """Модель продукта"""
@@ -20,21 +27,29 @@ class Product(BaseModel):
     calories: Optional[float] = None  # на порцию
     price: Optional[float] = None  # в местной валюте
 
+
 class Meal(BaseModel):
     """Модель приема пищи"""
     type: MealType
     title: str
     description: Optional[str] = None
+    why_recommended: Optional[str] = None  # Пояснение, почему блюдо рекомендовано
+    relevance_score: Optional[int] = None  # Показатель соответствия целям (1-10)
+
     products: List[Product]
     preparation: Optional[str] = None
     calories: Optional[float] = None
     proteins: Optional[float] = None
     fats: Optional[float] = None
     carbs: Optional[float] = None
-    
+    fiber: Optional[float] = None
+    vitamins: Optional[str] = None
+    minerals: Optional[str] = None
+
     # Технические метаданные
     local_products_percentage: Optional[float] = None
     estimated_price: Optional[float] = None
+
 
 class DailyDiet(BaseModel):
     """Модель диеты на один день"""
@@ -44,10 +59,12 @@ class DailyDiet(BaseModel):
     total_proteins: Optional[float] = None
     total_fats: Optional[float] = None
     total_carbs: Optional[float] = None
-    
+    macros_ratio: Optional[str] = None
+
     # Метаданные
     estimated_total_price: Optional[float] = None
     tips: Optional[str] = None
+
 
 class DietPlan(BaseModel):
     """Модель плана диеты на неделю"""
@@ -55,17 +72,21 @@ class DietPlan(BaseModel):
     start_date: date
     end_date: date
     daily_plans: Dict[str, DailyDiet]  # ключ - дата в формате строки
-    
+
     # Метаданные
-    created_at: datetime = Field(default_factory=lambda: datetime.now(pytz.timezone(settings.TIMEZONE)))
+    created_at: datetime = Field(default_factory=get_current_datetime)
     budget_limit: Optional[float] = None
     estimated_weekly_price: Optional[float] = None
     general_recommendations: Optional[str] = None
-    
+    personalized_note: Optional[str] = None  # Персональное обращение к пользователю
+    caloric_deficit: Optional[str] = None  # Рассчитанный дефицит калорий
+    caloric_proficit: Optional[str] = None  # Рассчитанный профицит калорий
+
     # Технические данные
     ai_generated: bool = True
     dietitian_approved: bool = False
     dietitian_comments: Optional[str] = None
+
 
 class ShoppingListItem(BaseModel):
     """Элемент списка покупок"""
@@ -76,17 +97,18 @@ class ShoppingListItem(BaseModel):
     store_suggestions: Optional[List[str]] = None
     is_purchased: bool = False
 
+
 class ShoppingList(BaseModel):
     """Список покупок на основе плана диеты"""
     user_id: str
     diet_plan_id: str
     items: List[ShoppingListItem]
-    
+
     # Метаданные
-    created_at: datetime = Field(default_factory=lambda: datetime.now(pytz.timezone(settings.TIMEZONE)))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(pytz.timezone(settings.TIMEZONE)))
+    created_at: datetime = Field(default_factory=get_current_datetime)
+    updated_at: datetime = Field(default_factory=get_current_datetime)
     total_estimated_price: Optional[float] = None
-    
+
     # Информация о подключении к сервисам доставки
     delivery_integration: Optional[str] = None  # например, "la_torre", "walmart"
     delivery_cart_id: Optional[str] = None
