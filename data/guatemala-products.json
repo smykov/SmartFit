@@ -1,0 +1,652 @@
+[
+  {
+    "name": "Frijoles negros",
+    "local_name": "Frijoles negros",
+    "category": "legumes",
+    "is_local": true,
+    "typical_unit": "kg",
+    "nutrition": {
+      "calories": 341,
+      "proteins": 21.6,
+      "fats": 1.4,
+      "carbs": 62.4,
+      "fiber": 15.5
+    },
+    "store_prices": {
+      "la_torre": {
+        "store_name": "La Torre",
+        "price": 15.5,
+        "unit": "kg",
+        "available": true
+      },
+      "walmart": {
+        "store_name": "Walmart",
+        "price": 14.8,
+        "unit": "kg",
+        "available": true
+      }
+    },
+    "seasonal": false,
+    "tags": ["protein", "staple", "local"]
+  },
+  {
+    "name": "Maíz",
+    "local_name": "Maíz",
+    "category": "grains",
+    "is_local": true,
+    "typical_unit": "kg",
+    "nutrition": {
+      "calories": 365,
+      "proteins": 9.4,
+      "fats": 4.7,
+      "carbs": 74.3,
+      "fiber": 7.3
+    },
+    "store_prices": {
+      "la_torre": {
+        "store_name": "La Torre",
+        "price": 10.2,
+        "unit": "kg",
+        "available": true
+      },
+      "walmart": {
+        "store_name": "Walmart",
+        "price": 9.5,
+        "unit": "kg",
+        "available": true
+      }
+    },
+    "seasonal": false,
+    "tags": ["carb", "staple", "local"]
+  },
+  {
+    "name": "Arroz",
+    "local_name": "Arroz",
+    "category": "grains",
+    "is_local": false,
+    "typical_unit": "kg",
+    "nutrition": {
+      "calories": 360,
+      "proteins": 6.5,
+      "fats": 0.9,
+      "carbs": 80.4,
+      "fiber": 1.4
+    },
+    "store_prices": {
+      "la_torre": {
+        "store_name": "La Torre",
+        "price": 11.0,
+        "unit": "kg",
+        "available": true
+      },
+      "walmart": {
+        "store_name": "Walmart",
+        "price": 9.9,
+        "unit": "kg",
+        "available": true
+      }
+    },
+    "seasonal": false,
+    "tags": ["carb", "staple"]
+  },
+  {
+    "name": "Aguacate",
+    "local_name": "Aguacate",
+    "category": "fruits",
+    "is_local": true,
+    "typical_unit": "piece",
+    "nutrition": {
+      "calories": 160,
+      "proteins": 2.0,
+      "fats": 14.7,
+      "carbs": 8.5,
+      "fiber": 6.7
+    },
+    "store_prices": {
+      "la_torre": {
+        "store_name": "La Torre",
+        "price": 5.0,
+        "unit": "piece",
+        "available": true
+      },
+      "walmart": {
+        "store_name": "Walmart",
+        "price": 4.5,
+        "unit": "piece",
+        "available": true
+      }
+    },
+    "seasonal": true,
+    "seasonal_months": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+    "regions": ["Alta Verapaz", "Quiché", "Huehuetenango"],
+    "tags": ["healthy-fat", "local"]
+  },
+  {
+    "name": "Plátano",
+    "local_name": "Plátano",
+    "category": "fruits",
+    "is_local": true,
+    "typical_unit": "kg",
+    "nutrition": {
+      "calories": 122,
+      "proteins": 1.3,
+      "fats": 0.4,
+      "carbs": 31.9,
+      "fiber": 2.3
+    },
+    "store_prices": {
+      "la_torre": {
+        "store_name": "La Torre",
+        "price": 8.5,
+        "unit": "kg",
+        "available": true
+      },
+      "walmart": {
+        "store_name": "Walmart",
+        "price": 7.9,
+        "unit": "kg",
+        "available": true
+      }
+    },
+    "seasonal": true,
+    "seasonal_months": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+    "regions": ["Escuintla", "Izabal", "Suchitepéquez"],
+    "tags": ["carb", "local", "sweet"]
+  },
+  {
+    "name": "Pollo",
+    "local_name": "Pollo",
+    "category": "poultry",
+    "is_local": true,
+    "typical_unit": "kg",
+    "nutrition": {
+      "calories": 165,
+      "proteins": 31.0,
+      "fats": 3.6,
+      "carbs": 0.0,
+      "fiber": 0.0
+    },
+    "store_prices": {
+      "la_torre": {
+        "store_name": "La Torre",
+        "price": 32.0,
+        "unit": "kg",
+        "available": true
+      },
+      "walmart": {
+        "store_name": "Walmart",
+        "price": 30.5,
+        "unit": "kg",
+        "available": true
+      }
+    },
+    "seasonal": false,
+    "tags": ["protein", "lean"]
+  },
+  {
+    "name": "Carne de res",
+    "local_name": "Carne de res",
+    "category": "meat",
+    "is_local": true,
+    "typical_unit": "kg",
+    "nutrition": {
+      "calories": 250,
+      "proteins": 26.0,
+      "fats": 17.0,
+      "carbs": 0.0,
+      "fiber": 0.0
+    },
+    "store_prices": {
+      "la_torre": {
+        "store_name": "La Torre",
+        "price": 65.0,
+        "unit": "kg",
+        "available": true
+      },
+      "walmart": {
+        "store_name": "Walmart",
+        "price": 62.0,
+        "unit": "kg",
+        "available": true
+      }
+    },
+    "seasonal": false,
+    "tags": ["protein", "expensive"]
+  },
+  {
+    "name": "Tomate",
+    "local_name": "Tomate",
+    "category": "vegetables",
+    "is_local": true,
+    "typical_unit": "kg",
+    "nutrition": {
+      "calories": 18,
+      "proteins": 0.9,
+      "fats": 0.2,
+      "carbs": 3.9,
+      "fiber": 1.2
+    },
+    "store_prices": {
+      "la_torre": {
+        "store_name": "La Torre",
+        "price": 12.0,
+        "unit": "kg",
+        "available": true
+      },
+      "walmart": {
+        "store_name": "Walmart",
+        "price": 11.5,
+        "unit": "kg",
+        "available": true
+      }
+    },
+    "seasonal": true,
+    "seasonal_months": [1, 2, 3, 4, 5, 9, 10, 11, 12],
+    "regions": ["Jutiapa", "Baja Verapaz", "Chiquimula"],
+    "tags": ["vegetable", "local"]
+  },
+  {
+    "name": "Cebolla",
+    "local_name": "Cebolla",
+    "category": "vegetables",
+    "is_local": true,
+    "typical_unit": "kg",
+    "nutrition": {
+      "calories": 40,
+      "proteins": 1.1,
+      "fats": 0.1,
+      "carbs": 9.3,
+      "fiber": 1.7
+    },
+    "store_prices": {
+      "la_torre": {
+        "store_name": "La Torre",
+        "price": 10.0,
+        "unit": "kg",
+        "available": true
+      },
+      "walmart": {
+        "store_name": "Walmart",
+        "price": 9.5,
+        "unit": "kg",
+        "available": true
+      }
+    },
+    "seasonal": true,
+    "seasonal_months": [1, 2, 11, 12],
+    "regions": ["Huehuetenango", "Quetzaltenango", "San Marcos"],
+    "tags": ["vegetable", "local"]
+  },
+  {
+    "name": "Chile",
+    "local_name": "Chile",
+    "category": "vegetables",
+    "is_local": true,
+    "typical_unit": "kg",
+    "nutrition": {
+      "calories": 40,
+      "proteins": 1.9,
+      "fats": 0.4,
+      "carbs": 8.8,
+      "fiber": 1.5
+    },
+    "store_prices": {
+      "la_torre": {
+        "store_name": "La Torre",
+        "price": 18.0,
+        "unit": "kg",
+        "available": true
+      },
+      "walmart": {
+        "store_name": "Walmart",
+        "price": 16.5,
+        "unit": "kg",
+        "available": true
+      }
+    },
+    "seasonal": true,
+    "seasonal_months": [4, 5, 6, 7, 8, 9],
+    "regions": ["Alta Verapaz", "Quiché", "Huehuetenango"],
+    "tags": ["spicy", "local"]
+  },
+  {
+    "name": "Queso fresco",
+    "local_name": "Queso fresco",
+    "category": "dairy",
+    "is_local": true,
+    "typical_unit": "kg",
+    "nutrition": {
+      "calories": 300,
+      "proteins": 14.0,
+      "fats": 25.0,
+      "carbs": 3.0,
+      "fiber": 0.0
+    },
+    "store_prices": {
+      "la_torre": {
+        "store_name": "La Torre",
+        "price": 45.0,
+        "unit": "kg",
+        "available": true
+      },
+      "walmart": {
+        "store_name": "Walmart",
+        "price": 42.0,
+        "unit": "kg",
+        "available": true
+      }
+    },
+    "seasonal": false,
+    "tags": ["protein", "dairy", "local"]
+  },
+  {
+    "name": "Huevos",
+    "local_name": "Huevos",
+    "category": "dairy",
+    "is_local": true,
+    "typical_unit": "dozen",
+    "nutrition": {
+      "calories": 68,
+      "proteins": 5.5,
+      "fats": 4.8,
+      "carbs": 0.4,
+      "fiber": 0.0
+    },
+    "store_prices": {
+      "la_torre": {
+        "store_name": "La Torre",
+        "price": 18.0,
+        "unit": "dozen",
+        "available": true
+      },
+      "walmart": {
+        "store_name": "Walmart",
+        "price": 16.5,
+        "unit": "dozen",
+        "available": true
+      }
+    },
+    "seasonal": false,
+    "tags": ["protein", "budget"]
+  },
+  {
+    "name": "Papaya",
+    "local_name": "Papaya",
+    "category": "fruits",
+    "is_local": true,
+    "typical_unit": "piece",
+    "nutrition": {
+      "calories": 43,
+      "proteins": 0.5,
+      "fats": 0.3,
+      "carbs": 10.8,
+      "fiber": 1.7
+    },
+    "store_prices": {
+      "la_torre": {
+        "store_name": "La Torre",
+        "price": 15.0,
+        "unit": "piece",
+        "available": true
+      },
+      "walmart": {
+        "store_name": "Walmart",
+        "price": 13.5,
+        "unit": "piece",
+        "available": true
+      }
+    },
+    "seasonal": true,
+    "seasonal_months": [1, 2, 3, 7, 8, 9, 10, 11, 12],
+    "regions": ["Petén", "Izabal", "Escuintla"],
+    "tags": ["fruit", "local", "vitamin-c"]
+  },
+  {
+    "name": "Piña",
+    "local_name": "Piña",
+    "category": "fruits",
+    "is_local": true,
+    "typical_unit": "piece",
+    "nutrition": {
+      "calories": 50,
+      "proteins": 0.5,
+      "fats": 0.1,
+      "carbs": 13.1,
+      "fiber": 1.4
+    },
+    "store_prices": {
+      "la_torre": {
+        "store_name": "La Torre",
+        "price": 20.0,
+        "unit": "piece",
+        "available": true
+      },
+      "walmart": {
+        "store_name": "Walmart",
+        "price": 18.0,
+        "unit": "piece",
+        "available": true
+      }
+    },
+    "seasonal": true,
+    "seasonal_months": [2, 3, 4, 5, 6, 7, 8],
+    "regions": ["Escuintla", "Izabal", "Retalhuleu"],
+    "tags": ["fruit", "local", "vitamin-c"]
+  },
+  {
+    "name": "Tortillas de maíz",
+    "local_name": "Tortillas de maíz",
+    "category": "grains",
+    "is_local": true,
+    "typical_unit": "piece",
+    "nutrition": {
+      "calories": 68,
+      "proteins": 1.5,
+      "fats": 0.9,
+      "carbs": 14.2,
+      "fiber": 1.9
+    },
+    "store_prices": {
+      "la_torre": {
+        "store_name": "La Torre",
+        "price": 0.5,
+        "unit": "piece",
+        "available": true
+      },
+      "walmart": {
+        "store_name": "Walmart",
+        "price": 0.5,
+        "unit": "piece",
+        "available": true
+      }
+    },
+    "seasonal": false,
+    "tags": ["staple", "carb", "local"]
+  },
+  {
+    "name": "Chicharrones",
+    "local_name": "Chicharrones",
+    "category": "meat",
+    "is_local": true,
+    "typical_unit": "kg",
+    "nutrition": {
+      "calories": 544,
+      "proteins": 61.3,
+      "fats": 31.3,
+      "carbs": 0.0,
+      "fiber": 0.0
+    },
+    "store_prices": {
+      "la_torre": {
+        "store_name": "La Torre",
+        "price": 90.0,
+        "unit": "kg",
+        "available": true
+      },
+      "walmart": {
+        "store_name": "Walmart",
+        "price": 85.0,
+        "unit": "kg",
+        "available": true
+      }
+    },
+    "seasonal": false,
+    "tags": ["indulgence", "local", "high-fat"]
+  },
+  {
+    "name": "Frijoles rojos",
+    "local_name": "Frijoles rojos",
+    "category": "legumes",
+    "is_local": true,
+    "typical_unit": "kg",
+    "nutrition": {
+      "calories": 337,
+      "proteins": 23.6,
+      "fats": 0.8,
+      "carbs": 61.3,
+      "fiber": 15.2
+    },
+    "store_prices": {
+      "la_torre": {
+        "store_name": "La Torre",
+        "price": 16.5,
+        "unit": "kg",
+        "available": true
+      },
+      "walmart": {
+        "store_name": "Walmart",
+        "price": 15.0,
+        "unit": "kg",
+        "available": true
+      }
+    },
+    "seasonal": false,
+    "tags": ["protein", "staple", "local"]
+  },
+  {
+    "name": "Mango",
+    "local_name": "Mango",
+    "category": "fruits",
+    "is_local": true,
+    "typical_unit": "piece",
+    "nutrition": {
+      "calories": 60,
+      "proteins": 0.8,
+      "fats": 0.4,
+      "carbs": 15.0,
+      "fiber": 1.6
+    },
+    "store_prices": {
+      "la_torre": {
+        "store_name": "La Torre",
+        "price": 4.0,
+        "unit": "piece",
+        "available": true
+      },
+      "walmart": {
+        "store_name": "Walmart",
+        "price": 3.5,
+        "unit": "piece",
+        "available": true
+      }
+    },
+    "seasonal": true,
+    "seasonal_months": [3, 4, 5, 6],
+    "regions": ["Santa Rosa", "Jutiapa", "Escuintla"],
+    "tags": ["fruit", "seasonal", "local", "vitamin-a"]
+  },
+  {
+    "name": "Cilantro",
+    "local_name": "Cilantro",
+    "category": "vegetables",
+    "is_local": true,
+    "typical_unit": "bunch",
+    "nutrition": {
+      "calories": 23,
+      "proteins": 2.1,
+      "fats": 0.5,
+      "carbs": 3.7,
+      "fiber": 2.8
+    },
+    "store_prices": {
+      "la_torre": {
+        "store_name": "La Torre",
+        "price": 3.0,
+        "unit": "bunch",
+        "available": true
+      },
+      "walmart": {
+        "store_name": "Walmart",
+        "price": 2.5,
+        "unit": "bunch",
+        "available": true
+      }
+    },
+    "seasonal": true,
+    "seasonal_months": [1, 2, 3, 4, 5, 9, 10, 11, 12],
+    "regions": ["Sacatepéquez", "Chimaltenango", "Guatemala"],
+    "tags": ["herb", "local", "flavor"]
+  },
+  {
+    "name": "Leche",
+    "local_name": "Leche",
+    "category": "dairy",
+    "is_local": true,
+    "typical_unit": "liter",
+    "nutrition": {
+      "calories": 42,
+      "proteins": 3.4,
+      "fats": 1.0,
+      "carbs": 5.0,
+      "fiber": 0.0
+    },
+    "store_prices": {
+      "la_torre": {
+        "store_name": "La Torre",
+        "price": 11.0,
+        "unit": "liter",
+        "available": true
+      },
+      "walmart": {
+        "store_name": "Walmart",
+        "price": 10.0,
+        "unit": "liter",
+        "available": true
+      }
+    },
+    "seasonal": false,
+    "tags": ["protein", "calcium", "dairy"]
+  },
+  {
+    "name": "Jocote",
+    "local_name": "Jocote",
+    "category": "fruits",
+    "is_local": true,
+    "typical_unit": "kg",
+    "nutrition": {
+      "calories": 74,
+      "proteins": 0.8,
+      "fats": 0.1,
+      "carbs": 19.0,
+      "fiber": 1.2
+    },
+    "store_prices": {
+      "la_torre": {
+        "store_name": "La Torre",
+        "price": 15.0,
+        "unit": "kg",
+        "available": true
+      },
+      "walmart": {
+        "store_name": "Walmart",
+        "price": 14.0,
+        "unit": "kg",
+        "available": true
+      }
+    },
+    "seasonal": true,
+    "seasonal_months": [2, 3, 4, 8, 9, 10],
+    "regions": ["Jutiapa", "Santa Rosa", "Baja Verapaz"],
+    "tags": ["fruit", "local", "seasonal"]
+  }
+]

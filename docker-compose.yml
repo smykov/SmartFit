@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    container_name: guatefit-api
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - ./firebase-credentials.json:/app/firebase-credentials.json:ro
+    env_file:
+      - .env
+    environment:
+      - DEBUG=True
+      - FIREBASE_CREDENTIALS=/app/firebase-credentials.json
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - guatefit-network
+
+  # Для разработки локально
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: guatefit-ngrok
+    restart: unless-stopped
+    command: "http api:8000 --log=stdout"
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    depends_on:
+      - api
+    networks:
+      - guatefit-network
+
+networks:
+  guatefit-network:
+    driver: bridge
