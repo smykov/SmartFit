@@ -7,7 +7,7 @@ import json
 
 from config import settings
 from app.db.firebase import firebase_client
-from app.services.diet_service import diet_service
+from app.services.diet import diet_service
 from app.services.whatsapp_service import whatsapp_service
 
 router = APIRouter()

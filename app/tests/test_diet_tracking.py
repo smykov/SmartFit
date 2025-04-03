@@ -4,7 +4,7 @@ import json
 from datetime import datetime, date, timedelta
 import pytz
 
-from app.services.diet_service import DietService
+from app.services.diet import DietService
 from app.services.tracking_service import TrackingService
 from app.templates.formatting_helpers import (
     format_message_with_emojis,

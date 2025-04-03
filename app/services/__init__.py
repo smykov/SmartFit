@@ -4,7 +4,7 @@
 from app.services.llm import llm_service, LLMFactory
 
 # Другие сервисы
-from app.services.diet_service import diet_service
+from app.services.diet import diet_service
 from app.services.tracking_service import tracking_service
 from app.services.whatsapp_service import whatsapp_service
 
