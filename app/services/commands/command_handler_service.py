@@ -1,8 +1,8 @@
 import logging
 from typing import Dict, Any, Optional
 
-from app.services.diet.diet_interface import IDietService
-from app.services.tracking.tracking_interface import ITrackingService
+from app.services.diet.diet_service_interface import IDietService
+from app.services.tracking.tracking_service_interface import ITrackingService
 from app.services.messaging.message_interface import IMessageService
 from app.db.interfaces.user_repository_interface import IUserRepository
 

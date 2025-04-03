@@ -5,8 +5,8 @@ import logging
 from datetime import datetime
 
 import pytz
-from app.services.diet.diet_interface import IDietService
-from app.services.tracking.tracking_interface import ITrackingService
+from app.services.diet.diet_service_interface import IDietService
+from app.services.tracking.tracking_service_interface import ITrackingService
 
 from app.db.interfaces.reminder_repository_interface import IReminderRepository
 from app.db.interfaces.user_repository_interface import IUserRepository

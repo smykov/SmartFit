@@ -6,9 +6,9 @@ from typing import Dict, Any, Optional, Tuple
 
 import pytz
 from app.db.interfaces.message_repository_interface import IMessageRepository
-from app.services.diet.diet_interface import IDietService
-from app.services.onboarding.onboarding_interface import IOnboardingService
-from app.services.tracking.tracking_interface import ITrackingService
+from app.services.diet.diet_service_interface import IDietService
+from app.services.onboarding.onboarding_service_interface import IOnboardingService
+from app.services.tracking.tracking_service_interface import ITrackingService
 
 from app.db.interfaces.user_repository_interface import IUserRepository
 from app.localization.message_processor_messages import MessageProcessorMessages
