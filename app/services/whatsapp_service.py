@@ -17,7 +17,7 @@ from app.templates.prompts import format_help_message
 from config import settings
 from app.db.firebase import firebase_client
 from app.services.llm import llm_service
-from app.services.tracking_service import tracking_service
+from app.services.tracking.tracking_service import tracking_service
 from app.services.diet import diet_service
 from app.models.tracking import MealComplianceStatus
 from app.templates.formatting_helpers import (
