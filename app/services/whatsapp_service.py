@@ -18,12 +18,13 @@ from config import settings
 from app.db.firebase import firebase_client
 from app.services.llm import llm_service
 from app.services.tracking_service import tracking_service
-from app.services.diet_service import diet_service
+from app.services.diet import diet_service
 from app.models.tracking import MealComplianceStatus
 from app.templates.formatting_helpers import (
     format_message_with_emojis,
     translate_meal_type, translate_day_name
 )
+from app.localization.messages import DietMessages
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,7 @@ class WhatsAppService:
 
     def __init__(self):
         self.from_phone_number = settings.TWILIO_PHONE_NUMBER
+        self.messages = DietMessages()
         self.ONBOARDING_STEPS = [
             "welcome",
             "name",
@@ -66,6 +68,7 @@ class WhatsAppService:
         ]
         # хранилище для неотправленных сообщений
         self.pending_messages = {}  # {phone_number: [(message_id, message_text, timestamp)]}
+        self.messages = DietMessages()
 
     async def initialize(self):
         """Инициализация сервиса при запуске, включая отправку отложенных сообщений"""
@@ -831,193 +834,6 @@ class WhatsAppService:
                     "Рад снова тебя видеть! Чем я могу помочь сегодня? Напиши 'план' чтобы увидеть свой текущий план питания или 'диета' чтобы создать новый план."
                 )
 
-    async def _start_registration(self, phone_number: str) -> Dict[str, Any]:
-        """
-        Начинает процесс регистрации нового пользователя
-
-        Args:
-            phone_number: Номер телефона пользователя
-
-        Returns:
-            Dict[str, Any]: Результат обработки
-        """
-        try:
-            # Создаем новую запись пользователя
-            new_user = {
-                "phone_number": phone_number,
-                "name": "",
-                "is_onboarding_completed": False,
-                "onboarding_step": "welcome",
-                "registration_source": "whatsapp"
-            }
-
-            # Сохраняем в базу данных
-            user_id = firebase_client.add_document("users", new_user)
-
-            if not user_id:
-                logger.error(f"Не удалось создать пользователя с номером {phone_number}")
-                return {"success": False, "error": "Failed to create user"}
-
-            # ИСПРАВЛЕНИЕ: Обновляем новый документ, добавляя ID
-            new_user["id"] = user_id
-            firebase_client.set_document("users", user_id, new_user, merge=True)
-
-            # Отправляем приветственное сообщение
-            await self.send_template_message(phone_number, "welcome")
-
-            # Обновляем шаг онбординга
-            firebase_client.update_document("users", user_id, {"onboarding_step": "name"})
-
-            return {
-                "success": True,
-                "action": "registration_started",
-                "user_id": user_id
-            }
-
-        except Exception as e:
-            logger.error(f"Ошибка при начале регистрации: {str(e)}")
-            return {"success": False, "error": str(e)}
-
-    async def _continue_onboarding(self, user: Dict[str, Any], message_text: str) -> Dict[str, Any]:
-        """
-        Продолжает процесс онбординга пользователя
-
-        Args:
-            user: Данные пользователя
-            message_text: Текст сообщения
-
-        Returns:
-            Dict[str, Any]: Результат обработки
-        """
-        try:
-            # ИСПРАВЛЕНИЕ: Проверяем наличие ID пользователя и получаем его правильно
-            if "id" not in user:
-                # Если id отсутствует, попробуем найти пользователя по номеру телефона
-                users = firebase_client.query_documents("users", "phone_number", "==", user.get("phone_number"))
-                if users and len(users) > 0:
-                    user_id = users[0].get("id")
-                    if not user_id:
-                        logger.error(f"Не удалось определить ID пользователя: {user.get('phone_number')}")
-                        return {"success": False, "error": "User ID not found"}
-                else:
-                    logger.error(f"Пользователь не найден: {user.get('phone_number')}")
-                    return {"success": False, "error": "User not found"}
-            else:
-                user_id = user["id"]
-
-            current_step = user.get("onboarding_step", "welcome")
-            phone_number = user.get('phone_number')
-            # Определяем следующий шаг
-            next_step = self._get_next_onboarding_step(current_step)
-
-            # Обрабатываем текущий шаг и обновляем данные пользователя
-            update_data = self._process_onboarding_step(current_step, message_text)
-
-            if not update_data:
-                # Если произошла ошибка, отправляем сообщение с просьбой повторить и подсказкой
-                step_message = self._get_onboarding_step_message(current_step)
-                await self.send_message(
-                    user["phone_number"],
-                    f"Извини, я не понял твой ответ. Пожалуйста, попробуй еще раз.\n\n{step_message}",
-                    current_step
-                )
-                return {"success": False, "error": "Invalid input for onboarding step"}
-
-            # Автоматически определяем цель по весу после ввода целевого веса
-            if current_step == "target_weight" and "target_weight" in update_data:
-                target_weight = float(update_data["target_weight"])
-                current_weight = float(user.get("current_weight", 0))
-
-                # Добавляем уведомление пользователю о том, что цель определена автоматически
-                weight_goal_message = ""
-
-                if target_weight < current_weight - 0.5:
-                    update_data["weight_goal"] = "lose"
-                    weight_goal_message = "Я вижу, что ты хочешь похудеть. Автоматически определил цель на основе текущего и целевого веса."
-                    logger.info(
-                        f"Автоматически определена цель: похудение (текущий вес: {current_weight}, целевой: {target_weight})")
-                elif target_weight > current_weight + 0.5:
-                    update_data["weight_goal"] = "gain"
-                    weight_goal_message = "Я вижу, что ты хочешь набрать вес. Автоматически определил цель на основе текущего и целевого веса."
-                    logger.info(
-                        f"Автоматически определена цель: набор веса (текущий вес: {current_weight}, целевой: {target_weight})")
-                else:
-                    update_data["weight_goal"] = "maintain"
-                    weight_goal_message = "Я вижу, что ты хочешь поддерживать текущий вес. Автоматически определил цель."
-                    logger.info(
-                        f"Автоматически определена цель: поддержание веса (текущий вес: {current_weight}, целевой: {target_weight})")
-
-                # Пропускаем шаг запроса цели по весу
-                if next_step == "weight_goal":
-                    next_step = self._get_next_onboarding_step(next_step)
-                    # Отправляем уведомление о том, что цель определена автоматически
-                    if weight_goal_message:
-                        await self.send_message(user["phone_number"], weight_goal_message)
-
-            # Обновляем данные пользователя
-            update_data["onboarding_step"] = next_step
-
-            # ИСПРАВЛЕНИЕ: Делаем дополнительную проверку ID
-            result = firebase_client.update_document("users", user_id, update_data)
-            if not result:
-                logger.error(f"Не удалось обновить пользователя {user_id}")
-
-                # Попробуем использовать set_document вместо update_document
-                logger.info(f"Попытка использовать set_document для пользователя {user_id}")
-                user.update(update_data)
-                result = firebase_client.set_document("users", user_id, user, merge=True)
-
-                if not result:
-                    logger.error(f"Не удалось сохранить данные пользователя {user_id}")
-                    await self.send_message(
-                        user["phone_number"],
-                        "Извините, произошла техническая ошибка. Пожалуйста, попробуйте позже."
-                    )
-                    return {"success": False, "error": "Failed to update user data"}
-
-            # Если онбординг завершен
-            if next_step == "complete":
-                firebase_client.update_document("users", user_id, {"is_onboarding_completed": True})
-                await self.send_message(
-                    user["phone_number"],
-                    "🎉 Отлично! Настройка завершена. Теперь я создам для тебя персональный план питания на основе твоих данных."
-                )
-
-                await self.send_message(
-                    user["phone_number"],
-                    "Я подготовлю для тебя план и скоро пришлю его. Это займет несколько минут."
-                )
-
-                # Прямой запуск генерации диеты
-                await self.start_short_diet_generation(phone_number, user_id)
-
-                return {
-                    "success": True,
-                    "action": "onboarding_completed",
-                    "user_id": user_id
-                }
-
-            # Отправляем сообщение для следующего шага
-            next_step_message = self._get_onboarding_step_message(next_step)
-            await self.send_message(user["phone_number"], next_step_message, next_step)
-
-            return {
-                "success": True,
-                "action": "onboarding_continued",
-                "user_id": user_id,
-                "current_step": current_step,
-                "next_step": next_step
-            }
-
-        except Exception as e:
-            self._log_error_with_context("Ошибка при продолжении онбординга", e, {
-                "user_id": user.get("id", "unknown"),
-                "phone_number": user.get("phone_number", "unknown"),
-                "current_step": user.get("onboarding_step", "unknown"),
-                "message_text": message_text
-            })
-            return {"success": False, "error": str(e)}
-
     async def _process_regular_message(self, user: Dict[str, Any], message_text: str, message_type: str) -> Dict[
         str, Any]:
         """
@@ -1275,8 +1091,7 @@ class WhatsAppService:
                     elif command_type == "shopping":
                         # Уведомляем пользователя о начале генерации списка покупок
                         await self.send_message(
-                            phone_number,
-                            "🛒 Начинаю формирование списка покупок на основе вашего плана питания. Это займет несколько секунд..."
+                            phone_number, self.messages.SHOPPING_LIST_GENERATION
                         )
                         # Генерируем список покупок
                         try:
@@ -1290,14 +1105,14 @@ class WhatsAppService:
                             else:
                                 await self.send_message(
                                     phone_number,
-                                    "Извините, не удалось создать список покупок. Попробуйте позже."
+                                    self.messages.SHOPPING_LIST_ERROR
                                 )
                                 return {"success": False, "action": "shopping_list_failed"}
                         except Exception as e:
                             logger.error(f"Ошибка при создании списка покупок: {str(e)}")
                             await self.send_message(
                                 phone_number,
-                                "Извините, произошла ошибка при создании списка покупок. Попробуйте позже."
+                                self.messages.SHOPPING_LIST_ERROR
                             )
                             return {"success": False, "action": "shopping_list_error"}
 
@@ -1321,14 +1136,14 @@ class WhatsAppService:
                     else:
                         await self.send_message(
                             phone_number,
-                            "У тебя пока нет активного плана питания. Напиши 'диета' для создания нового плана."
+                            self.messages.NO_DIET_PLAN
                         )
                         return {"success": False, "action": "no_diet_plan_for_update"}
 
                 # Сообщаем пользователю, что корректируем план
                 await self.send_message(
                     phone_number,
-                    "Я корректирую твой план питания согласно запросу. Это займет несколько секунд."
+                    self.messages.UPDATING_PLAN
                 )
 
                 try:
@@ -1651,8 +1466,7 @@ class WhatsAppService:
 
     async def start_short_diet_generation(self, phone_number, user_id):
         await self.send_message(
-            phone_number,
-            "🥗 Я начинаю создавать для вас краткую версию персонализированного плана питания на неделю. Это займет несколько минут."
+            phone_number, self.messages.PLAN_GENERATION_STARTED
         )
         await self.send_message(
             phone_number,
