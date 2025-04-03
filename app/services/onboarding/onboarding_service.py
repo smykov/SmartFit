@@ -1,14 +1,9 @@
 import logging
 from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime, timedelta
-import pytz
-import re
-from abc import ABC, abstractmethod
 
-from app.db.interfaces.user_repository import IUserRepository
+from app.db.interfaces.user_repository_interface import IUserRepository
 from app.services.messaging.message_interface import IMessageService
 from app.localization.onboarding_messages import OnboardingMessages
-from app.models.user import UserUpdate
 from config import settings
 
 
@@ -470,89 +465,3 @@ class OnboardingService:
             
         return message
     
-    async def send_onboarding_reminders(self):
-        """Отправляет напоминания пользователям с незавершенным онбордингом"""
-        try:
-            # Получаем пользователей с незавершенным онбордингом
-            users = await self.user_repository.find_with_incomplete_onboarding()
-            
-            # Текущее время
-            now = datetime.now(pytz.timezone(settings.TIMEZONE))
-            
-            # Обрабатываем каждого пользователя
-            for user in users:
-                # Получаем информацию о последнем взаимодействии
-                last_interaction = None
-                if "last_interaction" in user:
-                    try:
-                        last_interaction = datetime.fromisoformat(user["last_interaction"])
-                    except (ValueError, TypeError):
-                        # Если формат даты некорректный, считаем, что взаимодействия не было
-                        pass
-                
-                # Если информации о последнем взаимодействии нет или оно было давно
-                if not last_interaction or (now - last_interaction).total_seconds() > 14400:  # 4 часа
-                    # Получаем текущий шаг онбординга
-                    current_step = user.get("onboarding_step", self.STEP_WELCOME)
-                    
-                    # Формируем сообщение-напоминание
-                    reminder_message = self._get_onboarding_reminder(current_step, user.get("name", ""))
-                    
-                    # Проверяем, не отправлялось ли это напоминание недавно
-                    can_send = await self.message_service.can_send_reminder(
-                        user.get("phone_number"), 
-                        "onboarding_reminder", 
-                        86400  # 24 часа
-                    )
-                    
-                    if can_send:
-                        # Отправляем напоминание
-                        await self.message_service.send_message(
-                            user.get("phone_number"),
-                            reminder_message,
-                            current_step
-                        )
-                        
-                        # Записываем информацию об отправленном напоминании
-                        await self.message_service.record_reminder_sent(
-                            user.get("phone_number"), 
-                            "onboarding_reminder"
-                        )
-                        
-                        self.logger.info(
-                            f"Sent onboarding reminder to user {user.get('id')} for step {current_step}"
-                        )
-                        
-        except Exception as e:
-            self.logger.error(f"Error sending onboarding reminders: {str(e)}")
-    
-    def _get_onboarding_reminder(self, step: str, name: str) -> str:
-        """
-        Формирует текст напоминания в зависимости от шага онбординга
-        
-        Args:
-            step: Шаг онбординга
-            name: Имя пользователя
-            
-        Returns:
-            str: Текст напоминания
-        """
-        # Базовое обращение с именем, если оно есть
-        greeting = f"{self.message_service.BASE_GREETING}{', ' + name if name else ''}! "
-        
-        # Сообщения для разных шагов онбординга
-        if step == self.STEP_NAME:
-            return greeting + self.messages.REMINDER_NAME
-            
-        elif step in [self.STEP_AGE, self.STEP_GENDER, self.STEP_HEIGHT]:
-            return greeting + self.messages.REMINDER_BASIC_INFO
-            
-        elif step in [self.STEP_CURRENT_WEIGHT, self.STEP_TARGET_WEIGHT]:
-            return greeting + self.messages.REMINDER_WEIGHT_INFO
-            
-        elif step in [self.STEP_ACTIVITY_LEVEL, self.STEP_DIET_PREFERENCE, 
-                     self.STEP_ALLERGIES, self.STEP_DISLIKED_PRODUCTS, self.STEP_BUDGET]:
-            return greeting + self.messages.REMINDER_ALMOST_COMPLETE
-            
-        # Общее сообщение по умолчанию
-        return greeting + self.messages.REMINDER_DEFAULT

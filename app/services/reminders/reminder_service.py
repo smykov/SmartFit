@@ -6,8 +6,8 @@ from datetime import datetime, timedelta
 import pytz
 import asyncio
 
-from app.db.interfaces.user_repository import IUserRepository
-from app.db.interfaces.reminder_repository import IReminderRepository
+from app.db.interfaces.user_repository_interface import IUserRepository
+from app.db.interfaces.reminder_repository_interface import IReminderRepository
 from app.services.messaging.message_interface import IMessageService
 from app.localization.reminder_messages import ReminderMessages
 from app.services.tracking.tracking_interface import ITrackingService

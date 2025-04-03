@@ -68,7 +68,6 @@ class WhatsAppService:
         ]
         # хранилище для неотправленных сообщений
         self.pending_messages = {}  # {phone_number: [(message_id, message_text, timestamp)]}
-        self.messages = DietMessages()
 
     async def initialize(self):
         """Инициализация сервиса при запуске, включая отправку отложенных сообщений"""
@@ -78,50 +77,9 @@ class WhatsAppService:
             # Запускаем отправку всех неотправленных сообщений
             await self._resend_all_pending_messages()
 
-            # Запускаем задачи напоминаний
-            await self._schedule_periodic_tasks()
-
             logger.info("WhatsApp service initialization completed")
         except Exception as e:
             logger.error(f"Error initializing WhatsApp service: {str(e)}")
-
-    async def _schedule_periodic_tasks(self):
-        """Запускает регулярные задачи для работы сервиса"""
-        try:
-            # Запускаем периодические задачи
-            async def run_reminder_tasks():
-                while True:
-                    try:
-                        # Запускаем проверку и отправку напоминаний
-                        current_hour = datetime.now(pytz.timezone(settings.TIMEZONE)).hour
-
-                        # Проверяем неотправленные сообщения каждые 30 минут
-                        await self._resend_all_pending_messages()
-
-                        # Отправляем напоминания о незавершенном онбординге каждые 4 часа
-                        if current_hour in [8, 12, 16, 20]:  # 8:00, 12:00, 16:00, 20:00
-                            await self.send_onboarding_reminders()
-
-                        # Отправляем напоминания о трекинге в зависимости от времени суток
-                        await self.send_tracking_reminders()
-
-                        # Ждем 30 минут до следующей проверки
-                        await asyncio.sleep(1800)  # 30 минут
-
-                    except asyncio.CancelledError:
-                        # Задача отменена, завершаем корректно
-                        logger.info("Periodic tasks cancelled")
-                        break
-                    except Exception as e:
-                        logger.error(f"Error in periodic reminder tasks: {str(e)}")
-                        # В случае ошибки, ждем 5 минут и пробуем снова
-                        await asyncio.sleep(300)
-
-            # Запускаем задачу асинхронно
-            asyncio.create_task(run_reminder_tasks())
-
-        except Exception as e:
-            logger.error(f"Error scheduling periodic tasks: {str(e)}")
 
     async def _resend_all_pending_messages(self):
         """Отправляет все неотправленные сообщения из базы данных с учетом шага онбординга"""
