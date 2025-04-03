@@ -219,73 +219,6 @@ class WhatsAppService:
         except Exception as e:
             logger.error(f"Error resending all pending messages: {str(e)}")
 
-    async def process_incoming_message(self, body: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Обрабатывает входящее сообщение из WhatsApp
-
-        Args:
-            body: Данные входящего сообщения
-
-        Returns:
-            Dict[str, Any]: Результат обработки
-        """
-        try:
-            logger.info(f"Получено новое сообщение WhatsApp: {json.dumps(body, ensure_ascii=False)}")
-
-            # Извлекаем данные сообщения с идентификатором
-            phone_number, message_text, message_type, message_id = self._extract_message_data(body)
-
-            if not phone_number or not message_text:
-                logger.error("Не удалось извлечь номер телефона или текст сообщения")
-                return {"success": False, "error": "Invalid message format"}
-
-            # Проверяем наличие неотправленных сообщений для этого пользователя
-            await self._check_and_send_pending_messages(phone_number)
-
-            # Проверяем, обрабатывалось ли это сообщение ранее
-            if await self._is_message_processed(message_id):
-                logger.info(f"Сообщение {message_id} уже обработано")
-                return {"success": True, "action": "already_processed"}
-
-            # Ищем последнее обработанное сообщение для этого пользователя
-            last_processed = await self._get_last_processed_message(phone_number)
-
-            # Если есть разрыв во взаимодействии, восстанавливаем контекст
-            if last_processed and (datetime.now(pytz.timezone(settings.TIMEZONE)) -
-                                   datetime.fromisoformat(last_processed["timestamp"])) > timedelta(minutes=5):
-                await self._recover_conversation(phone_number, last_processed)
-
-            # Проверяем, существует ли пользователь
-            users = firebase_client.query_documents("users", "phone_number", "==", phone_number)
-
-            if not users:
-                # Если пользователь не существует, начинаем процесс регистрации
-                logger.info(f"Новый пользователь с номером {phone_number}. Начинаем регистрацию.")
-                result = await self._start_registration(phone_number)
-            else:
-                # Пользователь существует
-                user = users[0]
-
-                # Проверяем, завершил ли пользователь онбординг
-                if not user.get("is_onboarding_completed", False):
-                    logger.info(f"Пользователь {phone_number} продолжает онбординг")
-                    result = await self._continue_onboarding(user, message_text)
-                else:
-                    # Если онбординг завершен, обрабатываем обычное сообщение
-                    logger.info(f"Обработка обычного сообщения от пользователя {phone_number}")
-                    result = await self._process_regular_message(user, message_text, message_type)
-
-            # Отмечаем сообщение как обработанное
-            await self._mark_message_as_processed(message_id, phone_number, message_text)
-
-            return result
-
-        except Exception as e:
-            self._log_error_with_context("Ошибка при обработке входящего сообщения", e,
-                                         {"phone_number": body.get("From", ""),
-                                          "message_text": body.get("Body", "")})
-            return {"success": False, "error": str(e)}
-
     async def _check_and_send_pending_messages(self, phone_number: str):
         """Проверяет наличие неотправленных сообщений для пользователя и пытается их отправить"""
         try:
@@ -700,55 +633,6 @@ class WhatsAppService:
         except Exception as e:
             logger.error(f"Ошибка при отправке шаблонного сообщения: {str(e)}")
             return False
-
-    def _extract_message_data(self, body: Dict[str, Any]) -> Tuple[
-        Optional[str], Optional[str], Optional[str], Optional[str]]:
-        """
-        Извлекает данные из входящего сообщения WhatsApp
-
-        Args:
-            body: Данные сообщения
-
-        Returns:
-            Tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
-            (номер телефона, текст сообщения, тип сообщения, ID сообщения)
-        """
-        try:
-            # Пример обработки сообщения от Twilio
-            # Примечание: формат может отличаться в зависимости от провайдера WhatsApp API
-
-            phone_number = body.get("From", "").replace("whatsapp:", "")
-            message_text = body.get("Body", "")
-            message_type = MessageType.TEXT  # По умолчанию текстовое сообщение
-            message_id = body.get("MessageSid", "") or body.get("SmsMessageSid", "")
-
-            # Проверяем, есть ли медиа в сообщении
-            if "MediaUrl0" in body:
-                message_type = MessageType.MEDIA
-                # Для MVP не обрабатываем медиафайлы, но могли бы сохранить URL
-
-            return phone_number, message_text, message_type, message_id
-
-        except Exception as e:
-            logger.error(f"Ошибка при извлечении данных сообщения: {str(e)}")
-            return None, None, None, None
-
-    async def _is_message_processed(self, message_id: str) -> bool:
-        """Проверяет, было ли сообщение уже обработано"""
-        processed_messages = firebase_client.query_documents(
-            "processed_messages",
-            "message_id", "==", message_id
-        )
-        return len(processed_messages) > 0
-
-    async def _mark_message_as_processed(self, message_id: str, phone_number: str, message_text: str) -> None:
-        """Отмечает сообщение как обработанное"""
-        firebase_client.add_document("processed_messages", {
-            "message_id": message_id,
-            "phone_number": phone_number,
-            "message_text": message_text,
-            "timestamp": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
-        })
 
     async def _get_last_processed_message(self, phone_number: str) -> Optional[Dict[str, Any]]:
         """Получает последнее обработанное сообщение пользователя"""
