@@ -4,11 +4,12 @@
 """
 
 import logging
-from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime, date, timedelta
-import pytz
-import uuid
 import random
+import uuid
+from datetime import datetime, timedelta
+from typing import Dict, Any, List, Tuple
+
+import pytz
 
 from config import settings
 

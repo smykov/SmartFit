@@ -1,20 +1,15 @@
 import asyncio
-import logging
-from datetime import datetime
-
-import aiohttp
-import pytz
-import requests
 import json
+import logging
 from typing import Dict, Any, List, Optional
 
-from app.db.firebase import firebase_client
+import aiohttp
+
 from app.services.llm.base_llm_service import BaseLLMService
 from app.templates.formatting_helpers import clean_json_from_markdown
 from app.templates.prompts import create_diet_system_prompt, create_diet_user_prompt, \
     create_nutrition_question_prompt, get_bot_commands_prompt, update_diet_user_prompt, create_short_diet_system_prompt, \
     update_short_diet_user_prompt, create_shopping_list_user_prompt, create_shopping_list_system_prompt
-from config import settings
 
 logger = logging.getLogger(__name__)
 

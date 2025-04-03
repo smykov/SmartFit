@@ -1,6 +1,9 @@
 from typing import Dict, Any, Optional
-from app.services.commands.command_interface import ICommand
+
+from app.services.commands.interfaces.command_interface import ICommand
+
 from app.localization.command_handler_messages import CommandHandlerMessages
+
 
 class BaseCommand(ICommand):
     """

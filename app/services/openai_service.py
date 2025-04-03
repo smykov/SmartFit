@@ -1,8 +1,8 @@
-import openai
+import json
 import logging
 from typing import Dict, Any, List, Optional
-import json
-import os
+
+import openai
 
 from config import settings
 

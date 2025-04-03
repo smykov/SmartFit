@@ -1,11 +1,12 @@
 import unittest
-from unittest.mock import patch, MagicMock, AsyncMock
-import json
-from datetime import datetime, date, timedelta
-import pytz
+from datetime import datetime, timedelta
+from unittest.mock import patch, AsyncMock
 
-from app.services.diet import DietService
+import pytz
 from app.services.tracking_service import TrackingService
+
+from app.models.tracking import MealComplianceStatus
+from app.services.diet import DietService
 from app.templates.formatting_helpers import (
     format_message_with_emojis,
     create_meal_emoji,
@@ -13,7 +14,6 @@ from app.templates.formatting_helpers import (
     translate_day_name,
     translate_meal_type
 )
-from app.models.tracking import MealComplianceStatus
 
 
 class TestFormattingHelpers(unittest.TestCase):

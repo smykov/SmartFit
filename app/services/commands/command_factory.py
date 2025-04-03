@@ -1,11 +1,13 @@
 from typing import Dict, Any, Optional
-from app.services.commands.interfaces.command_interface import ICommand
-from app.services.commands.commands.weight_command import WeightCommand
-from app.services.commands.commands.water_command import WaterCommand
+
+from app.services.commands.commands.compliance_command import ComplianceCommand
 from app.services.commands.commands.diet_command import DietCommand
 from app.services.commands.commands.shopping_list_command import ShoppingListCommand
-from app.services.commands.commands.compliance_command import ComplianceCommand
 from app.services.commands.commands.stats_command import StatsCommand
+from app.services.commands.commands.water_command import WaterCommand
+from app.services.commands.commands.weight_command import WeightCommand
+from app.services.commands.interfaces.command_interface import ICommand
+
 
 class CommandFactory:
     """

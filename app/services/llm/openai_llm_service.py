@@ -1,8 +1,8 @@
-import openai
+import json
 import logging
 from typing import Dict, Any, List, Optional
-import json
-import os
+
+import openai
 
 from app.services.llm.base_llm_service import BaseLLMService
 from app.templates.formatting_helpers import clean_json_from_markdown

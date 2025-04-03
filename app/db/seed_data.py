@@ -1,9 +1,7 @@
+import asyncio
 import json
 import logging
-import os
-import asyncio
 from pathlib import Path
-from typing import Dict, Any, List
 
 from app.db.firebase import firebase_client
 

@@ -1,16 +1,14 @@
-import logging
-from typing import Dict, Any, List, Optional, Coroutine, Tuple
-from datetime import datetime, date, timedelta
-import pytz
 import json
-from app.services.mock_diet_service import mock_diet_service
-from app.services.progressive_diet_generator import ProgressiveDietGenerator
-from app.templates.prompts import create_short_diet_system_prompt, create_short_diet_user_prompt, \
-    create_full_diet_system_prompt, create_full_diet_user_prompt
+import logging
+from datetime import datetime, date, timedelta
+from typing import Dict, Any, List, Optional, Tuple
 
-from config import settings
+import pytz
+
 from app.db.firebase import firebase_client
 from app.services.llm import llm_service
+from app.services.mock_diet_service import mock_diet_service
+from app.services.progressive_diet_generator import ProgressiveDietGenerator
 from app.templates.formatting_helpers import (
     format_diet_message_for_whatsapp,
     create_meal_emoji,
@@ -18,8 +16,8 @@ from app.templates.formatting_helpers import (
     translate_day_name,
     translate_meal_type
 )
-
-from app.models.diet import DietPlan, DailyDiet, Meal, Product, ShoppingList, ShoppingListItem
+from app.templates.prompts import create_short_diet_system_prompt, create_short_diet_user_prompt
+from config import settings
 
 logger = logging.getLogger(__name__)
 

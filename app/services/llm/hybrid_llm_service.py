@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Dict, Any, List, Optional, Mapping
+from typing import Dict, Any, List, Optional
 
 from app.services.llm.base_llm_service import BaseLLMService
 from app.templates.formatting_helpers import clean_json_from_markdown

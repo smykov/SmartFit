@@ -1,13 +1,14 @@
 # app/services/diet/diet_plan_manager.py
 
-from typing import Dict, Any, Optional, Tuple
-from datetime import datetime, date
-import pytz
 import json
+from datetime import datetime, date
+from typing import Dict, Any, Optional, Tuple
 
+import pytz
+
+from app.db.firebase import firebase_client
 from app.localization.messages import DietMessages
 from app.services.diet.base_service import BaseDietService
-from app.db.firebase import firebase_client
 from app.templates.prompts import (
     create_diet_system_prompt,
     create_short_diet_system_prompt,

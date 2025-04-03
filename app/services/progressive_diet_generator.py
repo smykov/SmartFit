@@ -1,9 +1,10 @@
+import asyncio
 import json
 import logging
-from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
+from typing import Dict, Any, Optional
+
 import pytz
-import asyncio
 
 from app.db.firebase import firebase_client
 from app.templates.prompts import create_full_diet_system_prompt, create_full_diet_user_prompt, \

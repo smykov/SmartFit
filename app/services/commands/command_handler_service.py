@@ -1,11 +1,14 @@
 import logging
 from typing import Dict, Any, Optional
-from app.services.commands.command_factory import CommandFactory
-from app.db.interfaces.user_repository_interface import IUserRepository
-from app.services.messaging.message_interface import IMessageService
-from app.services.tracking.tracking_interface import ITrackingService
+
 from app.services.diet.diet_interface import IDietService
+from app.services.tracking.tracking_interface import ITrackingService
+from app.services.messaging.message_interface import IMessageService
+from app.db.interfaces.user_repository_interface import IUserRepository
+
+from app.services.commands.command_factory import CommandFactory
 from app.localization.command_handler_messages import CommandHandlerMessages
+
 
 class CommandHandlerService:
     """

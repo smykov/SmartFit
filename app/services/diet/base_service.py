@@ -1,7 +1,7 @@
 # app/services/diet/base_service.py
 
-from abc import ABC
 import logging
+from abc import ABC
 
 
 class BaseDietService(ABC):

@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, Form, BackgroundTasks, Query
-from fastapi.responses import JSONResponse
-from typing import Dict, Any, Optional
 import json
 import logging
+from typing import Optional
+
+from fastapi import APIRouter, HTTPException, Request, Form, BackgroundTasks, Query
+from fastapi.responses import JSONResponse
 
 from app.services.whatsapp_service import whatsapp_service
 from config import settings

@@ -1,10 +1,9 @@
-from pydantic import BaseModel
-from typing import Optional, Dict, List, Any
 from datetime import datetime, date
-import pytz
 from enum import Enum
+from typing import Optional, Dict
 
-from config import settings
+from pydantic import BaseModel
+
 from app.models.diet import MealType
 
 

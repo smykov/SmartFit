@@ -1,15 +1,15 @@
 import logging
-from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, date, timedelta
+from typing import Dict, Any, Optional, Tuple
+
 import pytz
 
-from config import settings
 from app.db.firebase import firebase_client
 from app.models.tracking import (
-    WeightEntry, WaterIntakeEntry, TrackingData, DailyTrackingStatus,
-    WeightGoalProgress, MealCompliance, DailyCompliance, MealComplianceStatus
+    DailyTrackingStatus,
+    WeightGoalProgress
 )
-from app.models.diet import MealType
+from config import settings
 
 logger = logging.getLogger(__name__)
 

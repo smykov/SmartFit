@@ -1,10 +1,13 @@
 import re
-from typing import Dict, Any, Optional
 from datetime import datetime
+from typing import Dict, Any, Optional
+
 import pytz
-from app.services.commands.base_command import BaseCommand
+
 from app.models.tracking import MealComplianceStatus
+from app.services.commands.base_command import BaseCommand
 from config import settings
+
 
 class ComplianceCommand(BaseCommand):
     """

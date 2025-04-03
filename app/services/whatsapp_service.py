@@ -1,30 +1,28 @@
-import logging
-from typing import Dict, Any, List, Optional, Tuple
-import requests
-import json
 import asyncio
-from random import uniform
+import json
+import logging
+import re
 import traceback
+from datetime import datetime, timedelta
+from enum import Enum
+from random import uniform
+from typing import Dict, Any, List, Optional
 
+import pytz
 from twilio.base.exceptions import TwilioRestException
 from twilio.rest import Client
-from enum import Enum
-import re
-from datetime import datetime, date, timedelta
-import pytz
 
-from app.templates.prompts import format_help_message
-from config import settings
 from app.db.firebase import firebase_client
+from app.localization.messages import DietMessages
+from app.models.tracking import MealComplianceStatus
+from app.services.diet import diet_service
 from app.services.llm import llm_service
 from app.services.tracking.tracking_service import tracking_service
-from app.services.diet import diet_service
-from app.models.tracking import MealComplianceStatus
 from app.templates.formatting_helpers import (
-    format_message_with_emojis,
     translate_meal_type, translate_day_name
 )
-from app.localization.messages import DietMessages
+from app.templates.prompts import format_help_message
+from config import settings
 
 logger = logging.getLogger(__name__)
 

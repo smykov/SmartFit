@@ -1,13 +1,14 @@
 # app/services/diet/shopping_list_manager.py
 
-from typing import Dict, Any
-from datetime import datetime
-import pytz
 import json
+from datetime import datetime
+from typing import Dict, Any
 
+import pytz
+
+from app.db.firebase import firebase_client
 from app.localization.messages import DietMessages
 from app.services.diet.base_service import BaseDietService
-from app.db.firebase import firebase_client
 from app.templates.prompts import create_shopping_list_system_prompt, create_shopping_list_user_prompt
 from config import settings
 

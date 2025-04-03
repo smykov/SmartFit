@@ -1,7 +1,9 @@
 import re
 from typing import Dict, Any, Optional
+
 from app.services.commands.base_command import BaseCommand
 from app.services.tracking.tracking_service import tracking_service
+
 
 class WeightCommand(BaseCommand):
     """

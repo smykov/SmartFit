@@ -1,7 +1,8 @@
-import firebase_admin
-from firebase_admin import credentials, firestore, auth
 import logging
 from typing import Dict, Any, List, Optional
+
+import firebase_admin
+from firebase_admin import credentials, firestore, auth
 
 from config import settings
 

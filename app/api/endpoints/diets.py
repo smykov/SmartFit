@@ -1,14 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, BackgroundTasks
-from typing import List, Dict, Any, Optional
 import logging
-from datetime import datetime, date, timedelta
-import pytz
-import json
+from datetime import datetime
+from typing import Dict, Any
 
-from config import settings
+import pytz
+from fastapi import APIRouter, HTTPException, Path, Query, BackgroundTasks
+
 from app.db.firebase import firebase_client
 from app.services.diet import diet_service
 from app.services.whatsapp_service import whatsapp_service
+from config import settings
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

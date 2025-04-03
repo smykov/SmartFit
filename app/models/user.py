@@ -1,8 +1,9 @@
-from pydantic import BaseModel, Field, EmailStr, validator
-from typing import Optional, List, Dict, Any
 from datetime import datetime
-import pytz
 from enum import Enum
+from typing import Optional, List, Dict
+
+import pytz
+from pydantic import BaseModel, Field, EmailStr, validator
 
 from config import settings
 

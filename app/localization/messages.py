@@ -1,6 +1,6 @@
 # app/localization/messages.py
 
-from typing import Dict, Any
+from typing import Dict
 
 
 class DietMessages:

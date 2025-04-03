@@ -1,10 +1,9 @@
 import logging
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple
 
 from app.db.interfaces.user_repository_interface import IUserRepository
-from app.services.messaging.message_interface import IMessageService
 from app.localization.onboarding_messages import OnboardingMessages
-from config import settings
+from app.services.messaging.message_interface import IMessageService
 
 
 class OnboardingService:

@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
-from typing import List, Optional
 import logging
+from typing import List, Optional
 
-from app.models.user import UserCreate, UserUpdate, UserResponse
+from fastapi import APIRouter, HTTPException, Path, Query
+
 from app.db.firebase import firebase_client
+from app.models.user import UserCreate, UserUpdate, UserResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

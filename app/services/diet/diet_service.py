@@ -1,13 +1,13 @@
 # app/services/diet/diet_service.py
 
-from typing import Dict, Any, List, Optional, Tuple
 from datetime import date
+from typing import Dict, Any, List, Optional, Tuple
 
 from app.localization.messages import DietMessages
 from app.services.diet.base_service import BaseDietService
+from app.services.diet.diet_formatter import DietFormatter
 from app.services.diet.diet_plan_manager import DietPlanManager
 from app.services.diet.shopping_list_manager import ShoppingListManager
-from app.services.diet.diet_formatter import DietFormatter
 from app.services.llm import llm_service
 
 

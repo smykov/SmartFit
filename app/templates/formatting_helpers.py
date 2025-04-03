@@ -1,6 +1,5 @@
 import json
 import re
-from typing import Dict, Any
 
 
 def format_message_with_emojis(message_type: str, content: str) -> str:

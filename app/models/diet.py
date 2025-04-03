@@ -1,8 +1,9 @@
-from pydantic import BaseModel, Field
-from typing import List, Dict, Optional, Any
 from datetime import datetime, date
-import pytz
 from enum import Enum
+from typing import List, Dict, Optional
+
+import pytz
+from pydantic import BaseModel, Field
 
 from config import settings
 
