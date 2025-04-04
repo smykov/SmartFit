@@ -1,42 +1,44 @@
-import json
-import logging
-from typing import Optional
-
-from fastapi import APIRouter, HTTPException, Request, Form, BackgroundTasks, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, Form
 from fastapi.responses import JSONResponse
+from typing import Dict, Any, Optional
+import logging
+import json
 
-from app.services.whatsapp_service import whatsapp_service
-from config import settings
+from app.services.messaging.message_processor_service import MessageProcessorService
+from app.services.messaging.whatsapp_service import WhatsAppService
+from app.di.container import container
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+
+# Определяем зависимости для инъекции в эндпоинты
+def get_message_processor_service():
+    return container.message_processor_service()
+
+
+def get_whatsapp_service():
+    return container.whatsapp_service()
+
+
 @router.post("/webhook")
-async def whatsapp_webhook(request: Request):
+async def whatsapp_webhook(
+        request: Request,
+        message_processor: MessageProcessorService = Depends(get_message_processor_service)
+):
     """
     Вебхук для входящих сообщений WhatsApp
-    
-    Этот эндпоинт обрабатывает входящие сообщения от WhatsApp API
-    через Twilio и перенаправляет их на обработку в сервис WhatsApp.
     """
     try:
         # Получаем данные из запроса
         form_data = await request.form()
-        
+
         # Преобразуем данные в словарь
         message_data = {key: value for key, value in form_data.items()}
-        
-        # Проверяем, есть ли необходимые поля
-        if "From" not in message_data or "Body" not in message_data:
-            logger.error("Неверный формат данных в вебхуке WhatsApp")
-            return JSONResponse(
-                status_code=400,
-                content={"message": "Invalid request format"}
-            )
-        
+
         # Обрабатываем сообщение
-        result = await whatsapp_service.process_incoming_message(message_data)
-        
+        result = await message_processor.process_incoming_message(message_data)
+
         # Возвращаем ответ для Twilio (пустой TwiML ответ)
         return JSONResponse(
             content={
@@ -45,7 +47,7 @@ async def whatsapp_webhook(request: Request):
                 "result": result
             }
         )
-        
+
     except Exception as e:
         logger.error(f"Ошибка при обработке вебхука WhatsApp: {str(e)}")
         return JSONResponse(
@@ -53,46 +55,60 @@ async def whatsapp_webhook(request: Request):
             content={"message": f"Error processing webhook: {str(e)}"}
         )
 
+
 @router.post("/send")
 async def send_whatsapp_message(
-    phone_number: str = Form(...),
-    message: str = Form(...)
+        phone_number: str = Form(...),
+        message: str = Form(...),
+        context: Optional[str] = Form(None),
+        whatsapp_service: WhatsAppService = Depends(get_whatsapp_service)
 ):
     """
     Отправляет сообщение через WhatsApp
-    
+
     Args:
         phone_number: Номер телефона получателя
         message: Текст сообщения
+        context: JSON-строка с контекстом сообщения (опционально)
     """
     try:
         # Проверяем формат номера телефона
         if not phone_number or len(phone_number) < 10:
             raise HTTPException(status_code=400, detail="Invalid phone number")
-        
+
+        # Преобразуем строку контекста в словарь, если она предоставлена
+        context_dict = None
+        if context:
+            try:
+                context_dict = json.loads(context)
+            except json.JSONDecodeError:
+                raise HTTPException(status_code=400, detail="Invalid context format")
+
         # Отправляем сообщение
-        result = await whatsapp_service.send_message(phone_number, message)
-        
+        result = await whatsapp_service.send_message(phone_number, message, context_dict)
+
         if not result:
             raise HTTPException(status_code=500, detail="Failed to send message")
-        
+
         return {"success": True, "message": "Message sent successfully"}
-        
+
     except HTTPException as he:
         raise he
     except Exception as e:
         logger.error(f"Ошибка при отправке сообщения WhatsApp: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error sending message: {str(e)}")
 
+
 @router.post("/send-template")
 async def send_template_message(
-    phone_number: str = Form(...),
-    template_name: str = Form(...),
-    parameters: Optional[str] = Form(None)
+        phone_number: str = Form(...),
+        template_name: str = Form(...),
+        parameters: Optional[str] = Form(None),
+        whatsapp_service: WhatsAppService = Depends(get_whatsapp_service)
 ):
     """
     Отправляет шаблонное сообщение через WhatsApp
-    
+
     Args:
         phone_number: Номер телефона получателя
         template_name: Название шаблона
@@ -102,7 +118,7 @@ async def send_template_message(
         # Проверяем формат номера телефона
         if not phone_number or len(phone_number) < 10:
             raise HTTPException(status_code=400, detail="Invalid phone number")
-        
+
         # Парсим параметры, если они есть
         params = None
         if parameters:
@@ -110,49 +126,21 @@ async def send_template_message(
                 params = json.loads(parameters)
             except json.JSONDecodeError:
                 raise HTTPException(status_code=400, detail="Invalid parameters format")
-        
+
         # Отправляем шаблонное сообщение
         result = await whatsapp_service.send_template_message(
             phone_number,
             template_name,
             params
         )
-        
+
         if not result:
             raise HTTPException(status_code=500, detail="Failed to send template message")
-        
+
         return {"success": True, "message": "Template message sent successfully"}
-        
+
     except HTTPException as he:
         raise he
     except Exception as e:
         logger.error(f"Ошибка при отправке шаблонного сообщения WhatsApp: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error sending template message: {str(e)}")
-
-
-@router.post("/admin/send-reminders")
-async def send_reminders_manually(
-        background_tasks: BackgroundTasks,
-        admin_key: str = Query(..., description="Ключ администратора для подтверждения операции"),
-        reminder_type: str = Query(..., description="Тип напоминания (onboarding, tracking, all)")
-):
-    """Вручную запускает отправку напоминаний"""
-    try:
-        # Проверяем ключ администратора
-        if admin_key != settings.ADMIN_API_KEY:
-            raise HTTPException(status_code=401, detail="Invalid admin key")
-
-        # Запускаем отправку напоминаний в фоновом режиме
-        if reminder_type == "onboarding" or reminder_type == "all":
-            background_tasks.add_task(whatsapp_service.send_onboarding_reminders)
-
-        if reminder_type == "tracking" or reminder_type == "all":
-            background_tasks.add_task(whatsapp_service.send_tracking_reminders)
-
-        return {"success": True, "message": f"Started sending {reminder_type} reminders"}
-
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        logger.error(f"Error in manual reminder sending: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")

@@ -20,31 +20,23 @@ class WaterCommand(BaseCommand):
         Returns:
             Dict[str, Any]: Результат выполнения команды
         """
+        self.logger.info(f"Обработка команды трекинга воды: params: {params}")
+
         if not params or 'params' not in params:
             return {
                 "success": False, 
                 "message": self.messages.INVALID_WATER_FORMAT
             }
-        
-        message_text = params['params'][0]
-        
-        # Используем регулярное выражение для извлечения количества стаканов
-        water_match = re.match(r'^вода\s+(\d+[.,]?\d*)$', message_text.lower())
-        
-        if not water_match:
-            return {
-                "success": False, 
-                "message": self.messages.INVALID_WATER_FORMAT
-            }
-        
+
         try:
-            amount = float(water_match.group(1).replace(',', '.'))
-            
+            amount = float(params['params'][0].lower().strip().replace(',', '.'))
+
             # Проверка диапазона потребления воды
-            if amount < 0 or amount > 20:
+            if amount < 0 or amount >= 20:
+                self.logger.error(f"Ошибка при записи трекинга воды: WATER_OUT_OF_RANGE '{amount}'")
                 return {
                     "success": False, 
-                    "message": self.messages.INVALID_WATER_VALUE
+                    "message": self.messages.WATER_OUT_OF_RANGE
                 }
             
             # Конвертируем стаканы в миллилитры (примерно 250 мл в стакане)

@@ -81,17 +81,16 @@ class MessageProcessorService:
             "weight": re.compile(r'^вес\s+(\d+[.,]?\d*)$', re.IGNORECASE),
             "water": re.compile(r'^вода\s+(\d+[.,]?\d*)$', re.IGNORECASE),
             "help": re.compile(r'^(помощь|справка|команды|help)$', re.IGNORECASE),
-            "diet": re.compile(r'^(диета|план питания|меню)$', re.IGNORECASE),
-            "diet_short": re.compile(r'^(план|меню)$', re.IGNORECASE),
-            "diet_today": re.compile(r'^(план|меню)\s+на\s+сегодня$', re.IGNORECASE),
-            "diet_tomorrow": re.compile(r'^(план|меню)\s+на\s+завтра$', re.IGNORECASE),
-            "diet_full": re.compile(r'^(полный план|полное меню)$', re.IGNORECASE),
+            "diet": re.compile(r'^(диета|план|план питания|меню)$', re.IGNORECASE),
+            # "diet_today": re.compile(r'^(план|меню)\s+на\s+сегодня$', re.IGNORECASE),
+            # "diet_tomorrow": re.compile(r'^(план|меню)\s+на\s+завтра$', re.IGNORECASE),
+            # "diet_full": re.compile(r'^(полный план|полное меню)$', re.IGNORECASE),
             "shopping_list": re.compile(r'^список покупок$', re.IGNORECASE),
-            "product_bought": re.compile(r'^купил[а]?\s+(.+)$', re.IGNORECASE),
+            # "product_bought": re.compile(r'^купил[а]?\s+(.+)$', re.IGNORECASE),
             "stats": re.compile(r'^(статистика|прогресс)$', re.IGNORECASE),
-            "meal_compliance": re.compile(r'^(выполнено|частично|заменил|пропустил)\s+(\w+)$', re.IGNORECASE),
-            "diet_update": re.compile(r'^(измени|поменяй|обнови|замени|скорректируй)\s+(план|меню|рацион|питание)(.*)$',
-                                      re.IGNORECASE),
+            "meal_compliance": re.compile(r'^(выполнено|частично|заменил[а]?|пропустил[а]?)\s+(\w+)$', re.IGNORECASE),
+            # "diet_update": re.compile(r'^(измени|поменяй|обнови|замени|скорректируй)\s+(план|меню|рацион|питание)(.*)$',
+            #                           re.IGNORECASE),
         }
 
         # Ответы на согласование плана
@@ -139,7 +138,7 @@ class MessageProcessorService:
             })
 
             # Определяем стратегию обработки сообщения
-            strategy = self._determine_processing_strategy(user, message_text)
+            strategy = await self._determine_processing_strategy(user, message_text)
             self.logger.info(f"Выбрана стратегия обработки: {strategy} для пользователя {phone_number}")
 
             # Обрабатываем сообщение в соответствии с выбранной стратегией
@@ -154,7 +153,7 @@ class MessageProcessorService:
             self.logger.error(f"Ошибка при обработке входящего сообщения: {str(e)}", exc_info=True)
             return {"success": False, "error": str(e)}
 
-    def _determine_processing_strategy(self, user: Dict[str, Any], message_text: str) -> ProcessingStrategy:
+    async def _determine_processing_strategy(self, user: Dict[str, Any], message_text: str) -> ProcessingStrategy:
         """
         Определяет стратегию обработки сообщения на основе контекста пользователя и содержания сообщения
 
@@ -170,7 +169,7 @@ class MessageProcessorService:
             return ProcessingStrategy.ONBOARDING
 
         # Проверяем наличие ожидающего согласования плана диеты
-        if self._has_pending_diet_plan(user["id"]):
+        if await self._has_pending_diet_plan(user["id"]):
             # Если сообщение похоже на ответ о согласовании
             for pattern_name in ["approve", "disapprove"]:
                 if self.approval_patterns[pattern_name].match(message_text):
@@ -240,6 +239,10 @@ class MessageProcessorService:
         Returns:
             Dict[str, Any]: Результат обработки команды
         """
+
+        diagnostic_info = self._diagnose_command_type(message_text)
+        self.logger.debug(diagnostic_info)
+
         user_id = user["id"]
         phone_number = user["phone_number"]
 
@@ -258,10 +261,17 @@ class MessageProcessorService:
 
         if not command_type:
             self.logger.warning(f"Не удалось определить тип команды: {message_text}")
-            return {"success": False, "error": "Unknown command"}
+            await self.message_service.send_message(phone_number, self.messages.COMMAND_NOT_FOUND)
+            return {"success": False, "error": f"Unknown command for text {message_text}"}
 
         # Создаем команду через фабрику
         command = self.command_factory.create_command(command_type, user)
+
+        # Проверяем, удалось ли создать команду
+        if command is None:
+            self.logger.error(f"Не удалось создать команду типа: {command_type}")
+            await self.message_service.send_message(phone_number, self.messages.COMMAND_NOT_FOUND)
+            return {"success": False, "error": f"Command type '{command_type}' not found"}
 
         # Проверяем предварительные условия
         if not await command.can_execute(user_id):
@@ -278,6 +288,29 @@ class MessageProcessorService:
             await self.message_service.send_message(phone_number, result["message"])
 
         return result
+
+    def _diagnose_command_type(self, message_text: str) -> str:
+        """
+        Диагностический метод для определения типа команды
+
+        Args:
+            message_text: Текст сообщения
+
+        Returns:
+            str: Диагностическая информация
+        """
+        matches = []
+
+        for cmd_type, pattern in self.command_patterns.items():
+            match = pattern.match(message_text)
+            if match:
+                groups = match.groups() if match.groups() else []
+                matches.append(f"Найдено соответствие для команды '{cmd_type}', группы: {groups}")
+
+        if matches:
+            return "Диагностика команды:\n" + "\n".join(matches)
+        else:
+            return f"Не найдено соответствие ни для одной команды: '{message_text}'"
 
     async def _process_diet_approval(self, user: Dict[str, Any], message_text: str) -> Dict[str, Any]:
         """
@@ -417,6 +450,7 @@ class MessageProcessorService:
             Dict[str, Any]: Результат обработки
         """
         # Логика обработки данных трекинга должна быть реализована
+        # TODO дописать обработку трекинга
         # в соответствующем сервисе трекинга
         return {"success": False, "action": "not_implemented"}
 
@@ -437,8 +471,13 @@ class MessageProcessorService:
         # Получаем ответ от ИИ через сервис диет
         response = await self.diet_service.answer_nutrition_question(user_id, message_text)
 
+        context = {
+            "message_type": "ai_response",
+            "user_id": user_id
+        }
+
         # Отправляем ответ пользователю
-        await self.message_service.send_message(phone_number, response)
+        await self.message_service.send_message(phone_number, response, context)
 
         return {"success": True, "action": "ai_response_sent"}
 

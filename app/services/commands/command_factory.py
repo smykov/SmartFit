@@ -1,4 +1,7 @@
+import logging
 from typing import Dict, Any, Optional
+
+from pip._internal.commands.help import HelpCommand
 
 from app.services.commands.commands.compliance_command import ComplianceCommand
 from app.services.commands.commands.diet_command import DietCommand
@@ -13,6 +16,7 @@ class CommandFactory:
     """
     Фабрика для создания команд с внедрением зависимостей
     """
+
     def __init__(self, dependencies: Dict[str, Any]):
         """
         Инициализация фабрики с зависимостями
@@ -21,36 +25,49 @@ class CommandFactory:
             dependencies: Словарь зависимостей для создания команд
         """
         self.dependencies = dependencies
-        
+        self.logger = logging.getLogger(self.__class__.__name__)
+
         # Маппинг типов команд к классам команд
         self.command_map = {
             "weight": WeightCommand,
             "water": WaterCommand,
+            "help": HelpCommand,
             "diet": DietCommand,
-            "shopping_list": ShoppingListCommand, 
+            # "diet_today": DietTodayCommand,
+            # "diet_tomorrow": DietTomorrowCommand,
+            # "diet_full": DietFullCommand,
+            "shopping_list": ShoppingListCommand,
+            # "product_bought": ProductBoughtCommand,
+            "stats": StatsCommand,
             "meal_compliance": ComplianceCommand,
-            "stats": StatsCommand
+            # "diet_update": DietUpdateCommand,
         }
 
     def create_command(self, command_type: str, user: Dict[str, Any]) -> Optional[ICommand]:
         """
         Создает экземпляр команды по ее типу
-        
+
         Args:
             command_type: Тип команды
             user: Данные пользователя
-        
+
         Returns:
             Optional[ICommand]: Экземпляр команды или None
         """
-        # Добавляем данные пользователя в зависимости
-        command_dependencies = self.dependencies.copy()
-        command_dependencies['user'] = user
+        try:
+            # Добавляем данные пользователя в зависимости
+            command_dependencies = self.dependencies.copy()
+            command_dependencies['user'] = user
 
-        # Находим класс команды по типу
-        command_class = self.command_map.get(command_type)
-        
-        if command_class:
-            return command_class(command_dependencies)
-        
-        return None
+            # Находим класс команды по типу
+            command_class = self.command_map.get(command_type)
+
+            if command_class:
+                self.logger.info(f"Создание команды типа: {command_type}")
+                return command_class(command_dependencies)
+            else:
+                self.logger.warning(f"Класс команды не найден для типа: {command_type}")
+                return None
+        except Exception as e:
+            self.logger.error(f"Ошибка при создании команды типа {command_type}: {str(e)}", exc_info=True)
+            return None

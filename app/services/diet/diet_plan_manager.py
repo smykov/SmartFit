@@ -543,3 +543,38 @@ class DietPlanManager(BaseDietService):
         # Преобразуем в строковое представление
         days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
         return days[weekday]
+
+
+    async def get_pending_diet_plan(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Получает план диеты, ожидающий согласования пользователем
+
+        Args:
+            user_id: ID пользователя
+
+        Returns:
+            Optional[Dict[str, Any]]: План диеты или None, если такого плана нет
+        """
+        try:
+            # Получаем все планы диеты пользователя
+            diet_plans = firebase_client.query_documents("diet_plans", "user_id", "==", user_id)
+
+            # Фильтруем планы по статусу "pending" и версии "short"
+            pending_plans = [
+                plan for plan in diet_plans
+                if plan.get("status") == "pending" and plan.get("version") == "short"
+            ]
+
+            if not pending_plans:
+                return None
+
+            # Возвращаем самый новый ожидающий план
+            return sorted(
+                pending_plans,
+                key=lambda p: p.get("created_at", ""),
+                reverse=True
+            )[0]
+
+        except Exception as e:
+            self.logger.error(f"Ошибка при получении ожидающего плана диеты: {str(e)}")
+            return None

@@ -1,11 +1,15 @@
-import uvicorn
+import logging
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-import logging
 
 from app.api.router import api_router
-from app.services import whatsapp_service
+from app.db.interfaces.message_repository_interface import IMessageRepository
+from app.db.interfaces.user_repository_interface import IUserRepository
+from app.di.container import container
+from app.services.messaging.interfaces.message_client_interface import IMessageClient
+from app.services.messaging.message_processor_service import MessageProcessorService
+from app.services.messaging.whatsapp_service import WhatsAppService
 from config import settings
 
 # Настройка логирования
@@ -33,6 +37,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Инициализация контейнера DI
+container.config.from_dict({
+    "app_name": settings.APP_NAME,
+    "app_version": settings.APP_VERSION,
+})
+
+# Регистрация контейнера в FastAPI приложении для внедрения зависимостей через ручки API
+app.container = container
+
 # Подключение API роутеров
 app.include_router(api_router)
 
@@ -57,18 +70,48 @@ async def root():
 async def health_check():
     return {"status": "healthy"}
 
+# Код для запуска инициализации при старте приложения
+@app.on_event("startup")
+async def startup_event():
+    # Проверка необходимых переменных окружения
+    required_env_vars = ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"]
+    missing_vars = [var for var in required_env_vars if not getattr(settings, var, None)]
+
+    if missing_vars:
+        logger.error(f"Missing required environment variables: {', '.join(missing_vars)}")
+        raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
+
+    # Проверка всех зависимостей в контейнере
+    try:
+        # Пробуем получить все основные зависимости
+        container.user_repository()
+        container.message_repository()
+        container.message_client()
+        container.whatsapp_service()
+        container.diet_service()
+        container.tracking_service()
+        container.message_processor_service()
+        container.text_splitter()
+        container.command_factory()
+        container.command_handler_service()
+        container.onboarding_service()
+
+        logger.info("All dependencies successfully resolved")
+    except Exception as e:
+        logger.error(f"Error resolving dependencies: {str(e)}")
+        raise
+
+    # Получаем WhatsApp сервис из контейнера
+    whatsapp_service = container.whatsapp_service()
+    # Инициализируем сервис
+    await whatsapp_service.initialize()
+    logger.info("WhatsApp service initialized")
+
 if __name__ == "__main__":
+    import uvicorn
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
         port=8000,
         reload=settings.DEBUG
     )
-
-
-# код для запуска инициализации при старте приложения
-@app.on_event("startup")
-async def startup_event():
-    # Запускаем процесс отправки неотправленных сообщений при старте
-    await whatsapp_service.initialize()
-    logger.info("WhatsApp service initialized")

@@ -167,3 +167,16 @@ class IDietService(ABC):
             str: Отформатированный список покупок
         """
         pass
+
+    @abstractmethod
+    async def get_pending_diet_plan(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Получает план диеты, ожидающий согласования пользователем
+
+        Args:
+            user_id: ID пользователя
+
+        Returns:
+            Optional[Dict[str, Any]]: План диеты или None, если такого плана нет
+        """
+        pass

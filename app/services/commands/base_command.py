@@ -1,3 +1,4 @@
+import logging
 from typing import Dict, Any, Optional
 
 from app.services.commands.interfaces.command_interface import ICommand
@@ -18,6 +19,7 @@ class BaseCommand(ICommand):
         """
         self.dependencies = dependencies
         self.messages = CommandHandlerMessages()
+        self.logger = logging.getLogger(self.__class__.__name__)
 
     async def can_execute(self, user_id: str) -> bool:
         """

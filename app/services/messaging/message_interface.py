@@ -1,12 +1,12 @@
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Any
 
 
 class IMessageService(ABC):
     """Интерфейс для сервиса отправки сообщений"""
     
     @abstractmethod
-    async def send_message(self, to_phone: str, message: str, context: str = None) -> bool:
+    async def send_message(self, to_phone: str, message: str, context: dict[str, str | Any] = None) -> bool:
         """
         Отправляет текстовое сообщение
         

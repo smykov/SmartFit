@@ -199,16 +199,21 @@ class OnboardingService:
         """
         # Отмечаем онбординг как завершенный
         await self.user_repository.update(user_id, {"is_onboarding_completed": True})
-        
         # Отправляем сообщение о завершении онбординга
+        context = {
+            "onboarding_step": "complete",
+            "user_id": user_id
+        }
         await self.message_service.send_message(
             phone_number, 
-            self.messages.ONBOARDING_COMPLETED
+            self.messages.ONBOARDING_COMPLETED,
+            context
         )
         
         await self.message_service.send_message(
             phone_number,
-            self.messages.DIET_GENERATION_STARTED
+            self.messages.DIET_GENERATION_STARTED,
+            context
         )
         
         # Если есть сервис генерации диет, запускаем генерацию

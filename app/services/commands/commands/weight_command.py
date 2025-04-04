@@ -33,28 +33,20 @@ class WeightCommand(BaseCommand):
         Returns:
             Dict[str, Any]: Результат выполнения команды
         """
+        self.logger.info(f"Обработка команды трекинга веса: params: {params}")
+
         if not params or 'params' not in params:
             return {
                 "success": False, 
                 "message": self.messages.INVALID_WEIGHT_FORMAT
             }
-        
-        message_text = params['params'][0]
-        
-        # Используем регулярное выражение для извлечения веса
-        weight_match = re.match(r'^вес\s+(\d+[.,]?\d*)$', message_text.lower())
-        
-        if not weight_match:
-            return {
-                "success": False, 
-                "message": self.messages.INVALID_WEIGHT_FORMAT
-            }
-        
+
         try:
-            weight = float(weight_match.group(1).replace(',', '.'))
-            
+            weight = float(params['params'][0].lower().strip().replace(',', '.'))
+
             # Проверка диапазона веса
             if weight < 30 or weight > 300:
+                self.logger.error(f"Ошибка при записи трекинга воды: WATER_OUT_OF_RANGE '{weight}'")
                 return {
                     "success": False, 
                     "message": self.messages.WEIGHT_OUT_OF_RANGE

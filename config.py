@@ -25,7 +25,12 @@ class Settings(BaseSettings):
     TWILIO_ACCOUNT_SID: str = os.getenv("TWILIO_ACCOUNT_SID", "")
     TWILIO_AUTH_TOKEN: str = os.getenv("TWILIO_AUTH_TOKEN", "")
     TWILIO_PHONE_NUMBER: str = os.getenv("TWILIO_PHONE_NUMBER", "")
+
+    # Настройки WhatsApp
     WHATSAPP_WEBHOOK_URL: str = os.getenv("WHATSAPP_WEBHOOK_URL", "")
+    WHATSAPP_RETRY_INTERVAL_SECONDS: int = 300  # 5 минут
+    WHATSAPP_MAX_MESSAGE_SIZE: int = 1500
+    WHATSAPP_MAX_MESSAGE_AGE_HOURS: int = 72  # 3 дня
 
     # Временная зона для Гватемалы
     TIMEZONE: str = "America/Guatemala"

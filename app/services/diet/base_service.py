@@ -3,7 +3,6 @@
 import logging
 from abc import ABC
 
-
 class BaseDietService(ABC):
     """Базовый абстрактный класс для всех сервисов, связанных с диетами"""
 

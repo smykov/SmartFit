@@ -3,26 +3,100 @@
 from datetime import date
 from typing import Dict, Any, List, Optional, Tuple
 
+from app.db.interfaces.user_repository_interface import IUserRepository
 from app.localization.messages import DietMessages
 from app.services.diet.base_service import BaseDietService
 from app.services.diet.diet_formatter import DietFormatter
 from app.services.diet.diet_plan_manager import DietPlanManager
+from app.services.diet.diet_service_interface import IDietService
 from app.services.diet.shopping_list_manager import ShoppingListManager
 from app.services.llm import llm_service
 
 
-class DietService(BaseDietService):
+class DietService(BaseDietService, IDietService):
     """Основной сервис для работы с диетами, использующий специализированные компоненты"""
 
-    def __init__(self):
+    def __init__(
+            self,
+            user_repository: IUserRepository,
+    ):
         """Инициализация сервиса диет с необходимыми компонентами"""
         super().__init__()
         self.diet_plan_manager = DietPlanManager(llm_service)
         self.shopping_list_manager = ShoppingListManager(llm_service)
         self.formatter = DietFormatter()
         self.messages = DietMessages()
+        self.llm_service = llm_service
+        self.user_repository = user_repository
 
-    # Методы для делегирования вызовов соответствующим компонентам
+    async def generate_full_diet_plan(self, short_plan_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Генерирует полную версию плана диеты на основе краткого плана
+
+        Args:
+            short_plan_id: ID краткого плана диеты
+
+        Returns:
+            Optional[Dict[str, Any]]: Полный план диеты или None в случае ошибки
+        """
+        try:
+            # Получаем краткий план диеты
+            short_plan = await self.diet_plan_manager.get_diet_plan_by_id(short_plan_id)
+
+            if not short_plan:
+                self.logger.error(f"Краткий план с ID {short_plan_id} не найден")
+                return None
+
+            # Получаем данные пользователя
+            user_id = short_plan.get("user_id")
+            user = await self.user_repository.get_by_id(user_id)
+
+            if not user:
+                self.logger.error(f"Пользователь с ID {user_id} не найден")
+                return None
+
+            # Используем прогрессивный генератор диет для создания полного плана
+            from app.services.progressive_diet_generator import ProgressiveDietGenerator
+
+            generator = ProgressiveDietGenerator(self.llm_service, short_plan_id, user)
+            full_plan = await generator.generate_full_plan()
+
+            if not full_plan:
+                self.logger.error(f"Не удалось создать полный план диеты для плана {short_plan_id}")
+                return None
+
+            return full_plan
+
+        except Exception as e:
+            self.logger.error(f"Ошибка при генерации полного плана диеты: {str(e)}")
+            return None
+
+    async def answer_nutrition_question(self, user_id: str, question: str) -> str:
+        """
+        Отвечает на вопрос пользователя о питании
+
+        Args:
+            user_id: ID пользователя
+            question: Вопрос о питании
+
+        Returns:
+            str: Ответ на вопрос
+        """
+        try:
+            # Получаем данные пользователя для контекста
+            user = await self.user_repository.get_by_id(user_id)
+
+            if not user:
+                return "Извините, не удалось найти информацию о пользователе."
+
+            # Отправляем запрос к LLM сервису
+            response = await self.llm_service.answer_nutrition_question(user_id, question)
+
+            return response
+
+        except Exception as e:
+            self.logger.error(f"Ошибка при ответе на вопрос о питании: {str(e)}")
+            return "Извините, произошла ошибка при обработке вашего вопроса. Пожалуйста, попробуйте позже."
 
     # Методы делегирования для DietPlanManager
     async def generate_short_diet_plan(self, user_id: str) -> Optional[Dict[str, Any]]:
@@ -65,7 +139,7 @@ class DietService(BaseDietService):
         return await self.diet_plan_manager.update_short_diet_plan(plan_id, updated_days, comment)
 
     async def update_diet_plan_partially(self, diet_plan_id: str, updated_days: Dict[str, Any], comment: str = None) -> \
-    Tuple[bool, Dict[str, Any]]:
+            Tuple[bool, Dict[str, Any]]:
         """
         Обновляет частично план питания
 
@@ -242,3 +316,21 @@ class DietService(BaseDietService):
             str: Отформатированный список покупок
         """
         return self.formatter.format_shopping_list(shopping_list_data)
+
+
+    async def get_pending_diet_plan(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Получает план диеты, ожидающий согласования пользователем
+
+        Args:
+            user_id: ID пользователя
+
+        Returns:
+            Optional[Dict[str, Any]]: План диеты или None, если такого плана нет
+        """
+        try:
+            # Делегируем запрос менеджеру планов диет
+            return await self.diet_plan_manager.get_pending_diet_plan(user_id)
+        except Exception as e:
+            self.logger.error(f"Ошибка при получении ожидающего плана диеты: {str(e)}")
+            return None
