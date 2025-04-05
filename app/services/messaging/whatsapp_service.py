@@ -12,6 +12,27 @@ from config import settings
 logger = logging.getLogger(__name__)
 
 
+def _log_error_with_context(message: str, exception: Optional[Exception] = None,
+                            context: Optional[Dict[str, Any]] = None):
+    """
+    Расширенное логирование ошибок с контекстом
+
+    Args:
+        message: Сообщение об ошибке
+        exception: Исключение
+        context: Дополнительный контекст
+    """
+    error_message = f"{message}"
+
+    if exception:
+        error_message += f": {str(exception)}"
+
+    if context:
+        error_message += f" [Context: {context}]"
+
+    logger.error(error_message)
+
+
 class WhatsAppService:
     """
     Сервис для работы с WhatsApp API, ответственный за отправку и обработку сообщений
@@ -341,22 +362,3 @@ class WhatsAppService:
             # Перезапускаем задачу после ошибки
             asyncio.create_task(self._schedule_resend_pending_messages())
 
-    def _log_error_with_context(self, message: str, exception: Optional[Exception] = None,
-                                context: Optional[Dict[str, Any]] = None):
-        """
-        Расширенное логирование ошибок с контекстом
-
-        Args:
-            message: Сообщение об ошибке
-            exception: Исключение
-            context: Дополнительный контекст
-        """
-        error_message = f"{message}"
-
-        if exception:
-            error_message += f": {str(exception)}"
-
-        if context:
-            error_message += f" [Context: {context}]"
-
-        logger.error(error_message)
