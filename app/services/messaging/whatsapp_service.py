@@ -1,3 +1,4 @@
+# app/services/messaging/whatsapp_service.py
 import asyncio
 import logging
 from datetime import datetime
@@ -6,7 +7,8 @@ import pytz
 
 from app.db.interfaces.message_repository_interface import IMessageRepository
 from app.services.messaging.interfaces.message_client_interface import IMessageClient
-from app.services.utils.text_splitter import TextSplitter
+from app.services.localization.localization_interface import ILocalizationService
+from app.utils.text_splitter import TextSplitter
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -41,6 +43,7 @@ class WhatsAppService:
     def __init__(self,
                  message_client: IMessageClient,
                  message_repository: IMessageRepository,
+                 localization_service: ILocalizationService,
                  text_splitter: TextSplitter,
                  from_phone_number: str,
                  retry_interval_seconds: int = 300,
@@ -52,6 +55,7 @@ class WhatsAppService:
         Args:
             message_client: Клиент для отправки сообщений
             message_repository: Репозиторий для работы с сообщениями
+            localization_service: Сервис локализации сообщений
             text_splitter: Утилита для разбиения текста на части
             from_phone_number: Номер телефона отправителя
             retry_interval_seconds: Интервал между повторными попытками отправки (в секундах)
@@ -60,6 +64,7 @@ class WhatsAppService:
         """
         self.message_client = message_client
         self.message_repository = message_repository
+        self.localization_service = localization_service
         self.text_splitter = text_splitter
         self.from_phone_number = from_phone_number
         self.retry_interval_seconds = retry_interval_seconds
@@ -208,27 +213,41 @@ class WhatsAppService:
             logger.error(f"Error sending multiple messages: {str(e)}")
             return False
 
-    async def send_template_message(self, to_phone: str, template_name: str, params: List[Any] = None) -> bool:
+    async def send_template_message(self, to_phone: str, template_name: str, user_id: Optional[str] = None,
+                                    params: Dict[str, Any] = None, ) -> bool:
         """
-        Отправляет шаблонное сообщение через WhatsApp Business API
+        Отправляет локализованное шаблонное сообщение через WhatsApp
 
         Args:
             to_phone: Номер телефона получателя
-            template_name: Название шаблона
-            params: Параметры для шаблона
+            template_name: Ключ шаблона сообщения
+            user_id: ID пользователя для определения языка (если None, используется язык по умолчанию)
+            params: Параметры для подстановки в шаблон
 
         Returns:
             bool: Результат отправки
         """
         try:
+            # Определяем язык пользователя, если предоставлен ID
+            lang = None
+            if user_id:
+                lang = await self.localization_service.get_user_language(user_id)
+
             # Отправляем шаблонное сообщение через клиент
-            message_id = await self.message_client.send_template_message(to_phone, template_name, params)
+            message_id = await self.message_client.send_template_message(
+                to_phone,
+                template_name,
+                lang,
+                params
+            )
 
             if message_id:
                 # Создаем контекст для шаблонного сообщения
                 template_context = {
                     "template_name": template_name,
-                    "template_params": params
+                    "template_params": params,
+                    "language": lang,
+                    "user_id": user_id
                 }
 
                 # Сохраняем информацию об отправленном сообщении
@@ -246,7 +265,9 @@ class WhatsAppService:
                 error_type = "template_send_error"
                 template_context = {
                     "template_name": template_name,
-                    "template_params": params
+                    "template_params": params,
+                    "language": lang,
+                    "user_id": user_id
                 }
 
                 await self.message_repository.save_pending_message(
@@ -320,6 +341,7 @@ class WhatsAppService:
                         success = await self.send_template_message(
                             phone_number,
                             context["template_name"],
+                            context.get("user_id"),
                             context.get("template_params")
                         )
                     else:
@@ -361,4 +383,3 @@ class WhatsAppService:
             logger.error(f"Error in scheduled resend task: {str(e)}")
             # Перезапускаем задачу после ошибки
             asyncio.create_task(self._schedule_resend_pending_messages())
-

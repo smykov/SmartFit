@@ -48,6 +48,20 @@ class IDietService(ABC):
         pass
 
     @abstractmethod
+    async def start_full_diet_generation(self, user_id: str, short_plan_id: str) -> bool:
+        """
+        Запускает фоновую генерацию полного плана диеты
+
+        Args:
+            user_id: ID пользователя
+            short_plan_id: ID краткой версии плана диеты
+
+        Returns:
+            bool: Успешность запуска генерации
+        """
+        pass
+
+    @abstractmethod
     async def get_current_diet(self, user_id: str) -> Optional[Dict[str, Any]]:
         """
         Получает текущий активный план диеты пользователя
@@ -130,12 +144,13 @@ class IDietService(ABC):
         pass
 
     @abstractmethod
-    def get_diet_summary(self, diet_plan: Dict[str, Any]) -> str:
+    def get_diet_summary(self, diet_plan: Dict[str, Any], lang: str) -> str:
         """
         Создает сводку плана диеты
 
         Args:
             diet_plan: План диеты
+            lang: Код языка (по умолчанию используется системный язык)
 
         Returns:
             str: Сводка плана диеты
@@ -178,5 +193,33 @@ class IDietService(ABC):
 
         Returns:
             Optional[Dict[str, Any]]: План диеты или None, если такого плана нет
+        """
+        pass
+
+    @abstractmethod
+    async def update_short_diet_plan_by_request(self, plan_id: str, update_request: str) -> Dict[str, Any]:
+        """
+        Обновляет краткий план диеты на основе запроса пользователя
+
+        Args:
+            plan_id: ID плана диеты
+            update_request: Текст запроса пользователя на изменение
+
+        Returns:
+            Dict[str, Any]: Результат обновления
+        """
+        pass
+
+    @abstractmethod
+    def get_day_diet_plan(self, diet_plan: Dict[str, Any], day_date: date = None) -> str:
+        """
+        Создает детальный план диеты на конкретный день
+
+        Args:
+            diet_plan: План диеты
+            day_date: Дата, на которую нужен план
+
+        Returns:
+            str: Сообщение с планом на день
         """
         pass

@@ -1,9 +1,11 @@
+# app/services/messaging/clients/twilio_whatsapp_client.py
 import logging
 from typing import Optional, Dict, Any, List
 
 from twilio.base.exceptions import TwilioRestException
 from twilio.rest import Client
 
+from app.services.localization.localization_interface import ILocalizationService
 from app.services.messaging.interfaces.message_client_interface import IMessageClient
 
 logger = logging.getLogger(__name__)
@@ -14,7 +16,7 @@ class TwilioWhatsAppClient(IMessageClient):
     Клиент для отправки сообщений через Twilio WhatsApp API
     """
 
-    def __init__(self, account_sid: str, auth_token: str, from_phone: str):
+    def __init__(self, account_sid: str, auth_token: str, from_phone: str, localization_service: ILocalizationService):
         """
         Инициализация клиента Twilio
 
@@ -22,9 +24,11 @@ class TwilioWhatsAppClient(IMessageClient):
             account_sid: Twilio Account SID
             auth_token: Twilio Auth Token
             from_phone: Номер телефона отправителя
+            localization_service: Сервис локализации для сообщений
         """
         self.client = Client(account_sid, auth_token)
         self.from_phone = from_phone
+        self.localization_service = localization_service
 
     async def send_message(self, to: str, message: str) -> Optional[str]:
         """
@@ -64,14 +68,16 @@ class TwilioWhatsAppClient(IMessageClient):
             logger.error(f"Error sending message via Twilio: {str(e)}")
             return None
 
-    async def send_template_message(self, to: str, template_name: str, params: List[Any] = None) -> Optional[str]:
+    async def send_template_message(self, to: str, template_name: str, lang: Optional[str] = None,
+                                    params: Dict[str, Any] = None) -> Optional[str]:
         """
-        Отправляет шаблонное сообщение через Twilio WhatsApp API
+        Отправляет локализованное шаблонное сообщение
 
         Args:
             to: Номер телефона получателя
-            template_name: Имя шаблона
-            params: Параметры для шаблона
+            template_name: Ключ шаблона в словаре локализаций
+            lang: Код языка (если None, будет определен автоматически)
+            params: Параметры для подстановки в шаблон
 
         Returns:
             Optional[str]: ID отправленного сообщения или None в случае ошибки
@@ -79,31 +85,15 @@ class TwilioWhatsAppClient(IMessageClient):
         try:
             # Нормализуем номер телефона
             to_number = self._normalize_phone_number(to)
-            from_number = f"whatsapp:{self.from_phone}"
-            to_number = f"whatsapp:{to_number}"
 
-            # Формируем содержимое шаблона
-            # Для Twilio это просто текст, поскольку API шаблонов ограничено
-            message_body = self._format_template(template_name, params)
+            # Получаем текст шаблона через сервис локализации
+            message_text = self.localization_service.get_message(template_name, lang, **(params or {}))
 
             # Отправляем сообщение
-            message_response = self.client.messages.create(
-                from_=from_number,
-                body=message_body,
-                to=to_number
-            )
-
-            # Возвращаем ID сообщения
-            return message_response.sid
-
-        except TwilioRestException as e:
-            # Логируем ошибку Twilio
-            logger.error(f"Twilio template message error: {str(e)}")
-            return None
+            return await self.send_message(to_number, message_text)
 
         except Exception as e:
-            # Общая обработка ошибок
-            logger.error(f"Error sending template message via Twilio: {str(e)}")
+            logger.error(f"Error sending template ('{lang}.{template_name}') message: {str(e)}")
             return None
 
     def _normalize_phone_number(self, phone_number: str) -> str:
@@ -125,34 +115,3 @@ class TwilioWhatsAppClient(IMessageClient):
             phone_number = f"+{phone_number}"
 
         return phone_number
-
-    def _format_template(self, template_name: str, params: List[Any] = None) -> str:
-        """
-        Форматирует шаблон сообщения
-
-        Args:
-            template_name: Имя шаблона
-            params: Параметры для шаблона
-
-        Returns:
-            str: Форматированный текст шаблона
-        """
-        # Для реализации можно использовать локализованные сообщения
-        # или более сложную систему шаблонов
-
-        # Заглушка для примера
-        templates = {
-            "welcome": "👋 Привет! Добро пожаловать в GuateFit - твой персональный ассистент.",
-            "diet_created": "🎉 Твой план питания готов!",
-            "weight_reminder": "⚖️ Не забудь записать свой вес сегодня."
-        }
-
-        # Берем базовый шаблон
-        message_text = templates.get(template_name, "")
-
-        # Заменяем параметры
-        if params:
-            for i, param in enumerate(params):
-                message_text = message_text.replace(f"{{{i}}}", str(param))
-
-        return message_text

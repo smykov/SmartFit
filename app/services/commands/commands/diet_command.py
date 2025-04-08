@@ -2,7 +2,9 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 
 import pytz
+from google.protobuf.message_factory import GetMessages
 
+from app.constants.localization_keys import LocalizationKeys as LK
 from app.services.commands.base_command import BaseCommand
 from config import settings
 
@@ -26,42 +28,57 @@ class DietCommand(BaseCommand):
             # Получаем текущий план диеты
             diet_plan = await self.dependencies['diet_service'].get_current_diet(user_id)
 
+            phone_number = self.dependencies['user']['phone_number']
+            lang = self.dependencies['user']['language']
+
             if not diet_plan:
                 # Запускаем генерацию нового плана диеты
                 await self.dependencies['message_service'].send_message(
-                    self.dependencies['user']['phone_number'], 
+                    phone_number,
                     self.messages.DIET_GENERATION_STARTED
                 )
                 await self.dependencies['message_service'].send_message(
-                    self.dependencies['user']['phone_number'], 
+                    phone_number,
                     self.messages.DIET_GENERATION_DETAILS
                 )
 
                 # Запускаем генерацию короткого плана диеты
-                short_plan = await self.dependencies['diet_service'].generate_short_diet_plan(user_id)
+                diet_plan = await self.dependencies['diet_service'].generate_short_diet_plan(user_id)
 
-                if short_plan and "error" not in short_plan:
-                    # Отправляем сводку плана для согласования
-                    summary = self.dependencies['diet_service'].get_short_diet_summary(short_plan)
-                    await self.dependencies['message_service'].send_message(
-                        self.dependencies['user']['phone_number'], 
-                        summary
-                    )
+                if not diet_plan or "error" in diet_plan:
+                    await self.dependencies['message_service'].send_template_message(
+                        phone_number,
+                        LK.Diet.Short.CREATED,
+                        user_id)
+                    return {
+                        "success": False,
+                        "message": self.dependencies['localization_service'].get_message(LK.Diet.Short.CREATING_ERROR, lang)
+                    }
 
-                    return {
-                        "success": True, 
-                        "action": "short_diet_generated",
-                        "message": "План диеты создан и отправлен для согласования"
-                    }
-                else:
-                    await self.dependencies['message_service'].send_message(
-                        self.dependencies['user']['phone_number'], 
-                        self.messages.NO_DIET_PLAN
-                    )
-                    return {
-                        "success": False, 
-                        "message": self.messages.NO_DIET_PLAN
-                    }
+            if diet_plan['version'] == "short" and diet_plan['status'] == "pending":
+                # Отправляем сводку плана для согласования
+                summary = await self.dependencies['diet_service'].get_short_diet_summary(diet_plan, lang)
+                await self.dependencies['message_service'].send_message(
+                    phone_number,
+                    summary
+                )
+                # Отправляем информация о следующих шагах
+                next_steps = self.dependencies['diet_service'].get_short_diet_next_steps(lang)
+                await self.dependencies['message_service'].send_message(
+                    phone_number,
+                    next_steps
+                )
+                # Отправляем информация о согласовании
+                await self.dependencies['message_service'].send_template_message(
+                    phone_number,
+                    LK.Diet.Short.CONFORMATION,
+                    user_id)
+
+                return {
+                    "success": True,
+                    "action": "short_diet_generated",
+                    "message": self.dependencies['localization_service'].get_message(LK.Diet.Short.CREATED, lang)
+                }
 
             # Получаем текущую дату
             today = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
@@ -76,11 +93,11 @@ class DietCommand(BaseCommand):
                 }
 
             # Форматируем и отправляем план на сегодня
-            formatted_plan = self.dependencies['diet_service'].get_day_diet_plan(diet_plan, today)
+            formatted_plan_messages = self.dependencies['diet_service'].get_day_diet_plan(diet_plan, today, lang)
             
             return {
                 "success": True, 
-                "message": formatted_plan
+                "messages": formatted_plan_messages
             }
 
         except Exception as e:

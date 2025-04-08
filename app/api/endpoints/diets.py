@@ -6,8 +6,9 @@ import pytz
 from fastapi import APIRouter, HTTPException, Path, Query, BackgroundTasks
 
 from app.db.firebase import firebase_client
-from app.services.diet import diet_service
-from app.services.whatsapp_service import whatsapp_service
+from app.services.diet.diet_service import DietService as diet_service
+from app.services.messaging.whatsapp_service import WhatsAppService as whatsapp_service
+from app.services.localization import localization_service as localization_service
 from config import settings
 
 router = APIRouter()
@@ -162,6 +163,8 @@ async def get_diet_summary(
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
+        lang = user.get("language")
+        phone_number = user["phone_number"]
         # Получаем текущий план через сервис
         diet_plan = await diet_service.get_current_diet(user_id)
 
@@ -169,12 +172,12 @@ async def get_diet_summary(
             return {"message": "No current diet plan found"}
 
         # Получаем сводку через сервис
-        summary, commands = diet_service.get_diet_summary(diet_plan)
-
+        summary = diet_service.get_diet_summary(diet_plan)
+        commands = localization_service.get_message("commands_message", lang)
         # Отправляем сводку в WhatsApp, если запрошено
         if send_whatsapp and "phone_number" in user:
-            await whatsapp_service.send_message(user["phone_number"], summary)
-            await whatsapp_service.send_message(user["phone_number"], commands)
+            await whatsapp_service.send_message(phone_number, summary)
+            await whatsapp_service.send_message(phone_number, commands)
 
         return {
             "message": "Diet summary generated",

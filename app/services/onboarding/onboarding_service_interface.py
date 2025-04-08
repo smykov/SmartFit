@@ -25,12 +25,12 @@ class IOnboardingService(ABC):
         pass
 
     @abstractmethod
-    async def continue_onboarding(self, user: Dict[str, Any], message_text: str) -> Dict[str, Any]:
+    async def continue_onboarding(self, user_id: str, message_text: str) -> Dict[str, Any]:
         """
         Продолжает процесс онбординга для пользователя
 
         Args:
-            user: Данные пользователя
+            user_id: ID пользователя
             message_text: Текст сообщения от пользователя
 
         Returns:

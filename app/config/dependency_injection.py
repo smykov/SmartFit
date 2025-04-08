@@ -6,7 +6,7 @@ from app.db.repositories.message_repository import FirebaseMessageRepository
 from app.services.messaging.clients.twilio_whatsapp_client import TwilioWhatsAppClient
 from app.services.messaging.interfaces.message_client_interface import IMessageClient
 from app.services.messaging.whatsapp_service import WhatsAppService
-from app.services.utils.text_splitter import TextSplitter
+from app.utils.text_splitter import TextSplitter
 from config import settings
 
 

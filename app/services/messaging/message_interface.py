@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Any
+from typing import List, Any, Optional
 
 
 class IMessageService(ABC):
@@ -35,13 +35,14 @@ class IMessageService(ABC):
         pass
     
     @abstractmethod
-    async def send_template_message(self, to_phone: str, template_name: str, params: List[str] = None) -> bool:
+    async def send_template_message(self, to_phone: str, template_name: str, user_id: Optional[str] = None, params: List[str] = None) -> bool:
         """
         Отправляет шаблонное сообщение
         
         Args:
             to_phone: Номер телефона получателя
             template_name: Название шаблона
+            user_id: ID пользователя для определения языка (если None, используется язык по умолчанию)
             params: Параметры для шаблона
             
         Returns:

@@ -103,6 +103,7 @@ async def send_whatsapp_message(
 async def send_template_message(
         phone_number: str = Form(...),
         template_name: str = Form(...),
+        user_id: Optional[str] = None,
         parameters: Optional[str] = Form(None),
         whatsapp_service: WhatsAppService = Depends(get_whatsapp_service)
 ):
@@ -112,7 +113,9 @@ async def send_template_message(
     Args:
         phone_number: Номер телефона получателя
         template_name: Название шаблона
+        user_id: ID пользователя для определения языка (если None, используется язык по умолчанию)
         parameters: JSON-строка с параметрами для шаблона
+        whatsapp_service:
     """
     try:
         # Проверяем формат номера телефона
@@ -127,10 +130,14 @@ async def send_template_message(
             except json.JSONDecodeError:
                 raise HTTPException(status_code=400, detail="Invalid parameters format")
 
+        if not user_id:
+            user_id = None
+
         # Отправляем шаблонное сообщение
         result = await whatsapp_service.send_template_message(
             phone_number,
             template_name,
+            user_id,
             params
         )
 

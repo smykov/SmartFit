@@ -87,6 +87,7 @@ async def startup_event():
         container.user_repository()
         container.message_repository()
         container.message_client()
+        container.localization_service()
         container.whatsapp_service()
         container.diet_service()
         container.tracking_service()

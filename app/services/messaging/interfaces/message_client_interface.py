@@ -1,3 +1,4 @@
+# app/services/messaging/interfaces/message_client_interface.py
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any, List
 
@@ -22,14 +23,16 @@ class IMessageClient(ABC):
         pass
 
     @abstractmethod
-    async def send_template_message(self, to: str, template_name: str, params: List[Any] = None) -> Optional[str]:
+    async def send_template_message(self, to: str, template_name: str, lang: Optional[str] = None,
+                                    params: Dict[str, Any] = None) -> Optional[str]:
         """
         Отправляет шаблонное сообщение
 
         Args:
             to: Идентификатор получателя
-            template_name: Имя шаблона
-            params: Параметры для шаблона
+            template_name: Ключ шаблона сообщения
+            lang: Код языка (если None, будет определен автоматически)
+            params: Параметры для подстановки в шаблон
 
         Returns:
             Optional[str]: ID отправленного сообщения или None в случае ошибки

@@ -84,6 +84,7 @@ class FirebaseMessageRepository(IMessageRepository):
 
             # Добавляем контекст, если он предоставлен
             if context:
+                logger.info(f"save_sent_message - context: {context}")
                 message_data.update(context)
 
             # Сохраняем в коллекции sent_messages

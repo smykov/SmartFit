@@ -2,11 +2,13 @@ import logging
 import re
 from datetime import datetime
 from enum import Enum
+from time import sleep
 from typing import Dict, Any, Optional, Tuple
 
 import pytz
 from app.db.interfaces.message_repository_interface import IMessageRepository
 from app.services.diet.diet_service_interface import IDietService
+from app.services.localization.localization_interface import ILocalizationService
 from app.services.onboarding.onboarding_service_interface import IOnboardingService
 from app.services.tracking.tracking_service_interface import ITrackingService
 
@@ -52,7 +54,8 @@ class MessageProcessorService:
             onboarding_service: IOnboardingService,
             diet_service: IDietService,
             tracking_service: ITrackingService,
-            command_factory: CommandFactory
+            command_factory: CommandFactory,
+            localization_service: ILocalizationService
     ):
         """
         Инициализация сервиса обработки сообщений
@@ -74,6 +77,7 @@ class MessageProcessorService:
         self.tracking_service = tracking_service
         self.command_factory = command_factory
         self.messages = MessageProcessorMessages()
+        self.localization_service = localization_service
         self.logger = logging.getLogger(self.__class__.__name__)
 
         # Регулярные выражения для определения типов сообщений
@@ -89,8 +93,8 @@ class MessageProcessorService:
             # "product_bought": re.compile(r'^купил[а]?\s+(.+)$', re.IGNORECASE),
             "stats": re.compile(r'^(статистика|прогресс)$', re.IGNORECASE),
             "meal_compliance": re.compile(r'^(выполнено|частично|заменил[а]?|пропустил[а]?)\s+(\w+)$', re.IGNORECASE),
-            # "diet_update": re.compile(r'^(измени|поменяй|обнови|замени|скорректируй)\s+(план|меню|рацион|питание)(.*)$',
-            #                           re.IGNORECASE),
+            "diet_update": re.compile(r'^(измени|поменяй|обнови|замени|скорректируй)\s+(план|меню|рацион|питание)(.*)$',
+                                       re.IGNORECASE),
         }
 
         # Ответы на согласование плана
@@ -128,8 +132,18 @@ class MessageProcessorService:
             # Если пользователя нет, начинаем процесс регистрации
             if not user:
                 self.logger.info(f"Новый пользователь с номером {phone_number}. Начинаем регистрацию.")
+                # Отправляем приветственное сообщение
                 result = await self.onboarding_service.start_registration(phone_number)
                 await self._mark_message_as_processed(message_id, phone_number, message_text)
+                if result['success'] and result['user_id']:
+                    user_id = result['user_id']
+                    # TODO сделать определение языка пользователя по его локали если возможно, или по тексту который он оправил
+                    if await self.localization_service.set_user_language(user_id, "ru"):
+                        # Отправляем приветственное сообщение
+                        await self.message_service.send_template_message(phone_number, "greeting", user_id)
+                        await self.message_service.send_template_message(phone_number, "onboarding.welcome", user_id)
+                    # Продолжаем онбординг
+                    await self.onboarding_service.continue_onboarding(user_id, message_text)
                 return result
 
             # Обновляем время последнего взаимодействия
@@ -211,7 +225,7 @@ class MessageProcessorService:
             Dict[str, Any]: Результат обработки
         """
         if strategy == ProcessingStrategy.ONBOARDING:
-            return await self.onboarding_service.continue_onboarding(user, message_text)
+            return await self.onboarding_service.continue_onboarding(user.get('id'), message_text)
 
         elif strategy == ProcessingStrategy.COMMAND:
             return await self._process_command(user, message_text)
@@ -287,6 +301,11 @@ class MessageProcessorService:
         if "message" in result and result["message"]:
             await self.message_service.send_message(phone_number, result["message"])
 
+        # Отправляем ответные сообщения, если команда это предусматривает
+        if "messages" in result and result["messages"]:
+            for message in result["messages"]:
+                await self.message_service.send_message(phone_number, message)
+
         return result
 
     def _diagnose_command_type(self, message_text: str) -> str:
@@ -330,9 +349,11 @@ class MessageProcessorService:
         pending_plan = await self._get_pending_diet_plan(user_id)
 
         if not pending_plan:
-            await self.message_service.send_message(
+            # Используем локализованное сообщение
+            await self.message_service.send_template_message(
                 phone_number,
-                self.messages.NO_PENDING_DIET_PLAN
+                "diet.no_pending_plan",
+                user_id
             )
             return {"success": False, "action": "no_pending_plan"}
 
@@ -344,9 +365,10 @@ class MessageProcessorService:
             success = await self.diet_service.approve_short_diet_plan(pending_plan["id"])
 
             if success:
-                await self.message_service.send_message(
+                await self.message_service.send_template_message(
                     phone_number,
-                    self.messages.PLAN_APPROVAL_SUCCESS
+                    "diet.short.approval_success",
+                    user_id
                 )
 
                 # Запускаем генерацию полного плана
@@ -354,16 +376,18 @@ class MessageProcessorService:
 
                 return {"success": True, "action": "plan_approved"}
             else:
-                await self.message_service.send_message(
+                await self.message_service.send_template_message(
                     phone_number,
-                    self.messages.PLAN_APPROVAL_ERROR
+                    "diet.approval_error",
+                    user_id
                 )
                 return {"success": False, "action": "approval_failed"}
         else:
             # Отклонение плана
-            await self.message_service.send_message(
+            await self.message_service.send_template_message(
                 phone_number,
-                self.messages.PLAN_DISAPPROVAL
+                "diet.disapproval",
+                user_id
             )
             return {"success": True, "action": "plan_disapproved"}
 

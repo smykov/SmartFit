@@ -286,6 +286,30 @@ class DietPlanManager(BaseDietService):
             self.logger.error(f"Ошибка при обновлении плана диеты: {str(e)}")
             return False, {"error": str(e)}
 
+    async def get_diet_plan_by_id(self, plan_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Получает план диеты по его ID
+
+        Args:
+            plan_id: ID плана диеты
+
+        Returns:
+            Optional[Dict[str, Any]]: План диеты или None, если план не найден
+        """
+        try:
+            # Получаем план из базы данных
+            diet_plan = firebase_client.get_document("diet_plans", plan_id)
+
+            if not diet_plan:
+                self.logger.error(f"План диеты с ID {plan_id} не найден")
+                return None
+
+            return diet_plan
+
+        except Exception as e:
+            self.logger.error(f"Ошибка при получении плана диеты по ID: {str(e)}")
+            return None
+
     async def get_current_diet(self, user_id: str) -> Optional[Dict[str, Any]]:
         """
         Получает текущий активный план диеты пользователя
@@ -543,7 +567,6 @@ class DietPlanManager(BaseDietService):
         # Преобразуем в строковое представление
         days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
         return days[weekday]
-
 
     async def get_pending_diet_plan(self, user_id: str) -> Optional[Dict[str, Any]]:
         """
