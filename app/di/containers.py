@@ -1,7 +1,12 @@
 from dependency_injector import containers, providers
 
+# Репозитории
 from app.db.repositories.message_repository import FirebaseMessageRepository
 from app.db.repositories.user_repository import FirebaseUserRepository
+from app.db.repositories.diet_plan_repository import FirebaseDietPlanRepository
+from app.db.repositories.product_repository import FirebaseProductRepository
+from app.db.repositories.shopping_list_repository import FirebaseShoppingListRepository
+
 from app.services.diet.diet_service import DietService
 from app.services.localization.localization_service import LocalizationService
 from app.services.messaging.clients.twilio_whatsapp_client import TwilioWhatsAppClient
@@ -25,8 +30,11 @@ class Container(containers.DeclarativeContainer):
     text_splitter = providers.Singleton(TextSplitter)
 
     # Репозитории
-    user_repository = providers.Factory(FirebaseUserRepository)
+    user_repository = providers.Singleton(FirebaseUserRepository)
     message_repository = providers.Singleton(FirebaseMessageRepository)
+    diet_plan_repository = providers.Singleton(FirebaseDietPlanRepository)
+    product_repository = providers.Singleton(FirebaseProductRepository)
+    shopping_list_repository = providers.Singleton(FirebaseShoppingListRepository)
 
     # Сервис локализации
     localization_service = providers.Singleton(
@@ -62,6 +70,9 @@ class Container(containers.DeclarativeContainer):
         user_repository=user_repository,
         message_service=whatsapp_service,
         localization_service=localization_service,
+        diet_plan_repository=diet_plan_repository,
+        product_repository=product_repository,
+        shopping_list_repository=shopping_list_repository
     )
 
     # Сервис трекинга

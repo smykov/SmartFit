@@ -304,11 +304,11 @@ class DietFormatter(BaseFormatter):
         """
         try:
             # Добавляем инструкции для отметки о соблюдении
-            message = self.get_localized_message(LK.Diet.Day.TRACKING_HEADER, lang)
-            message += self.get_localized_message(LK.Diet.Day.TRACKING_FOLLOWED, lang)
-            message += self.get_localized_message(LK.Diet.Day.TRACKING_PARTIALLY, lang)
-            message += self.get_localized_message(LK.Diet.Day.TRACKING_SUBSTITUTED, lang)
-            message += self.get_localized_message(LK.Diet.Day.TRACKING_SKIPPED, lang)
+            message = self.get_localized_message(LK.Diet.Day.Tracking.HEADER, lang)
+            message += self.get_localized_message(LK.Diet.Day.Tracking.FOLLOWED, lang)
+            message += self.get_localized_message(LK.Diet.Day.Tracking.PARTIALLY, lang)
+            message += self.get_localized_message(LK.Diet.Day.Tracking.SUBSTITUTED, lang)
+            message += self.get_localized_message(LK.Diet.Day.Tracking.SKIPPED, lang)
 
             return self.format_for_whatsapp(message)
 

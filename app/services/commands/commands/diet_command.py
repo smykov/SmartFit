@@ -91,13 +91,15 @@ class DietCommand(BaseCommand):
                     "success": False, 
                     "message": self.messages.NO_DIET_FOR_TODAY
                 }
-
             # Форматируем и отправляем план на сегодня
             formatted_plan_messages = self.dependencies['diet_service'].get_day_diet_plan(diet_plan, today, lang)
-            
+            tracking_info_message = self.dependencies['diet_service'].get_day_diet_plan(diet_plan, today, lang)
+
+            # TODO добавить список продуктов\покупок на день + обработка запросов на отметку что есть из списка
+
             return {
                 "success": True, 
-                "messages": formatted_plan_messages
+                "messages": [*formatted_plan_messages, tracking_info_message]
             }
 
         except Exception as e:

@@ -10,7 +10,8 @@ class LocalizationKeys:
         MEAL_TYPES = "common.meal_types.{}"
         MEAL_EMOJIS = "common.meal_emojis.{}"
         DAY_FORMAT = "diet.common.day_format"
-    
+        HELP_COMMANDS_LIST = "help_commands_list"
+
     class Diet:
         """Ключи локализации для диет"""
         class Full:
@@ -95,13 +96,14 @@ class LocalizationKeys:
             WHY_RECOMMENDED_HEADER = "diet.day.why_recommended_header"
             PREPARATION_HEADER = "diet.day.preparation_header"
             TIP = "diet.day.tip"
-            
-            # Ключи для трекинга
-            TRACKING_HEADER = "diet.day.tracking_header"
-            TRACKING_FOLLOWED = "diet.day.tracking_followed"
-            TRACKING_PARTIALLY = "diet.day.tracking_partially"
-            TRACKING_SUBSTITUTED = "diet.day.tracking_substituted"
-            TRACKING_SKIPPED = "diet.day.tracking_skipped"
+
+            class Tracking:
+                """Ключи для трекинга плана"""
+                HEADER = "diet.day.tracking.header"
+                FOLLOWED = "diet.day.tracking.followed"
+                PARTIALLY = "diet.day.tracking.partially"
+                SUBSTITUTED = "diet.day.tracking.substituted"
+                SKIPPED = "diet.day.tracking.skipped"
             
             # Сообщения статуса
             NO_PLAN = "diet.day.no_plan"

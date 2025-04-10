@@ -6,7 +6,8 @@ from typing import Dict, Any
 
 import pytz
 
-from app.db.firebase import firebase_client
+from app.db.interfaces.diet_plan_repository_interface import IDietPlanRepository
+from app.db.interfaces.shopping_list_repository_interface import IShoppingListRepository
 from app.localization.messages import DietMessages
 from app.services.diet.base_service import BaseDietService
 from app.templates.prompts import create_shopping_list_system_prompt, create_shopping_list_user_prompt
@@ -16,15 +17,24 @@ from config import settings
 class ShoppingListManager(BaseDietService):
     """Класс для управления списками покупок"""
 
-    def __init__(self, llm_service):
+    def __init__(
+            self,
+            llm_service,
+            diet_plan_repository: IDietPlanRepository,
+            shopping_list_repository: IShoppingListRepository
+    ):
         """
         Инициализация менеджера списков покупок
 
         Args:
             llm_service: Сервис LLM для генерации списков покупок
+            diet_plan_repository: Репозиторий для работы с планами диет
+            shopping_list_repository: Репозиторий для работы со списками покупок
         """
         super().__init__()
         self.llm_service = llm_service
+        self.diet_plan_repository = diet_plan_repository
+        self.shopping_list_repository = shopping_list_repository
         self.messages = DietMessages()
 
     async def generate_shopping_list(self, diet_plan_id: str) -> Dict[str, Any]:
@@ -39,14 +49,14 @@ class ShoppingListManager(BaseDietService):
         """
         try:
             # Получаем план диеты
-            diet_plan = firebase_client.get_document("diet_plans", diet_plan_id)
+            diet_plan = await self.diet_plan_repository.get_by_id(diet_plan_id)
 
             if not diet_plan:
                 self.logger.error(f"Diet plan {diet_plan_id} not found")
                 return {"error": "Diet plan not found"}
 
             # Проверяем наличие существующего списка покупок для этого плана
-            existing_lists = firebase_client.query_documents("shopping_lists", "diet_plan_id", "==", diet_plan_id)
+            existing_lists = await self.shopping_list_repository.get_by_diet_plan(diet_plan_id)
 
             # Находим самый последний список покупок
             if existing_lists:
@@ -112,7 +122,7 @@ class ShoppingListManager(BaseDietService):
                 "total_estimated_price": total_estimated_price
             }
 
-            list_id = firebase_client.add_document("shopping_lists", shopping_list_data)
+            list_id = await self.shopping_list_repository.create(shopping_list_data)
 
             if not list_id:
                 self.logger.error("Failed to save shopping list to database")
@@ -139,52 +149,27 @@ class ShoppingListManager(BaseDietService):
             Dict[str, Any]: Результат операции
         """
         try:
-            # Получаем текущий план диеты пользователя
-            diet_plans = firebase_client.query_documents("diet_plans", "user_id", "==", user_id)
-            if not diet_plans:
+            # Получаем текущий план диеты пользователя через репозиторий
+            current_plan = await self.diet_plan_repository.get_current_diet(user_id)
+            if not current_plan:
                 return {"success": False, "message": self.messages.NO_DIET_PLAN}
 
-            # Берем самый последний план
-            current_plan = max(diet_plans, key=lambda p: p.get("created_at", ""))
-
-            # Получаем список покупок для текущего плана
-            shopping_lists = firebase_client.query_documents(
-                "shopping_lists",
-                "diet_plan_id",
-                "==",
-                current_plan["id"]
-            )
+            # Получаем список покупок для текущего плана через репозиторий
+            shopping_lists = await self.shopping_list_repository.get_by_diet_plan(current_plan["id"])
 
             if not shopping_lists:
                 return {"success": False, "message": self.messages.NO_SHOPPING_LIST}
 
             # Берем последний список покупок
-            shopping_list = shopping_lists[0]
+            latest_list = max(shopping_lists, key=lambda x: x.get("created_at", ""))
 
-            # Найдем продукт в списке (нечеткий поиск)
-            found = False
-            updated_items = []
+            # Отмечаем продукт как купленный
+            result = await self.shopping_list_repository.mark_item_as_purchased(
+                latest_list["id"],
+                product_name
+            )
 
-            for item in shopping_list.get("items", []):
-                item_name = item.get("name", "").lower()
-                if product_name.lower() in item_name or item_name in product_name.lower():
-                    # Отмечаем продукт как купленный
-                    item["is_purchased"] = True
-                    found = True
-
-                updated_items.append(item)
-
-            if found:
-                # Обновляем список покупок
-                firebase_client.update_document(
-                    "shopping_lists",
-                    shopping_list["id"],
-                    {
-                        "items": updated_items,
-                        "updated_at": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
-                    }
-                )
-
+            if result:
                 return {
                     "success": True,
                     "message": self.messages.PRODUCT_MARKED.format(product=product_name)

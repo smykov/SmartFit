@@ -3,13 +3,13 @@ from typing import Dict, Any, Optional, Tuple
 
 from app.db.interfaces.user_repository_interface import IUserRepository
 from app.localization.onboarding_messages import OnboardingMessages
-from app.services.commands.command_handler_service import CommandHandlerService
 from app.services.commands.interfaces.command_handler_interface import ICommandHandler
 from app.services.diet.diet_service_interface import IDietService
 from app.services.messaging.message_interface import IMessageService
+from app.services.onboarding.onboarding_service_interface import IOnboardingService
 
 
-class OnboardingService:
+class OnboardingService(IOnboardingService):
     """Сервис для управления процессом онбординга пользователей"""
 
     # Константы для шагов онбординга
@@ -25,9 +25,9 @@ class OnboardingService:
     STEP_DIET_PREFERENCE = "diet_preference"
     STEP_ALLERGIES = "allergies"
     STEP_DISLIKED_PRODUCTS = "disliked_products"
-    # Добавить шаг предпочтительные продукты
+    # TODO Добавить шаг предпочтительные продукты
     STEP_BUDGET = "budget"
-    # Добавить шаг доп информация которую следует учесть для диеты
+    # TODO Добавить шаг доп информация которую следует учесть для диеты
     STEP_COMPLETE = "complete"
 
     # Последовательность шагов онбординга
@@ -132,7 +132,7 @@ class OnboardingService:
             self.logger.info(f"onboarding_step: '{current_step}'")
 
             # Определяем следующий шаг
-            next_step = self._get_next_step(current_step)
+            next_step = self.get_next_onboarding_step(current_step)
 
             # Обрабатываем текущий шаг и обновляем данные пользователя
             update_data = self._process_step(current_step, message_text)
@@ -166,7 +166,7 @@ class OnboardingService:
 
                 # Пропускаем шаг запроса цели по весу
                 if next_step == self.STEP_WEIGHT_GOAL:
-                    next_step = self._get_next_step(next_step)
+                    next_step = self.get_next_onboarding_step(next_step)
 
             # Обновляем данные пользователя
             update_data["onboarding_step"] = next_step
@@ -174,7 +174,7 @@ class OnboardingService:
 
             # Если онбординг завершен
             if next_step == self.STEP_COMPLETE:
-                await self._complete_onboarding(user_id, phone_number)
+                await self.complete_onboarding(user_id, phone_number)
                 return {
                     "success": True,
                     "action": "onboarding_completed",
@@ -200,7 +200,7 @@ class OnboardingService:
             self.logger.error(f"Ошибка при продолжении онбординга: {str(e)}", exc_info=True)
             return {"success": False, "error": str(e)}
 
-    async def _complete_onboarding(self, user_id: str, phone_number: str) -> None:
+    async def complete_onboarding(self, user_id: str, phone_number: str) -> None:
         """
         Завершает процесс онбординга и запускает генерацию диеты
         
@@ -224,7 +224,7 @@ class OnboardingService:
         user = await self.user_repository.get_by_id(user_id)
         await self.command_handler_service.handle_command(user, "diet")
 
-    def _get_next_step(self, current_step: str) -> str:
+    def get_next_onboarding_step(self, current_step: str) -> str:
         """
         Возвращает следующий шаг онбординга
         

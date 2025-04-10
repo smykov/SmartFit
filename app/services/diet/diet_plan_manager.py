@@ -6,7 +6,10 @@ from typing import Dict, Any, Optional, Tuple
 
 import pytz
 
-from app.db.firebase import firebase_client
+from app.db.interfaces.diet_plan_repository_interface import IDietPlanRepository
+from app.db.interfaces.product_repository_interface import IProductRepository
+from app.db.interfaces.user_repository_interface import IUserRepository
+
 from app.localization.messages import DietMessages
 from app.services.diet.base_service import BaseDietService
 from app.templates.prompts import (
@@ -22,15 +25,27 @@ from config import settings
 class DietPlanManager(BaseDietService):
     """Класс для создания и управления планами диет"""
 
-    def __init__(self, llm_service):
+    def __init__(
+            self,
+            llm_service,
+            diet_plan_repository: IDietPlanRepository,
+            product_repository: IProductRepository,
+            user_repository: IUserRepository
+    ):
         """
         Инициализация менеджера планов диет
 
         Args:
             llm_service: Сервис LLM для генерации планов диет
+            diet_plan_repository: Репозиторий для работы с планами диет
+            product_repository: Репозиторий для работы с продуктами
+            user_repository: Репозиторий для работы с пользователями
         """
         super().__init__()
         self.llm_service = llm_service
+        self.diet_plan_repository = diet_plan_repository
+        self.product_repository = product_repository
+        self.user_repository = user_repository
         self.messages = DietMessages()
 
     async def generate_short_diet_plan(self, user_id: str) -> Optional[Dict[str, Any]]:
@@ -47,13 +62,13 @@ class DietPlanManager(BaseDietService):
             self.logger.info(f"Генерация краткой версии плана для пользователя {user_id}")
 
             # Получаем данные пользователя
-            user_data = firebase_client.get_document("users", user_id)
+            user_data = await self.user_repository.get_by_id(user_id)
             if not user_data:
                 self.logger.error(f"User {user_id} not found")
                 return None
 
             # Получаем список доступных продуктов
-            products = firebase_client.get_all_documents("products")
+            products = await self.product_repository.get_all()
 
             # Создаем системный и пользовательский промпты для LLM
             system_prompt = create_short_diet_system_prompt(products)
@@ -76,15 +91,13 @@ class DietPlanManager(BaseDietService):
             short_plan["user_id"] = user_id
             short_plan["version"] = "short"
             short_plan["status"] = "pending"
-            short_plan["created_at"] = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
-            short_plan["updated_at"] = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
 
             # Проверяем структуру плана
             if "daily_plans" not in short_plan:
                 short_plan["daily_plans"] = {}
 
             # Сохраняем план в базу данных
-            plan_id = firebase_client.add_document("diet_plans", short_plan)
+            plan_id = self.diet_plan_repository.create(short_plan)
             if not plan_id:
                 self.logger.error("Failed to save short diet plan to database")
                 return None
@@ -108,8 +121,8 @@ class DietPlanManager(BaseDietService):
             bool: Результат операции
         """
         try:
-            # Получаем план
-            plan = firebase_client.get_document("diet_plans", plan_id)
+            # Получаем план через репозиторий
+            plan = await self.diet_plan_repository.get_by_id(plan_id)
             if not plan:
                 self.logger.error(f"Plan {plan_id} not found")
                 return False
@@ -119,9 +132,8 @@ class DietPlanManager(BaseDietService):
                 self.logger.error(f"Plan {plan_id} is not a short version")
                 return False
 
-            # Обновляем статус плана
-            result = firebase_client.update_document(
-                "diet_plans",
+            # Обновляем статус плана через репозиторий
+            result = await self.diet_plan_repository.update(
                 plan_id,
                 {
                     "status": "approved",
@@ -149,9 +161,8 @@ class DietPlanManager(BaseDietService):
             Tuple[bool, Dict[str, Any]]: (успех, обновленный план)
         """
         try:
-            # Получа
             # Получаем план диеты
-            diet_plan = firebase_client.get_document("diet_plans", plan_id)
+            diet_plan = await self.diet_plan_repository.get_by_id(plan_id)
 
             if not diet_plan:
                 self.logger.error(f"План с ID {plan_id} не найден")
@@ -190,8 +201,7 @@ class DietPlanManager(BaseDietService):
             diet_plan["updated_at"] = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
 
             # Обновляем план в базе данных
-            success = firebase_client.update_document(
-                "diet_plans",
+            success = await self.diet_plan_repository.update(
                 plan_id,
                 {
                     "daily_plans": diet_plan["daily_plans"],
@@ -199,7 +209,6 @@ class DietPlanManager(BaseDietService):
                     "updated_at": diet_plan["updated_at"]
                 }
             )
-
             if success:
                 self.logger.info(f"Краткий план питания {plan_id} успешно обновлен")
                 return True, diet_plan
@@ -211,13 +220,13 @@ class DietPlanManager(BaseDietService):
             self.logger.error(f"Ошибка при обновлении краткого плана диеты: {str(e)}")
             return False, {"error": str(e)}
 
-    async def update_diet_plan_partially(self, diet_plan_id: str, updated_days: Dict[str, Any],
+    async def update_diet_plan_partially(self, plan_id: str, updated_days: Dict[str, Any],
                                          comment: str = None) -> Tuple[bool, Dict[str, Any]]:
         """
         Обновляет частично план питания, изменяя только указанные дни
 
         Args:
-            diet_plan_id: ID плана диеты
+            plan_id: ID плана диеты
             updated_days: Словарь {дата: данные на день}
             comment: Комментарий по изменению
 
@@ -226,10 +235,10 @@ class DietPlanManager(BaseDietService):
         """
         try:
             # Получаем план диеты
-            diet_plan = firebase_client.get_document("diet_plans", diet_plan_id)
+            diet_plan = await self.diet_plan_repository.get_by_id(plan_id)
 
             if not diet_plan:
-                self.logger.error(f"План с ID {diet_plan_id} не найден")
+                self.logger.error(f"План с ID {plan_id} не найден")
                 return False, {"error": "План питания не найден"}
 
             # Обновляем только указанные дни
@@ -266,20 +275,18 @@ class DietPlanManager(BaseDietService):
                 diet_plan["modifications_history"].append(last_modification)
 
             # Обновляем план в базе данных
-            success = firebase_client.update_document(
-                "diet_plans",
-                diet_plan_id,
+            success = await self.diet_plan_repository.update(
+                plan_id,
                 {
                     "daily_plans": diet_plan["daily_plans"],
                     "modifications_history": diet_plan.get("modifications_history", [])
                 }
             )
-
             if success:
-                self.logger.info(f"План питания {diet_plan_id} успешно обновлен")
+                self.logger.info(f"План питания {plan_id} успешно обновлен")
                 return True, diet_plan
             else:
-                self.logger.error(f"Не удалось обновить план питания {diet_plan_id}")
+                self.logger.error(f"Не удалось обновить план питания {plan_id}")
                 return False, {"error": "Не удалось обновить план питания"}
 
         except Exception as e:
@@ -298,7 +305,7 @@ class DietPlanManager(BaseDietService):
         """
         try:
             # Получаем план из базы данных
-            diet_plan = firebase_client.get_document("diet_plans", plan_id)
+            diet_plan = await self.diet_plan_repository.get_by_id(plan_id)
 
             if not diet_plan:
                 self.logger.error(f"План диеты с ID {plan_id} не найден")
@@ -321,37 +328,12 @@ class DietPlanManager(BaseDietService):
             Optional[Dict[str, Any]]: Текущий план диеты или None, если план не найден
         """
         try:
-            # Ищем активный план диеты
-            diet_plans = firebase_client.query_documents("diet_plans", "user_id", "==", user_id)
-
-            # Сначала ищем полную версию с активным статусом
-            active_plans = [plan for plan in diet_plans if
-                            plan.get("status") == "active" and plan.get("version") == "full"]
-
-            if active_plans:
-                # Сортируем по дате создания (от новых к старым)
-                return sorted(active_plans, key=lambda p: p.get("created_at", ""), reverse=True)[0]
-
-            # Если нет активных полных планов, ищем согласованный краткий план
-            approved_plans = [plan for plan in diet_plans if
-                              plan.get("status") == "approved" and plan.get("version") == "short"]
-
-            if approved_plans:
-                # Сортируем по дате создания (от новых к старым)
-                return sorted(approved_plans, key=lambda p: p.get("created_at", ""), reverse=True)[0]
-
-            # Если нет ни активных полных, ни согласованных кратких, возвращаем последний план в ожидании согласования
-            pending_plans = [plan for plan in diet_plans if plan.get("status") == "pending"]
-
-            if pending_plans:
-                # Сортируем по дате создания (от новых к старым)
-                return sorted(pending_plans, key=lambda p: p.get("created_at", ""), reverse=True)[0]
-
-            return None
-
+            # Используем метод репозитория
+            return await self.diet_plan_repository.get_current_diet(user_id)
         except Exception as e:
             self.logger.error(f"Error getting current diet: {str(e)}")
             return None
+
 
     async def get_diet_for_day(self, user_id: str, day_date: date) -> Optional[Dict[str, Any]]:
         """
@@ -435,12 +417,12 @@ class DietPlanManager(BaseDietService):
             self.logger.error(f"Error getting diet for weekday: {str(e)}")
             return None
 
-    async def update_diet_plan(self, diet_plan_id: str, update_request: str) -> Dict[str, Any]:
+    async def update_diet_plan(self, plan_id: str, update_request: str) -> Dict[str, Any]:
         """
         Обновляет план диеты на основе запроса пользователя
 
         Args:
-            diet_plan_id: ID плана диеты
+            plan_id: ID плана диеты
             update_request: Текст запроса пользователя на изменение
 
         Returns:
@@ -448,7 +430,7 @@ class DietPlanManager(BaseDietService):
         """
         try:
             # Получаем план диеты
-            diet_plan = firebase_client.get_document("diet_plans", diet_plan_id)
+            diet_plan = await self.diet_plan_repository.get_by_id(plan_id)
 
             if not diet_plan:
                 return {"error": "План диеты не найден"}
@@ -475,7 +457,7 @@ class DietPlanManager(BaseDietService):
 
             # Обновляем план
             success, updated_plan = await self.update_diet_plan_partially(
-                diet_plan_id,
+                plan_id,
                 updates["updated_days"],
                 updates.get("comment", "План питания обновлен согласно запросу")
             )
@@ -506,7 +488,7 @@ class DietPlanManager(BaseDietService):
         """
         try:
             # Получаем план диеты
-            diet_plan = firebase_client.get_document("diet_plans", plan_id)
+            diet_plan = await self.diet_plan_repository.get_by_id(plan_id)
 
             if not diet_plan:
                 return {"error": "План диеты не найден"}
@@ -580,12 +562,12 @@ class DietPlanManager(BaseDietService):
         """
         try:
             # Получаем все планы диеты пользователя
-            diet_plans = firebase_client.query_documents("diet_plans", "user_id", "==", user_id)
+            diet_plans = await self.diet_plan_repository.get_user_plans(user_id)
 
             # Фильтруем планы по статусу "pending" и версии "short"
             pending_plans = [
                 plan for plan in diet_plans
-                if plan.get("status") == "pending" and plan.get("version") == "short"
+                if plan.get("user_id") == "user_id" and plan.get("version") == "short"
             ]
 
             if not pending_plans:

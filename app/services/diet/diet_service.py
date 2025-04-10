@@ -4,6 +4,10 @@ from datetime import date
 from typing import Dict, Any, List, Optional, Tuple
 
 from app.db.interfaces.user_repository_interface import IUserRepository
+from app.db.interfaces.diet_plan_repository_interface import IDietPlanRepository
+from app.db.interfaces.product_repository_interface import IProductRepository
+from app.db.interfaces.shopping_list_repository_interface import IShoppingListRepository
+
 from app.localization.messages import DietMessages
 from app.services.diet.base_service import BaseDietService
 from app.services.formatter.diet_formatter_service import DietFormatterService
@@ -23,17 +27,33 @@ class DietService(BaseDietService, IDietService):
             user_repository: IUserRepository,
             message_service: IMessageService,
             localization_service: ILocalizationService,
+            diet_plan_repository: IDietPlanRepository,
+            product_repository: IProductRepository,
+            shopping_list_repository: IShoppingListRepository
     ):
         """Инициализация сервиса диет с необходимыми компонентами"""
         super().__init__()
-        self.diet_plan_manager = DietPlanManager(llm_service)
-        self.shopping_list_manager = ShoppingListManager(llm_service)
+        # Инициализируем компоненты с новыми репозиториями
+        self.diet_plan_manager = DietPlanManager(
+            llm_service,
+            diet_plan_repository,
+            product_repository,
+            user_repository
+        )
+        self.shopping_list_manager = ShoppingListManager(
+            llm_service,
+            diet_plan_repository,
+            shopping_list_repository
+        )
         self.formatter = DietFormatterService(localization_service)
         self.localization_service = localization_service
         self.messages = DietMessages()
         self.message_service = message_service
         self.llm_service = llm_service
         self.user_repository = user_repository
+        self.diet_plan_repository = diet_plan_repository
+        self.product_repository = product_repository
+        self.shopping_list_repository = shopping_list_repository
 
     async def start_full_diet_generation(self, user_id: str, short_plan_id: str) -> bool:
         """
@@ -381,6 +401,18 @@ class DietService(BaseDietService, IDietService):
             List[str]: Сообщения с планом на день
         """
         return self.formatter.get_day_diet_plan(diet_plan, day_date, lang)
+
+    def get_diet_tracking_info_message(self, lang: Optional[str] = None) -> str:
+        """
+        Создает сообщение с информацией о командах трекинга диеты
+
+        Args:
+            lang: Код языка
+
+        Returns:
+            str: Сообщение с информацией по трекингу
+        """
+        return self.formatter.get_diet_tracking_info_message(lang)
 
     def format_shopping_list(self, shopping_list_data: Dict[str, Any]) -> str:
         """

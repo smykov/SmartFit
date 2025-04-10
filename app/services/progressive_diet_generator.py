@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional
 
 import pytz
 
-from app.db.firebase import firebase_client
+from app.db.interfaces.diet_plan_repository_interface import IDietPlanRepository
 from app.templates.prompts import create_full_diet_system_prompt, create_full_diet_user_prompt, \
     create_single_day_user_prompt
 from config import settings
@@ -23,16 +23,24 @@ class ProgressiveDietGenerator:
     DAYS_OF_WEEK = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
     MAX_RETRIES = 3
 
-    def __init__(self, llm_service, short_plan_id: str, user_data: Dict[str, Any]):
+    def __init__(
+            self,
+            llm_service,
+            diet_plan_repository: IDietPlanRepository,
+            short_plan_id: str,
+            user_data: Dict[str, Any]
+    ):
         """
         Инициализация генератора
 
         Args:
             llm_service: Сервис для взаимодействия с LLM моделью
+            diet_plan_repository: Репозиторий для работы с планами диет
             short_plan_id: ID краткого плана в базе данных
             user_data: Данные пользователя для персонализации плана
         """
         self.llm_service = llm_service
+        self.diet_plan_repository = diet_plan_repository
         self.short_plan_id = short_plan_id
         self.user_data = user_data
         self.full_plan_id = None
@@ -47,7 +55,7 @@ class ProgressiveDietGenerator:
         """
         try:
             # Получаем краткий план из БД
-            short_plan = firebase_client.get_document("diet_plans", self.short_plan_id)
+            short_plan = await self.diet_plan_repository.get_by_id(self.short_plan_id)
             if not short_plan:
                 logger.error(f"Short plan {self.short_plan_id} not found")
                 return None
@@ -56,7 +64,7 @@ class ProgressiveDietGenerator:
             full_plan = self._initialize_full_plan(short_plan)
 
             # Сохраняем базовую структуру в БД для отслеживания прогресса
-            self.full_plan_id = firebase_client.add_document("diet_plans", full_plan)
+            self.full_plan_id = await self.diet_plan_repository.create(full_plan)
             if not self.full_plan_id:
                 logger.error("Failed to save initial full diet plan to database")
                 return None
@@ -70,10 +78,10 @@ class ProgressiveDietGenerator:
                 if day_plan:
                     # Обновляем план в базе данных
                     full_plan["daily_plans"][day_of_week] = day_plan
-                    firebase_client.update_document(
-                        "diet_plans",
+                    await self.diet_plan_repository.update_daily_plan(
                         self.full_plan_id,
-                        {"daily_plans": full_plan["daily_plans"]}
+                        day_of_week,
+                        day_plan
                     )
                     logger.info(f"Successfully generated plan for {day_of_week}")
                 else:
@@ -82,8 +90,7 @@ class ProgressiveDietGenerator:
             # Проверяем, все ли дни недели успешно сгенерированы
             if all(day in full_plan["daily_plans"] for day in self.DAYS_OF_WEEK):
                 # Обновляем статус плана на "active"
-                firebase_client.update_document(
-                    "diet_plans",
+                await self.diet_plan_repository.update(
                     self.full_plan_id,
                     {"status": "active"}
                 )
@@ -205,4 +212,3 @@ class ProgressiveDietGenerator:
                 return False
 
         return True
-

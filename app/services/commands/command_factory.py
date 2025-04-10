@@ -1,10 +1,9 @@
 import logging
 from typing import Dict, Any, Optional
 
-from pip._internal.commands.help import HelpCommand
-
 from app.services.commands.commands.compliance_command import ComplianceCommand
 from app.services.commands.commands.diet_command import DietCommand
+from app.services.commands.commands.help_command import HelpCommand
 from app.services.commands.commands.shopping_list_command import ShoppingListCommand
 from app.services.commands.commands.stats_command import StatsCommand
 from app.services.commands.commands.water_command import WaterCommand

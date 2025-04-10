@@ -37,7 +37,7 @@ class DietMessages:
     DAY_MENU_EXAMPLE = "📅 *Пример меню на {day_name}, {date_formatted}:*\n"
     MEAL_FORMAT = "{emoji} *{meal_type}*: \n{title} {relevance}\n"
     CALORIES_FORMAT = "  Калории: {calories} ккал\n"
-    WHY_RECOMMENDED = "  Почему рекомендуем: {why_recommended}_\n"
+    WHY_RECOMMENDED = "  _Почему рекомендуем: {why_recommended}_\n"
 
     # Форматы даты и названия дней недели
     DAY_FORMAT = "%d.%m.%Y"

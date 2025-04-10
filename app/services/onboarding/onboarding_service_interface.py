@@ -39,29 +39,16 @@ class IOnboardingService(ABC):
         pass
 
     @abstractmethod
-    async def complete_onboarding(self, user_id: str) -> Dict[str, Any]:
+    async def complete_onboarding(self, user_id: str, phone_number: str) -> Dict[str, Any]:
         """
         Завершает процесс онбординга
 
         Args:
             user_id: Идентификатор пользователя
+            phone_number: Номер телефона пользователя
 
         Returns:
             Dict[str, Any]: Результат завершения онбординга
-        """
-        pass
-
-    @abstractmethod
-    def validate_onboarding_step(self, step: str, message_text: str) -> Optional[Dict[str, Any]]:
-        """
-        Валидирует шаг онбординга
-
-        Args:
-            step: Текущий шаг онбординга
-            message_text: Текст сообщения от пользователя
-
-        Returns:
-            Optional[Dict[str, Any]]: Обработанные данные или None
         """
         pass
 
@@ -75,18 +62,5 @@ class IOnboardingService(ABC):
 
         Returns:
             str: Следующий шаг онбординга
-        """
-        pass
-
-    @abstractmethod
-    async def restore_onboarding_context(self, user_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Восстанавливает контекст онбординга для пользователя
-
-        Args:
-            user_id: Идентификатор пользователя
-
-        Returns:
-            Optional[Dict[str, Any]]: Контекст онбординга или None
         """
         pass
