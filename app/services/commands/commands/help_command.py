@@ -8,9 +8,6 @@ class HelpCommand(BaseCommand):
     Команда для отображения справки
     """
 
-    def __init__(self, dependencies: Dict[str, Any]):
-        super().__init__(dependencies)
-
     async def execute(self, user_id: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Выполнение команды получения справки по командам
@@ -22,7 +19,14 @@ class HelpCommand(BaseCommand):
         Returns:
             Dict[str, Any]: Результат выполнения команды
         """
-        help_message = self.messages.get_help_message()
+        # Получаем язык пользователя, если доступен сервис локализации
+        lang = None
+        if hasattr(self, 'localization_service') and self.localization_service:
+            lang = await self.localization_service.get_user_language(user_id)
+
+        # Получаем локализованное сообщение справки
+        help_message = self.messages.get_help_message(lang)
+
         return {
             "success": True,
             "message": help_message

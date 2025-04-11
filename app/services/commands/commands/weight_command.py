@@ -2,34 +2,35 @@ import re
 from typing import Dict, Any, Optional
 
 from app.services.commands.base_command import BaseCommand
-from app.services.tracking.tracking_service import tracking_service
+from app.services.tracking.tracking_service_interface import ITrackingService
 
 
 class WeightCommand(BaseCommand):
     """
     Команда для записи веса пользователя
     """
+
     async def can_execute(self, user_id: str) -> bool:
         """
         Проверка возможности выполнения команды
-        
+
         Args:
             user_id: ID пользователя
-        
+
         Returns:
             bool: Возможность выполнения команды
         """
-        # Здесь можно добавить дополнительные проверки
+
         return True
 
     async def execute(self, user_id: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Выполнение команды записи веса
-        
+
         Args:
             user_id: ID пользователя
             params: Параметры команды (содержит текст сообщения)
-        
+
         Returns:
             Dict[str, Any]: Результат выполнения команды
         """
@@ -37,7 +38,7 @@ class WeightCommand(BaseCommand):
 
         if not params or 'params' not in params:
             return {
-                "success": False, 
+                "success": False,
                 "message": self.messages.INVALID_WEIGHT_FORMAT
             }
 
@@ -48,41 +49,41 @@ class WeightCommand(BaseCommand):
             if weight < 30 or weight > 300:
                 self.logger.error(f"Ошибка при записи трекинга воды: WATER_OUT_OF_RANGE '{weight}'")
                 return {
-                    "success": False, 
+                    "success": False,
                     "message": self.messages.WEIGHT_OUT_OF_RANGE
                 }
-            
-            # Запись веса через трекинг-сервис
-            await tracking_service.record_weight(user_id, weight)
-            
+
+            # Запись веса через типизированный сервис трекинга
+            await self.tracking_service.record_weight(user_id, weight)
+
             # Получаем прогресс
-            progress = await tracking_service.calculate_weight_progress(user_id)
-            
+            progress = await self.tracking_service.calculate_weight_progress(user_id)
+
             # Форматируем сообщение о записи веса
             message = self.messages.format_weight_recorded_message(weight, progress)
-            
+
             return {
-                "success": True, 
+                "success": True,
                 "message": message
             }
-        
+
         except ValueError:
             return {
-                "success": False, 
+                "success": False,
                 "message": self.messages.INVALID_WEIGHT_VALUE
             }
         except Exception as e:
             # Логирование ошибки
-            print(f"Ошибка при записи веса: {str(e)}")
+            self.logger.error(f"Ошибка при записи веса: {str(e)}")
             return {
-                "success": False, 
+                "success": False,
                 "message": "Произошла ошибка при записи веса. Попробуйте позже."
             }
 
     def get_error_message(self) -> str:
         """
         Получение сообщения об ошибке
-        
+
         Returns:
             str: Сообщение об ошибке
         """
