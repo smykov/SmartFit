@@ -207,7 +207,3 @@ class FirebaseClient:
         except Exception as e:
             logger.error(f"Ошибка при получении пользователя по телефону {phone}: {str(e)}")
             return None
-
-
-# Создаем экземпляр клиента Firebase
-firebase_client = FirebaseClient()

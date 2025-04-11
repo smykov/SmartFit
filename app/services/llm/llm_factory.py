@@ -98,7 +98,3 @@ class LLMFactory:
             BaseLLMService: Экземпляр LLM-сервиса
         """
         return LLMFactory.create_llm_service()
-
-
-# Создаем глобальный экземпляр LLM-сервиса для использования в приложении
-llm_service = LLMFactory.get_default_llm_service()

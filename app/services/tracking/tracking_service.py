@@ -1,21 +1,47 @@
+# app/services/tracking/tracking_service.py
 import logging
 from datetime import datetime, date, timedelta
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple, List
 
 import pytz
 
-from app.db.firebase import firebase_client
+from app.db.interfaces.user_repository_interface import IUserRepository
+from app.db.interfaces.weight_entry_repository_interface import IWeightEntryRepository
+from app.db.interfaces.water_entry_repository_interface import IWaterEntryRepository
+from app.db.interfaces.compliance_repository_interface import IComplianceRepository
 from app.models.tracking import (
     DailyTrackingStatus,
     WeightGoalProgress
 )
+from app.services.tracking.tracking_service_interface import ITrackingService
 from config import settings
 
 logger = logging.getLogger(__name__)
 
 
-class TrackingService:
+class TrackingService(ITrackingService):
     """Сервис для работы с данными трекинга"""
+
+    def __init__(
+            self,
+            user_repository: IUserRepository,
+            weight_entry_repository: IWeightEntryRepository,
+            water_entry_repository: IWaterEntryRepository,
+            compliance_repository: IComplianceRepository
+    ):
+        """
+        Инициализация сервиса трекинга с использованием DI
+
+        Args:
+            user_repository: Репозиторий для работы с пользователями
+            weight_entry_repository: Репозиторий для работы с записями веса
+            water_entry_repository: Репозиторий для работы с записями потребления воды
+            compliance_repository: Репозиторий для работы с записями соблюдения диеты
+        """
+        self.user_repository = user_repository
+        self.weight_entry_repository = weight_entry_repository
+        self.water_entry_repository = water_entry_repository
+        self.compliance_repository = compliance_repository
 
     async def record_weight(self, user_id: str, weight: float, notes: str = None) -> bool:
         """
@@ -30,36 +56,9 @@ class TrackingService:
             bool: Результат операции
         """
         try:
-            # Получаем пользователя
-            user = firebase_client.get_document("users", user_id)
-            if not user:
-                logger.error(f"User {user_id} not found")
-                return False
-
-            # Получаем текущую дату
-            today = datetime.now(pytz.timezone(settings.TIMEZONE)).date().isoformat()
-
-            # Обновляем текущий вес
-            firebase_client.update_document("users", user_id, {"current_weight": weight})
-
-            # Добавляем запись в историю веса
-            weight_history = user.get("weight_history", {})
-            weight_history[today] = weight
-
-            firebase_client.update_document("users", user_id, {"weight_history": weight_history})
-
-            # Создаем запись в коллекции weight_entries для аналитики
-            entry_data = {
-                "user_id": user_id,
-                "weight": weight,
-                "date": today,
-                "notes": notes
-            }
-
-            firebase_client.add_document("weight_entries", entry_data)
-
-            return True
-
+            # Используем репозиторий записей веса
+            entry_id = await self.weight_entry_repository.add_entry(user_id, weight, notes=notes)
+            return entry_id is not None
         except Exception as e:
             logger.error(f"Error recording weight: {str(e)}")
             return False
@@ -76,38 +75,9 @@ class TrackingService:
             bool: Результат операции
         """
         try:
-            # Получаем пользователя
-            user = firebase_client.get_document("users", user_id)
-            if not user:
-                logger.error(f"User {user_id} not found")
-                return False
-
-            # Получаем текущую дату
-            today = datetime.now(pytz.timezone(settings.TIMEZONE)).date().isoformat()
-
-            # Добавляем запись в историю потребления воды
-            water_history = user.get("water_intake_history", {})
-
-            # Если на сегодня уже есть запись, добавляем к ней
-            if today in water_history:
-                water_history[today] += amount
-            else:
-                water_history[today] = amount
-
-            firebase_client.update_document("users", user_id, {"water_intake_history": water_history})
-
-            # Создаем запись в коллекции water_entries для аналитики
-            entry_data = {
-                "user_id": user_id,
-                "amount": amount,
-                "date": today,
-                "time": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
-            }
-
-            firebase_client.add_document("water_entries", entry_data)
-
-            return True
-
+            # Используем репозиторий записей потребления воды
+            entry_id = await self.water_entry_repository.add_entry(user_id, amount)
+            return entry_id is not None
         except Exception as e:
             logger.error(f"Error recording water intake: {str(e)}")
             return False
@@ -136,154 +106,64 @@ class TrackingService:
             bool: Результат операции
         """
         try:
-            # Проверяем существование пользователя
-            user = firebase_client.get_document("users", user_id)
-            if not user:
-                logger.error(f"User {user_id} not found")
-                return False
-
-            # Формируем дату в формате строки
-            date_str = date_val.isoformat() if isinstance(date_val, date) else date_val
-
-            # Создаем запись о соблюдении режима
-            compliance_data = {
-                "user_id": user_id,
-                "date": date_str,
-                "meal_type": meal_type,
-                "status": status,
-                "notes": notes,
-                "alternative_meal": alternative_meal,
-                "created_at": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
-            }
-
-            # Сохраняем в базу данных
-            compliance_id = firebase_client.add_document("meal_compliance", compliance_data)
-
-            if not compliance_id:
-                logger.error(f"Failed to save meal compliance for user {user_id}")
-                return False
-
-            # Обновляем общую статистику соблюдения
-            await self._update_daily_compliance(user_id, date_str)
-
-            return True
-
+            # Используем репозиторий соблюдения плана
+            compliance_id = await self.compliance_repository.add_meal_compliance(
+                user_id, date_val, meal_type, status, notes, alternative_meal
+            )
+            return compliance_id is not None
         except Exception as e:
             logger.error(f"Error recording meal compliance: {str(e)}")
             return False
 
-    async def _update_daily_compliance(self, user_id: str, date_str: str) -> None:
+    async def calculate_weight_progress(self, user_id: str) -> Optional[WeightGoalProgress]:
         """
-        Обновляет общую статистику соблюдения за день
+        Рассчитывает прогресс в достижении цели по весу
 
         Args:
             user_id: ID пользователя
-            date_str: Дата в формате строки
-        """
-        try:
-            # Получаем все записи о соблюдении за день
-            compliances = firebase_client.query_documents(
-                "meal_compliance",
-                "user_id", "==", user_id
-            )
-
-            # Фильтруем по дате
-            daily_compliances = [c for c in compliances if c.get("date") == date_str]
-
-            if not daily_compliances:
-                return
-
-            # Формируем словарь по типам приемов пищи
-            meals_status = {}
-            for compliance in daily_compliances:
-                meal_type = compliance.get("meal_type")
-                status = compliance.get("status")
-                meals_status[meal_type] = status
-
-            # Рассчитываем общий процент соблюдения
-            score_map = {
-                "followed": 1.0,
-                "partially": 0.5,
-                "substituted": 0.3,
-                "skipped": 0.0,
-                "not_recorded": 0.0
-            }
-
-            total_score = sum(score_map.get(status, 0) for status in meals_status.values())
-            max_possible = len(meals_status) if meals_status else 1
-            overall_score = (total_score / max_possible) * 100
-
-            # Сохраняем общую статистику
-            compliance_data = {
-                "user_id": user_id,
-                "date": date_str,
-                "meals": meals_status,
-                "overall_score": overall_score,
-                "updated_at": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
-            }
-
-            # Проверяем, существует ли уже запись
-            existing = firebase_client.query_documents(
-                "daily_compliance",
-                "user_id", "==", user_id
-            )
-
-            # Фильтруем по дате
-            existing = [e for e in existing if e.get("date") == date_str]
-
-            if existing:
-                # Обновляем существующую запись
-                firebase_client.update_document("daily_compliance", existing[0]["id"], compliance_data)
-            else:
-                # Создаем новую запись
-                firebase_client.add_document("daily_compliance", compliance_data)
-
-        except Exception as e:
-            logger.error(f"Error updating daily compliance: {str(e)}")
-
-    async def get_diet_compliance(self, user_id: str, date_val: date = None) -> Optional[Dict[str, Any]]:
-        """
-        Получает статистику соблюдения плана питания
-
-        Args:
-            user_id: ID пользователя
-            date_val: Дата (если None, используется текущая дата)
 
         Returns:
-            Optional[Dict[str, Any]]: Статистика соблюдения
+            Optional[WeightGoalProgress]: Прогресс или None в случае ошибки
         """
         try:
-            # Если дата не указана, используем текущую
-            if date_val is None:
-                date_val = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
+            # Получаем пользователя
+            user = await self.user_repository.get_by_id(user_id)
+            if not user:
+                logger.error(f"User {user_id} not found")
+                return None
 
-            # Преобразуем в строку
-            date_str = date_val.isoformat() if isinstance(date_val, date) else date_val
+            # Проверяем наличие целевого веса
+            if "target_weight" not in user or not user["target_weight"]:
+                logger.error(f"Target weight not set for user {user_id}")
+                return None
 
-            # Получаем запись о соблюдении
-            compliances = firebase_client.query_documents(
-                "daily_compliance",
-                "user_id", "==", user_id
+            # Проверяем наличие текущего веса
+            if "current_weight" not in user or not user["current_weight"]:
+                logger.error(f"Current weight not set for user {user_id}")
+                return None
+
+            # Получаем историю веса для определения начального веса
+            weight_entries = await self.weight_entry_repository.get_entries_by_user(user_id)
+
+            # Определяем начальный вес
+            start_weight, start_date = self._get_start_weight(weight_entries)
+
+            if not start_weight:
+                # Если нет истории, используем текущий вес как начальный
+                start_weight = user["current_weight"]
+
+            # Рассчитываем прогресс
+            progress = WeightGoalProgress.calculate(
+                user_id=user_id,
+                start_weight=start_weight,
+                current_weight=user["current_weight"],
+                target_weight=user["target_weight"]
             )
 
-            # Фильтруем по дате
-            compliances = [c for c in compliances if c.get("date") == date_str]
-
-            if not compliances:
-                # Если записи нет, создаем пустую запись
-                empty_compliance = {
-                    "user_id": user_id,
-                    "date": date_str,
-                    "meals": {},
-                    "overall_score": 0,
-                    "message": "Нет данных о соблюдении плана на этот день"
-                }
-                return empty_compliance
-
-            return compliances[0]
+            return progress
 
         except Exception as e:
-            logger.error(f"Error getting diet compliance: {str(e)}")
+            logger.error(f"Error calculating weight progress: {str(e)}")
             return None
 
     async def get_daily_status(self, user_id: str, target_date: date = None) -> Optional[DailyTrackingStatus]:
@@ -299,7 +179,7 @@ class TrackingService:
         """
         try:
             # Получаем пользователя
-            user = firebase_client.get_document("users", user_id)
+            user = await self.user_repository.get_by_id(user_id)
             if not user:
                 logger.error(f"User {user_id} not found")
                 return None
@@ -308,25 +188,25 @@ class TrackingService:
             if not target_date:
                 target_date = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
 
-            date_str = target_date.isoformat()
-
             # Проверяем, записан ли вес на указанную дату
-            weight_history = user.get("weight_history", {})
-            weight_recorded = date_str in weight_history
+            latest_weight = await self.weight_entry_repository.get_latest_entry(user_id)
+            weight_recorded = False
+            if latest_weight:
+                latest_date = datetime.strptime(latest_weight.get("date", ""), "%Y-%m-%d").date()
+                weight_recorded = latest_date == target_date
 
             # Получаем потребление воды на указанную дату
-            water_history = user.get("water_intake_history", {})
-            current_water_intake = water_history.get(date_str, 0)
+            current_water_intake = await self.water_entry_repository.get_daily_total(user_id, target_date)
 
             # Целевое потребление воды (2 литра по умолчанию)
             water_goal = 2000  # в мл
 
             # Получаем данные о соблюдении плана питания
-            compliance_data = await self.get_diet_compliance(user_id, target_date)
+            compliance_data = await self.compliance_repository.get_daily_compliance(user_id, target_date)
             meal_compliance = {}
             overall_compliance_score = 0
 
-            if compliance_data and "meals" in compliance_data:
+            if compliance_data:
                 meal_compliance = compliance_data.get("meals", {})
                 overall_compliance_score = compliance_data.get("overall_score", 0)
 
@@ -350,6 +230,29 @@ class TrackingService:
             logger.error(f"Error getting daily status: {str(e)}")
             return None
 
+    async def get_diet_compliance(self, user_id: str, date_val: date = None) -> Optional[Dict[str, Any]]:
+        """
+        Получает статистику соблюдения плана питания
+
+        Args:
+            user_id: ID пользователя
+            date_val: Дата (если None, используется текущая дата)
+
+        Returns:
+            Optional[Dict[str, Any]]: Статистика соблюдения или None
+        """
+        try:
+            # Если дата не указана, используем текущую
+            if date_val is None:
+                date_val = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
+
+            # Получаем запись о соблюдении через репозиторий
+            return await self.compliance_repository.get_daily_compliance(user_id, date_val)
+
+        except Exception as e:
+            logger.error(f"Error getting diet compliance: {str(e)}")
+            return None
+
     async def get_weight_history(
             self,
             user_id: str,
@@ -368,30 +271,18 @@ class TrackingService:
             Optional[Dict[str, float]]: История веса (дата: вес) или None в случае ошибки
         """
         try:
-            # Получаем пользователя
-            user = firebase_client.get_document("users", user_id)
-            if not user:
-                logger.error(f"User {user_id} not found")
-                return None
+            # Получаем записи веса через репозиторий
+            entries = await self.weight_entry_repository.get_entries_by_user(user_id, start_date, end_date)
 
-            # Получаем историю веса
-            weight_history = user.get("weight_history", {})
+            # Преобразуем в словарь {дата: вес}
+            weight_history = {}
+            for entry in entries:
+                date_str = entry.get("date", "")
+                weight = entry.get("weight", 0.0)
+                if date_str and weight:
+                    weight_history[date_str] = weight
 
-            # Если не указаны даты, возвращаем всю историю
-            if not start_date and not end_date:
-                return weight_history
-
-            # Фильтруем по датам
-            filtered_history = {}
-
-            for date_str, weight in weight_history.items():
-                entry_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-
-                # Проверяем, входит ли дата в указанный период
-                if (not start_date or entry_date >= start_date) and (not end_date or entry_date <= end_date):
-                    filtered_history[date_str] = weight
-
-            return filtered_history
+            return weight_history
 
         except Exception as e:
             logger.error(f"Error getting weight history: {str(e)}")
@@ -415,81 +306,26 @@ class TrackingService:
             Optional[Dict[str, float]]: История потребления воды (дата: объем) или None в случае ошибки
         """
         try:
-            # Получаем пользователя
-            user = firebase_client.get_document("users", user_id)
-            if not user:
-                logger.error(f"User {user_id} not found")
-                return None
+            # Получаем записи о потреблении воды через репозиторий
+            entries = await self.water_entry_repository.get_entries_by_user(user_id, start_date, end_date)
 
-            # Получаем историю потребления воды
-            water_history = user.get("water_intake_history", {})
+            # Создаем словарь для суммирования потребления воды по дням
+            water_history = {}
 
-            # Если не указаны даты, возвращаем всю историю
-            if not start_date and not end_date:
-                return water_history
+            for entry in entries:
+                date_str = entry.get("date", "")
+                amount = entry.get("amount", 0.0)
 
-            # Фильтруем по датам
-            filtered_history = {}
+                if date_str:
+                    if date_str in water_history:
+                        water_history[date_str] += amount
+                    else:
+                        water_history[date_str] = amount
 
-            for date_str, amount in water_history.items():
-                entry_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-
-                # Проверяем, входит ли дата в указанный период
-                if (not start_date or entry_date >= start_date) and (not end_date or entry_date <= end_date):
-                    filtered_history[date_str] = amount
-
-            return filtered_history
+            return water_history
 
         except Exception as e:
             logger.error(f"Error getting water history: {str(e)}")
-            return None
-
-    async def calculate_weight_progress(self, user_id: str) -> Optional[WeightGoalProgress]:
-        """
-        Рассчитывает прогресс в достижении цели по весу
-
-        Args:
-            user_id: ID пользователя
-
-        Returns:
-            Optional[WeightGoalProgress]: Прогресс или None в случае ошибки
-        """
-        try:
-            # Получаем пользователя
-            user = firebase_client.get_document("users", user_id)
-            if not user:
-                logger.error(f"User {user_id} not found")
-                return None
-
-            # Проверяем наличие целевого веса
-            if "target_weight" not in user or not user["target_weight"]:
-                logger.error(f"Target weight not set for user {user_id}")
-                return None
-
-            # Проверяем наличие текущего веса
-            if "current_weight" not in user or not user["current_weight"]:
-                logger.error(f"Current weight not set for user {user_id}")
-                return None
-
-            # Определяем начальный вес
-            start_weight, start_date = self._get_start_weight(user)
-
-            if not start_weight:
-                # Если нет истории, используем текущий вес как начальный
-                start_weight = user["current_weight"]
-
-            # Рассчитываем прогресс
-            progress = WeightGoalProgress.calculate(
-                user_id=user_id,
-                start_weight=start_weight,
-                current_weight=user["current_weight"],
-                target_weight=user["target_weight"]
-            )
-
-            return progress
-
-        except Exception as e:
-            logger.error(f"Error calculating weight progress: {str(e)}")
             return None
 
     async def generate_weekly_report(self, user_id: str) -> Optional[str]:
@@ -504,7 +340,7 @@ class TrackingService:
         """
         try:
             # Получаем пользователя
-            user = firebase_client.get_document("users", user_id)
+            user = await self.user_repository.get_by_id(user_id)
             if not user:
                 logger.error(f"User {user_id} not found")
                 return None
@@ -533,29 +369,40 @@ class TrackingService:
             logger.error(f"Error generating weekly report: {str(e)}")
             return None
 
-    def _get_start_weight(self, user: Dict[str, Any]) -> Tuple[Optional[float], Optional[date]]:
+    def _get_start_weight(self, weight_entries: List[Dict[str, Any]]) -> Tuple[Optional[float], Optional[date]]:
         """
-        Определяет начальный вес пользователя
+        Определяет начальный вес пользователя из истории
 
         Args:
-            user: Данные пользователя
+            weight_entries: Список записей веса
 
         Returns:
             Tuple[Optional[float], Optional[date]]: (начальный вес, дата начального веса)
         """
         try:
-            # Получаем историю веса
-            weight_history = user.get("weight_history", {})
-
-            if not weight_history:
+            if not weight_entries:
                 return None, None
 
-            # Находим самую раннюю запись
-            earliest_date = min(weight_history.keys())
-            start_weight = weight_history[earliest_date]
+            # Сортируем записи по дате (от ранних к поздним)
+            sorted_entries = sorted(
+                weight_entries,
+                key=lambda entry: entry.get("date", "")
+            )
+
+            # Берем самую раннюю запись
+            earliest_entry = sorted_entries[0]
+
+            start_weight = earliest_entry.get("weight")
+            start_date_str = earliest_entry.get("date")
+
+            if not start_weight or not start_date_str:
+                return None, None
 
             # Преобразуем строку даты в объект date
-            start_date = datetime.strptime(earliest_date, "%Y-%m-%d").date()
+            try:
+                start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+            except ValueError:
+                start_date = None
 
             return start_weight, start_date
 
@@ -582,6 +429,7 @@ class TrackingService:
         Returns:
             str: Отформатированный отчет
         """
+        # TODO вынести форматирование в отдельный сервис форматирования в будущем
         try:
             report = f"📊 *Еженедельный отчет о прогрессе для {user.get('name', 'пользователя')}*\n\n"
 
@@ -647,7 +495,3 @@ class TrackingService:
         except Exception as e:
             logger.error(f"Error formatting weekly report: {str(e)}")
             return "Еженедельный отчет недоступен. Пожалуйста, попробуйте позже."
-
-
-# Создаем экземпляр сервиса трекинга
-tracking_service = TrackingService()

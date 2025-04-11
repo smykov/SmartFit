@@ -1,18 +1,26 @@
-# app/db/repositories/user_repository.py
-
 import logging
 from typing import Dict, Any, List, Optional
+from datetime import datetime
 
-from app.db.firebase import firebase_client
+import pytz
+
 from app.db.interfaces.user_repository_interface import IUserRepository
+from config import settings
 
 logger = logging.getLogger(__name__)
 
 
 class FirebaseUserRepository(IUserRepository):
-    """
-    Репозиторий для работы с пользователями в Firebase
-    """
+    """Репозиторий для работы с пользователями через Firebase"""
+
+    def __init__(self, firebase_client):
+        """
+        Инициализация репозитория пользователей
+
+        Args:
+            firebase_client: Клиент Firebase для работы с базой данных
+        """
+        self.firebase_client = firebase_client
 
     async def create(self, user_data: Dict[str, Any]) -> Optional[str]:
         """
@@ -25,7 +33,13 @@ class FirebaseUserRepository(IUserRepository):
             Optional[str]: ID созданного пользователя или None в случае ошибки
         """
         try:
-            user_id = firebase_client.add_document("users", user_data)
+            now = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+            if 'created_at' not in user_data:
+                user_data['created_at'] = now
+            user_data['updated_at'] = now
+
+            user_id = self.firebase_client.add_document("users", user_data)
+
             return user_id
         except Exception as e:
             logger.error(f"Error creating user: {str(e)}")
@@ -42,7 +56,7 @@ class FirebaseUserRepository(IUserRepository):
             Optional[Dict[str, Any]]: Данные пользователя или None, если пользователь не найден
         """
         try:
-            user = firebase_client.get_document("users", user_id)
+            user = self.firebase_client.get_document("users", user_id)
             return user
         except Exception as e:
             logger.error(f"Error retrieving user by ID: {str(e)}")
@@ -59,7 +73,7 @@ class FirebaseUserRepository(IUserRepository):
             Optional[Dict[str, Any]]: Данные пользователя или None, если пользователь не найден
         """
         try:
-            users = firebase_client.query_documents("users", "phone_number", "==", phone_number)
+            users = self.firebase_client.query_documents("users", "phone_number", "==", phone_number)
             if not users:
                 return None
             return users[0]
@@ -79,7 +93,7 @@ class FirebaseUserRepository(IUserRepository):
             bool: Результат обновления
         """
         try:
-            return firebase_client.update_document("users", user_id, update_data)
+            return self.firebase_client.update_document("users", user_id, update_data)
         except Exception as e:
             logger.error(f"Error updating user: {str(e)}")
             return False
@@ -96,7 +110,7 @@ class FirebaseUserRepository(IUserRepository):
         """
         try:
             # В реальном приложении часто делают "soft delete" вместо физического удаления
-            return firebase_client.update_document("users", user_id, {"is_active": False})
+            return self.firebase_client.update_document("users", user_id, {"is_active": False})
         except Exception as e:
             logger.error(f"Error deleting user: {str(e)}")
             return False
@@ -109,7 +123,7 @@ class FirebaseUserRepository(IUserRepository):
             List[Dict[str, Any]]: Список пользователей с незавершенным онбордингом
         """
         try:
-            return firebase_client.query_documents("users", "is_onboarding_completed", "==", False)
+            return self.firebase_client.query_documents("users", "is_onboarding_completed", "==", False)
         except Exception as e:
             logger.error(f"Error finding users with incomplete onboarding: {str(e)}")
             return []

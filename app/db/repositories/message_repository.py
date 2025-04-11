@@ -4,7 +4,6 @@ from typing import Dict, Any, Optional, List
 
 import pytz
 
-from app.db.firebase import firebase_client
 from app.db.interfaces.message_repository_interface import IMessageRepository
 from app.models.messaging import MessageStatus
 from config import settings
@@ -16,6 +15,15 @@ class FirebaseMessageRepository(IMessageRepository):
     """
     Репозиторий для работы с сообщениями в Firebase
     """
+
+    def __init__(self, firebase_client):
+        """
+        Инициализация репозитория с сообщениями
+
+        Args:
+            firebase_client: Клиент Firebase для работы с базой данных
+        """
+        self.firebase_client = firebase_client
 
     async def save_message(self, message_data: Dict[str, Any]) -> str:
         """
@@ -33,7 +41,7 @@ class FirebaseMessageRepository(IMessageRepository):
                 message_data["timestamp"] = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
 
             # Сохраняем в Firebase
-            message_id = firebase_client.add_document("messages", message_data)
+            message_id = self.firebase_client.add_document("messages", message_data)
 
             return message_id or ""
 
@@ -52,7 +60,7 @@ class FirebaseMessageRepository(IMessageRepository):
             Optional[Dict[str, Any]]: Данные сообщения или None
         """
         try:
-            message = firebase_client.get_document("messages", message_id)
+            message = self.firebase_client.get_document("messages", message_id)
             return message
 
         except Exception as e:
@@ -88,7 +96,7 @@ class FirebaseMessageRepository(IMessageRepository):
                 message_data.update(context)
 
             # Сохраняем в коллекции sent_messages
-            result = firebase_client.add_document("sent_messages", message_data)
+            result = self.firebase_client.add_document("sent_messages", message_data)
             return bool(result)
 
         except Exception as e:
@@ -127,7 +135,7 @@ class FirebaseMessageRepository(IMessageRepository):
                 message_data.update(context)
 
             # Проверяем наличие дубликата
-            existing_messages = firebase_client.query_documents(
+            existing_messages = self.firebase_client.query_documents(
                 "pending_messages",
                 "phone_number", "==", phone_number
             )
@@ -141,7 +149,7 @@ class FirebaseMessageRepository(IMessageRepository):
             if duplicate_messages:
                 # Если нашли дубликат, просто обновляем его, увеличивая счетчик попыток
                 duplicate = duplicate_messages[0]
-                firebase_client.update_document(
+                self.firebase_client.update_document(
                     "pending_messages",
                     duplicate.get("id"),
                     {
@@ -153,7 +161,7 @@ class FirebaseMessageRepository(IMessageRepository):
                 logger.info(f"Updated existing pending message (id: {duplicate.get('id')})")
             else:
                 # Если дубликата нет, создаем новую запись
-                firebase_client.add_document("pending_messages", message_data)
+                self.firebase_client.add_document("pending_messages", message_data)
                 logger.info(f"Created new pending message for {phone_number}")
 
             return True
@@ -173,7 +181,7 @@ class FirebaseMessageRepository(IMessageRepository):
             List[Dict[str, Any]]: Список неотправленных сообщений
         """
         try:
-            pending_messages = firebase_client.query_documents(
+            pending_messages = self.firebase_client.query_documents(
                 "pending_messages",
                 "status", "==", MessageStatus.PENDING
             )
@@ -208,7 +216,7 @@ class FirebaseMessageRepository(IMessageRepository):
         """
         try:
             # Получаем сообщение из базы данных
-            message = firebase_client.get_document("pending_messages", message_id)
+            message = self.firebase_client.get_document("pending_messages", message_id)
 
             if not message:
                 logger.warning(f"Pending message {message_id} not found")
@@ -230,10 +238,10 @@ class FirebaseMessageRepository(IMessageRepository):
                 sent_data["onboarding_step"] = message["onboarding_step"]
 
             # Записываем в sent_messages
-            firebase_client.add_document("sent_messages", sent_data)
+            self.firebase_client.add_document("sent_messages", sent_data)
 
             # Удаляем из pending_messages
-            firebase_client.delete_document("pending_messages", message_id)
+            self.firebase_client.delete_document("pending_messages", message_id)
 
             return True
 
@@ -252,7 +260,7 @@ class FirebaseMessageRepository(IMessageRepository):
             bool: Успешность операции
         """
         try:
-            return firebase_client.update_document(
+            return self.firebase_client.update_document(
                 "pending_messages",
                 message_id,
                 {
@@ -277,14 +285,14 @@ class FirebaseMessageRepository(IMessageRepository):
         """
         try:
             # Получаем сообщение из базы данных
-            message = firebase_client.get_document("pending_messages", message_id)
+            message = self.firebase_client.get_document("pending_messages", message_id)
 
             if not message:
                 logger.warning(f"Pending message {message_id} not found")
                 return False
 
             # Увеличиваем счетчик попыток
-            return firebase_client.update_document(
+            return self.firebase_client.update_document(
                 "pending_messages",
                 message_id,
                 {
@@ -308,7 +316,7 @@ class FirebaseMessageRepository(IMessageRepository):
             bool: Статус обработки сообщения
         """
         try:
-            processed_messages = firebase_client.query_documents(
+            processed_messages = self.firebase_client.query_documents(
                 "processed_messages",
                 "message_id", "==", message_id
             )
@@ -330,7 +338,7 @@ class FirebaseMessageRepository(IMessageRepository):
             timestamp: Временная метка обработки
         """
         try:
-            firebase_client.add_document("processed_messages", {
+            self.firebase_client.add_document("processed_messages", {
                 "message_id": message_id,
                 "phone_number": phone_number,
                 "message_text": message_text,
@@ -361,7 +369,7 @@ class FirebaseMessageRepository(IMessageRepository):
         """
         try:
             # Сначала получаем все сообщения
-            all_messages = firebase_client.get_all_documents("messages")
+            all_messages = self.firebase_client.get_all_documents("messages")
 
             # Постепенно фильтруем по критериям
             filtered_messages = all_messages
@@ -406,7 +414,7 @@ class FirebaseMessageRepository(IMessageRepository):
         """
         try:
             # Получаем сообщения для указанного номера телефона
-            messages = firebase_client.query_documents(
+            messages = self.firebase_client.query_documents(
                 "messages",
                 "phone_number", "==", phone_number
             )

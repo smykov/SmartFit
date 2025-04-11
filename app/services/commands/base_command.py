@@ -13,13 +13,23 @@ class BaseCommand(ICommand):
     def __init__(self, dependencies: Dict[str, Any]):
         """
         Инициализация базовой команды с зависимостями
-        
+
         Args:
             dependencies: Словарь зависимостей для команды
         """
         self.dependencies = dependencies
         self.messages = CommandHandlerMessages()
         self.logger = logging.getLogger(self.__class__.__name__)
+
+        # Для удобства доступа, извлекаем общие зависимости
+        if 'user_repository' in dependencies:
+            self.user_repository = dependencies['user_repository']
+        if 'message_service' in dependencies:
+            self.message_service = dependencies['message_service']
+        if 'tracking_service' in dependencies:
+            self.tracking_service = dependencies['tracking_service']
+        if 'diet_service' in dependencies:
+            self.diet_service = dependencies['diet_service']
 
     async def can_execute(self, user_id: str) -> bool:
         """

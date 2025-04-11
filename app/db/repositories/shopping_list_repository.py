@@ -5,7 +5,6 @@ from datetime import datetime
 
 import pytz
 
-from app.db.firebase import firebase_client
 from app.db.interfaces.shopping_list_repository_interface import IShoppingListRepository
 from config import settings
 
@@ -17,6 +16,14 @@ class FirebaseShoppingListRepository(IShoppingListRepository):
     Репозиторий для работы со списками покупок через Firebase
     """
 
+    def __init__(self, firebase_client):
+        """
+        Инициализация репозитория списка покупок
+
+        Args:
+            firebase_client: Клиент Firebase для работы с базой данных
+        """
+        self.firebase_client = firebase_client
     async def create(self, shopping_list_data: Dict[str, Any]) -> Optional[str]:
         """
         Создает новый список покупок
@@ -33,7 +40,7 @@ class FirebaseShoppingListRepository(IShoppingListRepository):
                 shopping_list_data['created_at'] = now
             shopping_list_data['updated_at'] = now
 
-            list_id = firebase_client.add_document("shopping_lists", shopping_list_data)
+            list_id = self.firebase_client.add_document("shopping_lists", shopping_list_data)
 
             if not list_id:
                 logger.error("Failed to create shopping list")
@@ -55,7 +62,7 @@ class FirebaseShoppingListRepository(IShoppingListRepository):
             Optional[Dict[str, Any]]: Данные списка покупок или None, если список не найден
         """
         try:
-            shopping_list = firebase_client.get_document("shopping_lists", list_id)
+            shopping_list = self.firebase_client.get_document("shopping_lists", list_id)
             return shopping_list
         except Exception as e:
             logger.error(f"Error getting shopping list by ID: {str(e)}")
@@ -75,7 +82,7 @@ class FirebaseShoppingListRepository(IShoppingListRepository):
         try:
             update_data['updated_at'] = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
 
-            result = firebase_client.update_document("shopping_lists", list_id, update_data)
+            result = self.firebase_client.update_document("shopping_lists", list_id, update_data)
             return result
         except Exception as e:
             logger.error(f"Error updating shopping list: {str(e)}")
@@ -92,7 +99,7 @@ class FirebaseShoppingListRepository(IShoppingListRepository):
             bool: Результат удаления
         """
         try:
-            result = firebase_client.delete_document("shopping_lists", list_id)
+            result = self.firebase_client.delete_document("shopping_lists", list_id)
             return result
         except Exception as e:
             logger.error(f"Error deleting shopping list: {str(e)}")
@@ -109,7 +116,7 @@ class FirebaseShoppingListRepository(IShoppingListRepository):
             List[Dict[str, Any]]: Списки покупок для указанного плана диеты
         """
         try:
-            shopping_lists = firebase_client.query_documents(
+            shopping_lists = self.firebase_client.query_documents(
                 "shopping_lists",
                 "diet_plan_id",
                 "==",
@@ -131,7 +138,7 @@ class FirebaseShoppingListRepository(IShoppingListRepository):
             List[Dict[str, Any]]: Списки покупок указанного пользователя
         """
         try:
-            shopping_lists = firebase_client.query_documents(
+            shopping_lists = self.firebase_client.query_documents(
                 "shopping_lists",
                 "user_id",
                 "==",

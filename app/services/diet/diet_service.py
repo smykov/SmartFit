@@ -14,7 +14,7 @@ from app.services.formatter.diet_formatter_service import DietFormatterService
 from app.services.diet.diet_plan_manager import DietPlanManager
 from app.services.diet.diet_service_interface import IDietService
 from app.services.diet.shopping_list_manager import ShoppingListManager
-from app.services.llm import llm_service
+from app.services.llm import BaseLLMService
 from app.services.localization.localization_interface import ILocalizationService
 from app.services.messaging.message_interface import IMessageService
 
@@ -29,7 +29,8 @@ class DietService(BaseDietService, IDietService):
             localization_service: ILocalizationService,
             diet_plan_repository: IDietPlanRepository,
             product_repository: IProductRepository,
-            shopping_list_repository: IShoppingListRepository
+            shopping_list_repository: IShoppingListRepository,
+            llm_service: BaseLLMService
     ):
         """Инициализация сервиса диет с необходимыми компонентами"""
         super().__init__()

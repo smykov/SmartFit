@@ -69,7 +69,7 @@ class CommandHandlerService:
                 }
 
             # Создаем команду через фабрику
-            command = self.command_factory.create_command(command_type, user)
+            command = self.command_factory.create_command(command_type)
 
             # Если команда не найдена
             if not command:

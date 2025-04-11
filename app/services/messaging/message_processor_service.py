@@ -279,7 +279,7 @@ class MessageProcessorService:
             return {"success": False, "error": f"Unknown command for text {message_text}"}
 
         # Создаем команду через фабрику
-        command = self.command_factory.create_command(command_type, user)
+        command = self.command_factory.create_command(command_type)
 
         # Проверяем, удалось ли создать команду
         if command is None:

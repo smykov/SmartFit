@@ -5,7 +5,6 @@ from datetime import datetime
 
 import pytz
 
-from app.db.firebase import firebase_client
 from app.db.interfaces.product_repository_interface import IProductRepository
 from config import settings
 
@@ -16,6 +15,15 @@ class FirebaseProductRepository(IProductRepository):
     """
     Репозиторий для работы с продуктами через Firebase
     """
+
+    def __init__(self, firebase_client):
+        """
+        Инициализация репозитория продуктов
+
+        Args:
+            firebase_client: Клиент Firebase для работы с базой данных
+        """
+        self.firebase_client = firebase_client
 
     async def create(self, product_data: Dict[str, Any]) -> Optional[str]:
         """
@@ -33,7 +41,7 @@ class FirebaseProductRepository(IProductRepository):
                 product_data['created_at'] = now
             product_data['updated_at'] = now
 
-            product_id = firebase_client.add_document("products", product_data)
+            product_id = self.firebase_client.add_document("products", product_data)
 
             if not product_id:
                 logger.error("Failed to create product")
@@ -55,7 +63,7 @@ class FirebaseProductRepository(IProductRepository):
             Optional[Dict[str, Any]]: Данные продукта или None, если продукт не найден
         """
         try:
-            product = firebase_client.get_document("products", product_id)
+            product = self.firebase_client.get_document("products", product_id)
             return product
         except Exception as e:
             logger.error(f"Error getting product by ID: {str(e)}")
@@ -75,7 +83,7 @@ class FirebaseProductRepository(IProductRepository):
         try:
             update_data['updated_at'] = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
 
-            result = firebase_client.update_document("products", product_id, update_data)
+            result = self.firebase_client.update_document("products", product_id, update_data)
             return result
         except Exception as e:
             logger.error(f"Error updating product: {str(e)}")
@@ -92,7 +100,7 @@ class FirebaseProductRepository(IProductRepository):
             bool: Результат удаления
         """
         try:
-            result = firebase_client.delete_document("products", product_id)
+            result = self.firebase_client.delete_document("products", product_id)
             return result
         except Exception as e:
             logger.error(f"Error deleting product: {str(e)}")
@@ -106,7 +114,7 @@ class FirebaseProductRepository(IProductRepository):
             List[Dict[str, Any]]: Список продуктов
         """
         try:
-            products = firebase_client.get_all_documents("products")
+            products = self.firebase_client.get_all_documents("products")
             return products
         except Exception as e:
             logger.error(f"Error getting all products: {str(e)}")
@@ -154,7 +162,7 @@ class FirebaseProductRepository(IProductRepository):
             List[Dict[str, Any]]: Список продуктов указанной категории
         """
         try:
-            products = firebase_client.query_documents("products", "category", "==", category)
+            products = self.firebase_client.query_documents("products", "category", "==", category)
             return products
         except Exception as e:
             logger.error(f"Error getting products by category: {str(e)}")
