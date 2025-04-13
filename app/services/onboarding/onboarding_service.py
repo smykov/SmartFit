@@ -1,12 +1,14 @@
+# app/services/onboarding/onboarding_service.py
 import logging
 from typing import Dict, Any, Optional, Tuple
 
+from app.constants.localization_keys import LocalizationKeys as LK
 from app.db.interfaces.user_repository_interface import IUserRepository
-from app.localization.onboarding_messages import OnboardingMessages
 from app.services.commands.interfaces.command_handler_interface import ICommandHandler
 from app.services.diet.diet_service_interface import IDietService
 from app.services.messaging.message_interface import IMessageService
 from app.services.onboarding.onboarding_service_interface import IOnboardingService
+from app.services.localization.localization_interface import ILocalizationService
 
 
 class OnboardingService(IOnboardingService):
@@ -53,30 +55,33 @@ class OnboardingService(IOnboardingService):
             user_repository: IUserRepository,
             message_service: IMessageService,
             diet_service: IDietService,
-            command_handler_service: ICommandHandler
+            command_handler_service: ICommandHandler,
+            localization_service: ILocalizationService
     ):
         """
         Инициализация сервиса онбординга
-        
+
         Args:
             user_repository: Репозиторий для работы с пользователями
             message_service: Сервис для отправки сообщений
             diet_service: Сервис для генерации диет (опционально)
+            command_handler_service: Сервис обработки команд
+            localization_service: Сервис локализации
         """
         self.user_repository = user_repository
         self.message_service = message_service
         self.diet_service = diet_service
-        self.messages = OnboardingMessages()
         self.command_handler_service = command_handler_service
+        self.localization_service = localization_service
         self.logger = logging.getLogger(self.__class__.__name__)
 
     async def start_registration(self, phone_number: str) -> Dict[str, Any]:
         """
         Начинает процесс регистрации нового пользователя
-        
+
         Args:
             phone_number: Номер телефона пользователя
-        
+
         Returns:
             Dict[str, Any]: Результат обработки
         """
@@ -95,7 +100,7 @@ class OnboardingService(IOnboardingService):
             user_id = await self.user_repository.create(new_user)
 
             if not user_id:
-                self.logger.error(f"Не удалось создать пользователя с номером {phone_number}")
+                self.logger.error(f"Failed to create user with phone number {phone_number}")
                 return {"success": False, "error": "Failed to create user"}
 
             return {
@@ -105,45 +110,53 @@ class OnboardingService(IOnboardingService):
             }
 
         except Exception as e:
-            self.logger.error(f"Ошибка при начале регистрации: {str(e)}")
+            self.logger.error(f"Error during registration start: {str(e)}")
             return {"success": False, "error": str(e)}
 
     async def continue_onboarding(self, user_id: str, message_text: str) -> Dict[str, Any]:
         """
         Продолжает процесс онбординга пользователя
-        
+
         Args:
             user_id: ID Пользователя
             message_text: Текст сообщения
-        
+
         Returns:
             Dict[str, Any]: Результат обработки
         """
         try:
-
             if not user_id:
-                self.logger.error(f"Отсутствует ID пользователя")
+                self.logger.error(f"User ID missing")
                 return {"success": False, "error": "User ID not found"}
 
             user = await self.user_repository.get_by_id(user_id)
 
+            # Получаем язык пользователя
+            lang = None
+            if hasattr(self, 'localization_service') and self.localization_service:
+                lang = await self.localization_service.get_user_language(user_id)
+
             current_step = user.get("onboarding_step", self.STEP_WELCOME)
             phone_number = user.get('phone_number')
-            self.logger.info(f"onboarding_step: '{current_step}'")
+            self.logger.info(f"Processing onboarding step: '{current_step}'")
 
             # Определяем следующий шаг
             next_step = self.get_next_onboarding_step(current_step)
 
             # Обрабатываем текущий шаг и обновляем данные пользователя
             update_data = self._process_step(current_step, message_text)
-            self.logger.info(f"update_data: '{update_data}'")
+            self.logger.info(f"Update data: '{update_data}'")
 
             if not update_data:
                 # Если произошла ошибка, отправляем сообщение с просьбой повторить
-                step_message = self._get_step_message(current_step)
+                step_message = self._get_step_message(current_step, lang)
                 await self.message_service.send_message(
                     phone_number,
-                    self.messages.INVALID_INPUT_RETRY.format(step_message=step_message),
+                    self.localization_service.get_message(
+                        LK.Onboarding.INVALID_INPUT,
+                        lang,
+                        step_message=step_message
+                    ),
                     {
                         'onboarding_step': current_step,
                         'user_id': user_id
@@ -157,7 +170,7 @@ class OnboardingService(IOnboardingService):
                 current_weight = float(user.get("current_weight", 0))
 
                 # Определяем weight_goal на основе разницы весов
-                weight_goal, weight_goal_message = self._determine_weight_goal(current_weight, target_weight)
+                weight_goal, weight_goal_message = self._determine_weight_goal(current_weight, target_weight, lang)
                 update_data["weight_goal"] = weight_goal
 
                 # Отправляем уведомление пользователю о цели
@@ -182,9 +195,9 @@ class OnboardingService(IOnboardingService):
                 }
 
             # Отправляем сообщение для следующего шага
-            next_step_message = self._get_step_message(next_step)
+            next_step_message = self._get_step_message(next_step, lang)
             await self.message_service.send_message(phone_number, next_step_message, {
-                'onboarding_step': next_step_message,
+                'onboarding_step': next_step,
                 'user_id': user_id
             })
 
@@ -197,19 +210,28 @@ class OnboardingService(IOnboardingService):
             }
 
         except Exception as e:
-            self.logger.error(f"Ошибка при продолжении онбординга: {str(e)}", exc_info=True)
+            self.logger.error(f"Error during onboarding continuation: {str(e)}", exc_info=True)
             return {"success": False, "error": str(e)}
 
-    async def complete_onboarding(self, user_id: str, phone_number: str) -> None:
+    async def complete_onboarding(self, user_id: str, phone_number: str) -> Dict[str, Any]:
         """
         Завершает процесс онбординга и запускает генерацию диеты
-        
+
         Args:
             user_id: ID пользователя
             phone_number: Номер телефона пользователя
+
+        Returns:
+            Dict[str, Any]: Результат завершения онбординга
         """
+        # Получаем язык пользователя
+        lang = None
+        if hasattr(self, 'localization_service') and self.localization_service:
+            lang = await self.localization_service.get_user_language(user_id)
+
         # Отмечаем онбординг как завершенный
         await self.user_repository.update(user_id, {"is_onboarding_completed": True})
+
         # Отправляем сообщение о завершении онбординга
         context = {
             "onboarding_step": "complete",
@@ -217,20 +239,26 @@ class OnboardingService(IOnboardingService):
         }
         await self.message_service.send_message(
             phone_number,
-            self.messages.ONBOARDING_COMPLETED,
+            self.localization_service.get_message(LK.Onboarding.COMPLETED, lang),
             context
         )
 
         user = await self.user_repository.get_by_id(user_id)
         await self.command_handler_service.handle_command(user, "diet")
 
+        return {
+            "success": True,
+            "action": "onboarding_completed",
+            "user_id": user_id
+        }
+
     def get_next_onboarding_step(self, current_step: str) -> str:
         """
         Возвращает следующий шаг онбординга
-        
+
         Args:
             current_step: Текущий шаг
-            
+
         Returns:
             str: Следующий шаг
         """
@@ -248,11 +276,11 @@ class OnboardingService(IOnboardingService):
     def _process_step(self, step: str, message_text: str) -> Optional[Dict[str, Any]]:
         """
         Обрабатывает ответ пользователя на шаге онбординга
-        
+
         Args:
             step: Текущий шаг
             message_text: Текст сообщения
-        
+
         Returns:
             Optional[Dict[str, Any]]: Данные для обновления пользователя или None в случае ошибки
         """
@@ -285,10 +313,11 @@ class OnboardingService(IOnboardingService):
             return {}
 
         except Exception as e:
-            self.logger.error(f"Ошибка при обработке шага онбординга {step}: {str(e)}")
+            self.logger.error(f"Error processing onboarding step {step}: {str(e)}")
             return None
 
-    def _process_welcome(self, message_text: str) -> Optional[Dict[str, Any]]:
+    # Методы обработки шагов онбординга...
+    def _process_welcome(self) -> Optional[Dict[str, Any]]:
         """Обработка приветствия"""
         return {"onboarding_step": self.STEP_NAME}
 
@@ -308,12 +337,26 @@ class OnboardingService(IOnboardingService):
         except ValueError:
             return None
 
-    def _process_gender(self, message_text: str) -> Optional[Dict[str, Any]]:
+    def _process_gender(self, message_text: str, lang: str = None) -> Optional[Dict[str, Any]]:
         """Обработка пола"""
         gender_text = message_text.lower()
-        if "муж" in gender_text:
+
+        # Локализованные ключевые слова для определения пола
+        male_keywords = [
+            self.localization_service.get_message(LK.Onboarding.Gender.MALE, lang),
+            self.localization_service.get_message(LK.Onboarding.Gender.MALE_SHORT, lang),
+            "1"  # Универсальный номер
+        ]
+
+        female_keywords = [
+            self.localization_service.get_message(LK.Onboarding.Gender.FEMALE, lang),
+            self.localization_service.get_message(LK.Onboarding.Gender.FEMALE_SHORT, lang),
+            "2"  # Универсальный номер
+        ]
+
+        if any(keyword.lower() in gender_text for keyword in male_keywords if keyword):
             return {"gender": "male"}
-        elif "жен" in gender_text:
+        elif any(keyword.lower() in gender_text for keyword in female_keywords if keyword):
             return {"gender": "female"}
         else:
             return {"gender": "other"}
@@ -348,59 +391,114 @@ class OnboardingService(IOnboardingService):
         except ValueError:
             return None
 
-    def _process_activity_level(self, message_text: str) -> Optional[Dict[str, Any]]:
+    def _process_activity_level(self, message_text: str, lang: str = None) -> Optional[Dict[str, Any]]:
         """Обработка уровня активности"""
         activity_text = message_text.lower()
-        # TODO ДОбавить в локализация ответы
-        if "сид" in activity_text or "низк" in activity_text or "1" in activity_text:
-            return {"activity_level": "sedentary"}
-        elif "легк" in activity_text or "2" in activity_text:
-            return {"activity_level": "light"}
-        elif "сред" in activity_text or "умер" in activity_text or "3" in activity_text:
-            return {"activity_level": "moderate"}
-        elif "высок" in activity_text or "4" in activity_text:
-            return {"activity_level": "high"}
-        elif "очень высок" in activity_text or "спорт" in activity_text or "5" in activity_text:
-            return {"activity_level": "very_high"}
-        else:
-            return {"activity_level": "moderate"}  # По умолчанию
 
-    def _process_weight_goal(self, message_text: str) -> Optional[Dict[str, Any]]:
+        # Словарь для маппинга ключевых слов на уровни активности
+        activity_keywords = {
+            "sedentary": [
+                self.localization_service.get_message(LK.Onboarding.ActivityLevel.SEDENTARY, lang),
+                "1"
+            ],
+            "light": [
+                self.localization_service.get_message(LK.Onboarding.ActivityLevel.LIGHT, lang),
+                "2"
+            ],
+            "moderate": [
+                self.localization_service.get_message(LK.Onboarding.ActivityLevel.MODERATE, lang),
+                "3"
+            ],
+            "high": [
+                self.localization_service.get_message(LK.Onboarding.ActivityLevel.HIGH, lang),
+                "4"
+            ],
+            "very_high": [
+                self.localization_service.get_message(LK.Onboarding.ActivityLevel.VERY_HIGH, lang),
+                "5"
+            ]
+        }
+
+        # Проверяем каждый уровень активности
+        for level, keywords in activity_keywords.items():
+            if any(keyword.lower() in activity_text for keyword in keywords if keyword):
+                return {"activity_level": level}
+
+        # По умолчанию умеренная активность
+        return {"activity_level": "moderate"}
+
+    def _process_weight_goal(self, message_text: str, lang: str = None) -> Optional[Dict[str, Any]]:
         """Обработка цели по весу"""
         goal_text = message_text.lower()
-        # TODO ДОбавить в локализация ответы
-        if "похуд" in goal_text or "сниж" in goal_text or "1" in goal_text:
-            return {"weight_goal": "lose"}
-        elif "поддерж" in goal_text or "сохран" in goal_text or "2" in goal_text:
-            return {"weight_goal": "maintain"}
-        elif "набр" in goal_text or "увел" in goal_text or "3" in goal_text:
-            return {"weight_goal": "gain"}
-        else:
-            return {"weight_goal": "lose"}  # По умолчанию для сервиса похудения
 
-    def _process_diet_preference(self, message_text: str) -> Optional[Dict[str, Any]]:
+        # Словарь для маппинга ключевых слов на цели по весу
+        weight_goal_keywords = {
+            "lose": [
+                self.localization_service.get_message(LK.Onboarding.WeightGoal.LOSE, lang),
+                "1"
+            ],
+            "maintain": [
+                self.localization_service.get_message(LK.Onboarding.WeightGoal.MAINTAIN, lang),
+                "2"
+            ],
+            "gain": [
+                self.localization_service.get_message(LK.Onboarding.WeightGoal.GAIN, lang),
+                "3"
+            ]
+        }
+
+        # Проверяем каждую цель по весу
+        for goal, keywords in weight_goal_keywords.items():
+            if any(keyword.lower() in goal_text for keyword in keywords if keyword):
+                return {"weight_goal": goal}
+
+        # По умолчанию цель - похудение
+        return {"weight_goal": "lose"}
+
+    def _process_diet_preference(self, message_text: str, lang: str = None) -> Optional[Dict[str, Any]]:
         """Обработка предпочтений в диете"""
         pref_text = message_text.lower()
-        # TODO ДОбавить в локализация ответы
-        if "обыч" in pref_text or "1" in pref_text:
-            return {"diet_preference": "regular"}
-        elif "вегетар" in pref_text or "2" in pref_text:
-            return {"diet_preference": "vegetarian"}
-        elif "веган" in pref_text or "3" in pref_text:
-            return {"diet_preference": "vegan"}
-        elif "низкоуглевод" in pref_text or "4" in pref_text:
-            return {"diet_preference": "low_carb"}
-        elif "кето" in pref_text or "5" in pref_text:
-            return {"diet_preference": "keto"}
-        elif "безглютен" in pref_text or "6" in pref_text:
-            return {"diet_preference": "gluten_free"}
-        else:
-            return {"diet_preference": "regular"}  # По умолчанию
+
+        # Словарь для маппинга ключевых слов на предпочтения в диете
+        diet_pref_keywords = {
+            "regular": [
+                self.localization_service.get_message(LK.Onboarding.DietPreference.REGULAR, lang),
+                "1"
+            ],
+            "vegetarian": [
+                self.localization_service.get_message(LK.Onboarding.DietPreference.VEGETARIAN, lang),
+                "2"
+            ],
+            "vegan": [
+                self.localization_service.get_message(LK.Onboarding.DietPreference.VEGAN, lang),
+                "3"
+            ],
+            "low_carb": [
+                self.localization_service.get_message(LK.Onboarding.DietPreference.LOW_CARB, lang),
+                "4"
+            ],
+            "keto": [
+                self.localization_service.get_message(LK.Onboarding.DietPreference.KETO, lang),
+                "5"
+            ],
+            "gluten_free": [
+                self.localization_service.get_message(LK.Onboarding.DietPreference.GLUTEN_FREE, lang),
+                "6"
+            ]
+        }
+
+        # Проверяем каждое предпочтение в диете
+        for pref, keywords in diet_pref_keywords.items():
+            if any(keyword.lower() in pref_text for keyword in keywords if keyword):
+                return {"diet_preference": pref}
+
+        # По умолчанию обычная диета
+        return {"diet_preference": "regular"}
 
     def _process_allergies(self, message_text: str) -> Optional[Dict[str, Any]]:
         """Обработка аллергий"""
-        # TODO ДОбавить в локализация ответы
-        if message_text.lower() in ["нет", "не имею", "отсутствуют", "no"]:
+        # Получаем список ключевых слов для отрицательного ответа из локализации
+        if self._is_negative_answer(message_text):
             return {"allergies": []}
 
         allergies = [a.strip() for a in message_text.split(',')]
@@ -408,8 +506,7 @@ class OnboardingService(IOnboardingService):
 
     def _process_disliked_products(self, message_text: str) -> Optional[Dict[str, Any]]:
         """Обработка нелюбимых продуктов"""
-        # TODO ДОбавить в локализация ответы
-        if message_text.lower() in ["нет", "не имею", "отсутствуют", "no"]:
+        if self._is_negative_answer(message_text):
             return {"disliked_products": []}
 
         disliked = [p.strip() for p in message_text.split(',')]
@@ -418,18 +515,12 @@ class OnboardingService(IOnboardingService):
     def _process_budget(self, message_text: str) -> Optional[Dict[str, Any]]:
         """Обработка бюджета"""
         try:
-            # TODO ДОбавить в локализация ответы
             # Проверяем на ключевые слова неограниченного бюджета
             message_lower = message_text.lower()
-            unlimited_keywords = [
-                "нет", "неограничен", "без ограничений", "без учета", "не важно",
-                "любой", "не имеет значения", "без бюджета", "неограниченный",
-                "no limit", "unlimited"
-            ]
 
-            # Проверка на ключевые слова
-            if any(keyword in message_lower for keyword in unlimited_keywords):
-                self.logger.info(f"Распознан неограниченный бюджет: '{message_text}'")
+            # Используем локализацию для получения ключевых слов
+            if self._is_unlimited_budget(message_lower):
+                self.logger.info(f"Detected unlimited budget: '{message_text}'")
                 return {"budget_limit": 10000, "budget_unlimited": True}
 
             # Если нет ключевых слов, пробуем преобразовать в число
@@ -438,42 +529,95 @@ class OnboardingService(IOnboardingService):
                 return None
             return {"budget_limit": budget, "budget_unlimited": False}
         except ValueError:
-            self.logger.warning(f"Не удалось распознать бюджет: '{message_text}'")
+            self.logger.warning(f"Could not parse budget: '{message_text}'")
             return None
 
-    def _determine_weight_goal(self, current_weight: float, target_weight: float) -> Tuple[str, str]:
+    def _determine_weight_goal(self, current_weight: float, target_weight: float, lang: str = 'en') -> Tuple[str, str]:
         """
         Определяет цель по весу на основе текущего и целевого весов
-        
+
         Args:
             current_weight: Текущий вес
             target_weight: Целевой вес
-            
+            lang: Код языка
+
         Returns:
             Tuple[str, str]: (weight_goal, сообщение пользователю)
         """
         if target_weight < current_weight - 0.5:
-            return "lose", self.messages.WEIGHT_GOAL_DETERMINED_LOSE
+            return "lose", self.localization_service.get_message(LK.Onboarding.WEIGHT_GOAL_DETERMINED_LOSE, lang)
         elif target_weight > current_weight + 0.5:
-            return "gain", self.messages.WEIGHT_GOAL_DETERMINED_GAIN
+            return "gain", self.localization_service.get_message(LK.Onboarding.WEIGHT_GOAL_DETERMINED_GAIN, lang)
         else:
-            return "maintain", self.messages.WEIGHT_GOAL_DETERMINED_MAINTAIN
+            return "maintain", self.localization_service.get_message(LK.Onboarding.WEIGHT_GOAL_DETERMINED_MAINTAIN,
+                                                                     lang)
 
-    def _get_step_message(self, step: str) -> str:
+    def _get_step_message(self, step: str, lang: str = 'en') -> str:
         """
-        Возвращает сообщение для шага онбординга с примерами
-        
+        Получает локализованное сообщение для шага онбординга
+
         Args:
             step: Шаг онбординга
-            
-        Returns:
-            str: Сообщение с инструкциями и примерами
-        """
-        # Получаем сообщение для шага из локализации
-        message = self.messages.get_step_message(step)
+            lang: Код языка
 
-        # Добавляем пример к сообщению
-        if step in self.messages.EXAMPLES:
-            message += f"\n{self.messages.EXAMPLES[step]}"
+        Returns:
+            str: Локализованное сообщение для шага
+        """
+        # Маппинг шагов и ключей локализации
+        step_keys = {
+            self.STEP_WELCOME: LK.Onboarding.WELCOME,
+            self.STEP_NAME: LK.Onboarding.NAME_REQUEST,
+            self.STEP_AGE: LK.Onboarding.AGE_REQUEST,
+            self.STEP_GENDER: LK.Onboarding.GENDER_REQUEST,
+            self.STEP_HEIGHT: LK.Onboarding.HEIGHT_REQUEST,
+            self.STEP_CURRENT_WEIGHT: LK.Onboarding.CURRENT_WEIGHT_REQUEST,
+            self.STEP_TARGET_WEIGHT: LK.Onboarding.TARGET_WEIGHT_REQUEST,
+            self.STEP_WEIGHT_GOAL: LK.Onboarding.WEIGHT_GOAL_REQUEST,
+            self.STEP_ACTIVITY_LEVEL: LK.Onboarding.ACTIVITY_LEVEL_REQUEST,
+            self.STEP_DIET_PREFERENCE: LK.Onboarding.DIET_PREFERENCE_REQUEST,
+            self.STEP_ALLERGIES: LK.Onboarding.ALLERGIES_REQUEST,
+            self.STEP_DISLIKED_PRODUCTS: LK.Onboarding.DISLIKED_PRODUCTS_REQUEST,
+            self.STEP_BUDGET: LK.Onboarding.BUDGET_REQUEST,
+            self.STEP_COMPLETE: LK.Onboarding.COMPLETED
+        }
+
+        # Получаем ключ для шага
+        key = step_keys.get(step)
+        if not key:
+            return f"Step {step}"
+
+        # Получаем сообщение для шага
+        message = self.localization_service.get_message(key, lang)
+
+        # Получаем пример для шага, если есть
+        example_key = f"{key}Example"
+        try:
+            example = self.localization_service.get_message(example_key, lang)
+            if example:
+                message += f"\n\n{example}"
+        except:
+            # Если примера нет, игнорируем
+            pass
 
         return message
+
+    def _is_negative_answer(self, text: str, lang: str = None) -> bool:
+        """Проверяет, является ли текст отрицательным ответом"""
+        text_lower = text.lower()
+        negative_answers = [
+            self.localization_service.get_message(LK.Onboarding.Answers.NO, lang),
+            self.localization_service.get_message(LK.Onboarding.Answers.NONE, lang),
+            self.localization_service.get_message(LK.Onboarding.Answers.NO_HAVE, lang),
+            "no"  # Универсальное слово для совместимости
+        ]
+        return any(ans.lower() in text_lower for ans in negative_answers if ans)
+
+    def _is_unlimited_budget(self, text: str, lang: str = None) -> bool:
+        """Проверяет, указывает ли текст на неограниченный бюджет"""
+        unlimited_keywords = [
+            self.localization_service.get_message(LK.Onboarding.Budget.UNLIMITED, lang),
+            self.localization_service.get_message(LK.Onboarding.Budget.NO_LIMIT, lang),
+            self.localization_service.get_message(LK.Onboarding.Budget.ANY, lang),
+            "unlimited"  # Универсальное слово для совместимости
+        ]
+        return any(keyword.lower() in text for keyword in unlimited_keywords if keyword)

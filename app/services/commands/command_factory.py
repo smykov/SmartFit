@@ -22,37 +22,18 @@ class CommandFactory:
     Фабрика для создания команд с внедрением зависимостей
     """
 
-    def __init__(self,
-                 user_repository: IUserRepository,
-                 message_service: IMessageService,
-                 tracking_service: ITrackingService = None,
-                 diet_service: IDietService = None,
-                 localization_service: ILocalizationService = None):
+    def __init__(
+            self,
+            dependencies: Dict[str, Any]
+    ):
         """
         Инициализация фабрики с зависимостями
 
         Args:
-            user_repository: Репозиторий для работы с пользователями
-            message_service: Сервис для отправки сообщений
-            tracking_service: Сервис трекинга (опционально)
-            diet_service: Сервис диет (опционально)
-            localization_service: Сервис локализации (опционально)
+            dependencies: Словарь всех доступных зависимостей
         """
-        self.user_repository = user_repository
-        self.message_service = message_service
-        self.tracking_service = tracking_service
-        self.diet_service = diet_service
-        self.localization_service = localization_service
+        self.dependencies = dependencies
         self.logger = logging.getLogger(self.__class__.__name__)
-
-        # Создаем словарь зависимостей для обратной совместимости
-        self.dependencies = {
-            "user_repository": user_repository,
-            "message_service": message_service,
-            "tracking_service": tracking_service,
-            "diet_service": diet_service,
-            "localization_service": localization_service
-        }
 
         # Типизированный маппинг типов команд к классам команд
         self.command_map: Dict[str, Type[ICommand]] = {

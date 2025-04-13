@@ -1,8 +1,8 @@
+# app/services/commands/commands/diet_command.py
 from datetime import datetime
 from typing import Dict, Any, Optional
 
 import pytz
-from google.protobuf.message_factory import GetMessages
 
 from app.constants.localization_keys import LocalizationKeys as LK
 from app.services.commands.base_command import BaseCommand
@@ -13,33 +13,38 @@ class DietCommand(BaseCommand):
     """
     Команда для работы с планом диеты
     """
+
     async def execute(self, user_id: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Выполнение команды работы с диетой
-        
+
         Args:
             user_id: ID пользователя
             params: Параметры команды
-        
+
         Returns:
             Dict[str, Any]: Результат выполнения команды
         """
         try:
+            # Получаем язык пользователя
+            lang = None
+            if hasattr(self, 'localization_service') and self.localization_service:
+                lang = await self.localization_service.get_user_language(user_id)
+
             # Получаем текущий план диеты
             diet_plan = await self.dependencies['diet_service'].get_current_diet(user_id)
 
-            phone_number = self.dependencies['user']['phone_number']
-            lang = self.dependencies['user']['language']
+            phone_number = self.dependencies['user'].get('phone_number', '')
 
             if not diet_plan:
                 # Запускаем генерацию нового плана диеты
                 await self.dependencies['message_service'].send_message(
                     phone_number,
-                    self.messages.DIET_GENERATION_STARTED
+                    self.get_localized_message(LK.Commands.Diet.DIET_GENERATION_STARTED, lang)
                 )
                 await self.dependencies['message_service'].send_message(
                     phone_number,
-                    self.messages.DIET_GENERATION_DETAILS
+                    self.get_localized_message(LK.Commands.Diet.DIET_GENERATION_DETAILS, lang)
                 )
 
                 # Запускаем генерацию короткого плана диеты
@@ -52,10 +57,10 @@ class DietCommand(BaseCommand):
                         user_id)
                     return {
                         "success": False,
-                        "message": self.dependencies['localization_service'].get_message(LK.Diet.Short.CREATING_ERROR, lang)
+                        "message": self.get_localized_message(LK.Diet.Short.CREATING_ERROR, lang)
                     }
 
-            if diet_plan['version'] == "short" and diet_plan['status'] == "pending":
+            if diet_plan.get('version') == "short" and diet_plan.get('status') == "pending":
                 # Отправляем сводку плана для согласования
                 summary = await self.dependencies['diet_service'].get_short_diet_summary(diet_plan, lang)
                 await self.dependencies['message_service'].send_message(
@@ -77,7 +82,7 @@ class DietCommand(BaseCommand):
                 return {
                     "success": True,
                     "action": "short_diet_generated",
-                    "message": self.dependencies['localization_service'].get_message(LK.Diet.Short.CREATED, lang)
+                    "message": self.get_localized_message(LK.Diet.Short.CREATED, lang)
                 }
 
             # Получаем текущую дату
@@ -88,32 +93,32 @@ class DietCommand(BaseCommand):
 
             if not today_plan:
                 return {
-                    "success": False, 
-                    "message": self.messages.NO_DIET_FOR_TODAY
+                    "success": False,
+                    "message": self.get_localized_message(LK.Commands.Diet.NO_DIET_FOR_TODAY, lang)
                 }
             # Форматируем и отправляем план на сегодня
             formatted_plan_messages = self.dependencies['diet_service'].get_day_diet_plan(diet_plan, today, lang)
-            tracking_info_message = self.dependencies['diet_service'].get_day_diet_plan(diet_plan, today, lang)
+            tracking_info_message = self.dependencies['diet_service'].get_diet_tracking_info_message(lang)
 
             # TODO добавить список продуктов\покупок на день + обработка запросов на отметку что есть из списка
 
             return {
-                "success": True, 
+                "success": True,
                 "messages": [*formatted_plan_messages, tracking_info_message]
             }
 
         except Exception as e:
-            print(f"Ошибка при работе с диетой: {str(e)}")
+            self.logger.error(f"Error processing diet command: {str(e)}")
             return {
-                "success": False, 
-                "message": "Произошла ошибка при работе с планом диеты. Попробуйте позже."
+                "success": False,
+                "message": self.get_localized_message(LK.Commands.Diet.ERROR, lang)
             }
 
     def get_error_message(self) -> str:
         """
         Получение сообщения об ошибке
-        
+
         Returns:
             str: Сообщение об ошибке
         """
-        return self.messages.NO_DIET_PLAN
+        return self.get_localized_message(LK.Commands.Diet.NO_DIET_PLAN)

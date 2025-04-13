@@ -1,6 +1,7 @@
 # app/services/commands/commands/language_command.py
 from typing import Dict, Any, Optional
 from app.services.commands.base_command import BaseCommand
+from app.constants.localization_keys import LocalizationKeys as LK
 
 
 class LanguageCommand(BaseCommand):
@@ -19,14 +20,17 @@ class LanguageCommand(BaseCommand):
         Returns:
             Dict[str, Any]: Результат выполнения команды
         """
+        # Получаем текущий язык пользователя
+        current_lang = None
+        if hasattr(self, 'localization_service') and self.localization_service:
+            current_lang = await self.localization_service.get_user_language(user_id)
+
         phone_number = self.dependencies['user']['phone_number']
 
         # Получаем код языка из параметров
         if not params or 'language' not in params:
             # Отправляем список доступных языков
-            message = "Доступные языки / Idiomas disponibles:\n\n" + \
-                      "🇪🇸 Español: Escriba 'idioma es'\n" + \
-                      "🇷🇺 Русский: Напишите 'язык ru'"
+            message = self.get_localized_message(LK.Commands.Language.LANGUAGES_LIST, current_lang)
 
             return {
                 "success": True,
@@ -37,12 +41,17 @@ class LanguageCommand(BaseCommand):
         language_code = params['language']
 
         # Проверяем доступные языки
-        available_languages = ["es", "ru"]
+        # TODO брать из модуля локализации список языков
+        available_languages = ["en", "es", "ru"]
 
         if language_code not in available_languages:
             return {
                 "success": False,
-                "message": f"Неподдерживаемый код языка. Доступные варианты: {', '.join(available_languages)}"
+                "message": self.get_localized_message(
+                    LK.Commands.Language.UNSUPPORTED_LANGUAGE,
+                    current_lang,
+                    languages=", ".join(available_languages)
+                )
             }
 
         # Получаем локализационный сервис из зависимостей
@@ -51,7 +60,7 @@ class LanguageCommand(BaseCommand):
         if not localization_service:
             return {
                 "success": False,
-                "message": "Сервис локализации недоступен"
+                "message": self.get_localized_message(LK.Commands.Language.UNAVAILABLE_SERVICE, current_lang)
             }
 
         # Устанавливаем язык пользователя
@@ -60,16 +69,25 @@ class LanguageCommand(BaseCommand):
         if not success:
             return {
                 "success": False,
-                "message": "Не удалось обновить язык пользователя"
+                "message": self.get_localized_message(LK.Commands.Language.UNAVAILABLE_SERVICE, current_lang)
             }
 
         # Формируем подтверждающее сообщение на выбранном языке
-        languages = {
-            "es": "¡Idioma cambiado a Español!",
-            "ru": "Язык изменен на Русский!"
+        # Используем языковые ключи для разных языков
+        # TODO брать из модуля локализации список языков
+        language_confirmation_keys = {
+            "en": LK.Commands.Language.LANGUAGE_CHANGED,
+            "ru": LK.Commands.Language.LANGUAGE_CHANGED,
+            "es": LK.Commands.Language.LANGUAGE_CHANGED
         }
+
+        # Получаем сообщение на новом языке
+        message = self.get_localized_message(
+            language_confirmation_keys[language_code],
+            language_code
+        )
 
         return {
             "success": True,
-            "message": languages[language_code]
+            "message": message
         }

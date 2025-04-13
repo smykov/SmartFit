@@ -28,14 +28,18 @@ class BaseFormatter:
         Получает локализованное сообщение по ключу
 
         Args:
-            key: Ключ сообщения
+            key: Ключ сообщения в формате 'module.key'
             lang: Код языка
             **params: Параметры для форматирования
 
         Returns:
             str: Локализованное сообщение
         """
-        return self.localization_service.get_message(key, lang, **params)
+        try:
+            return self.localization_service.get_message(key, lang, **params)
+        except Exception as e:
+            self.logger.error(f"Error getting localized message for key '{key}': {str(e)}")
+            return f"[{key}]"
 
     def get_localized_meal_type(self, meal_type: str, lang: Optional[str] = None) -> str:
         """

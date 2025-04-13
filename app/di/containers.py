@@ -1,3 +1,4 @@
+# app/di/containers.py
 from dependency_injector import containers, providers
 
 from app.db.repositories.compliance_repository import FirebaseComplianceRepository
@@ -9,6 +10,8 @@ from app.db.repositories.product_repository import FirebaseProductRepository
 from app.db.repositories.shopping_list_repository import FirebaseShoppingListRepository
 from app.db.repositories.water_entry_repository import FirebaseWaterEntryRepository
 from app.db.repositories.weight_entry_repository import FirebaseWeightEntryRepository
+from app.services.formatter.diet_formatter_service import DietFormatterService
+from app.services.formatter.tracking_formatter_service import TrackingFormatterService
 
 # Сервисы
 from app.services.llm.llm_factory import LLMFactory
@@ -122,7 +125,8 @@ class Container(containers.DeclarativeContainer):
         user_repository=user_repository,
         weight_entry_repository=weight_entry_repository,
         water_entry_repository=water_entry_repository,
-        compliance_repository=compliance_repository
+        compliance_repository=compliance_repository,
+        localization_service=localization_service
     )
 
     # Сервис диет
@@ -144,6 +148,7 @@ class Container(containers.DeclarativeContainer):
         message_service=whatsapp_service,
         diet_service=diet_service,
         tracking_service=tracking_service,
+        localization_service=localization_service
     )
 
     # Сервис онбординга
@@ -152,7 +157,8 @@ class Container(containers.DeclarativeContainer):
         user_repository=user_repository,
         message_service=whatsapp_service,
         diet_service=diet_service,
-        command_handler_service=command_handler_service
+        command_handler_service=command_handler_service,
+        localization_service=localization_service
     )
 
     # Фабрика команд
@@ -166,6 +172,17 @@ class Container(containers.DeclarativeContainer):
             "localization_service": localization_service,
             "llm_service": llm_service
         })
+    )
+
+    # Форматтеры
+    diet_formatter_service = providers.Singleton(
+        DietFormatterService,
+        localization_service=localization_service
+    )
+
+    tracking_formatter_service = providers.Singleton(
+        TrackingFormatterService,
+        localization_service=localization_service
     )
 
     # Сервис обработки сообщений

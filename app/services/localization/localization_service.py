@@ -1,9 +1,9 @@
-# app/services/localization/localization_service.py
 from typing import Dict, Any, Optional
 import logging
+
 from app.db.interfaces.user_repository_interface import IUserRepository
 from app.services.localization.localization_interface import ILocalizationService
-from app.services.localization.localization_messages import LOCALIZED_MESSAGES
+from app.localization.registry import get_message
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,6 @@ class LocalizationService(ILocalizationService):
             user_repository: Репозиторий для работы с пользователями
         """
         self.user_repository = user_repository
-        self.messages = LOCALIZED_MESSAGES
 
     def get_message(self, key: str, lang: Optional[str] = None, **params) -> str:
         """
@@ -41,44 +40,13 @@ class LocalizationService(ILocalizationService):
         if not lang:
             lang = self.DEFAULT_LANGUAGE
 
-        # Проверяем существование языка
-        if lang not in self.messages:
-            lang = self.DEFAULT_LANGUAGE
-
-        # Разбиваем ключ на части для поддержки вложенной структуры
-        key_parts = key.split('.')
-
-        # Получаем сообщение по ключу
-        message_dict = self.messages[lang]
-
-        for part in key_parts:
-            if isinstance(message_dict, dict) and part in message_dict:
-                message_dict = message_dict[part]
-            else:
-                # Если ключ не найден, ищем в языке по умолчанию
-                if lang != self.DEFAULT_LANGUAGE:
-                    return self.get_message(key, self.DEFAULT_LANGUAGE, **params)
-
-                # Если ключ не найден и в языке по умолчанию, возвращаем ключ
-                logger.warning(f"Message key not found: {key} (lang: {lang})")
-                return f"[{key}]"
-
-        # Если сообщение не является строкой, возвращаем ключ
-        if not isinstance(message_dict, str):
-            logger.warning(f"Message is not a string: {key} (lang: {lang})")
-            return f"[{key}]"
-
-        # Форматируем сообщение с переданными параметрами
         try:
-            return message_dict.format(**params)
-        except KeyError as e:
-            # В случае ошибки форматирования, логируем и возвращаем шаблон как есть
-            logger.warning(f"Missing format parameter in message {key}: {e}")
-            return message_dict
+            # Используем функцию из реестра локализаций
+            return get_message(key, lang, **params)
         except Exception as e:
-            # Любая другая ошибка
-            logger.error(f"Error formatting message {key}: {e}")
-            return message_dict
+            logger.error(f"Error getting localized message: {e}")
+            # В случае ошибки возвращаем ключ
+            return f"[{key}]"
 
     async def get_user_language(self, user_id: str) -> str:
         """
@@ -100,14 +68,10 @@ class LocalizationService(ILocalizationService):
             # Получаем язык из данных пользователя, если он есть
             lang = user.get("language", self.DEFAULT_LANGUAGE)
 
-            # Проверяем существование языка
-            if lang not in self.messages:
-                return self.DEFAULT_LANGUAGE
-
             return lang
 
         except Exception as e:
-            logger.error(f"Error getting user language: {e}")
+            logger.error(f"Error getting user language: {str(e)}")
             return self.DEFAULT_LANGUAGE
 
     async def set_user_language(self, user_id: str, lang: str) -> bool:
@@ -122,15 +86,11 @@ class LocalizationService(ILocalizationService):
             bool: Результат операции
         """
         try:
-            logger.info(f"Устанавливает предпочитаемый язык пользователя: '{lang}'")
-            # Проверяем существование языка
-            if lang not in self.messages:
-                logger.error(f"Localization texts for '{lang}' not found")
-                return False
+            logger.info(f"Setting user preferred language: '{lang}'")
 
             # Обновляем язык пользователя в репозитории
             result = await self.user_repository.update(user_id, {"language": lang})
-            logger.info(f"result: '{result}'")
+            logger.info(f"Result: '{result}'")
             return result
 
         except Exception as e:

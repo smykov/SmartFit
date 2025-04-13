@@ -7,7 +7,6 @@ from app.services.diet.diet_service_interface import IDietService
 from app.services.tracking.tracking_service_interface import ITrackingService
 from app.services.messaging.message_interface import IMessageService
 from app.services.localization.localization_interface import ILocalizationService
-from app.localization.command_handler_messages import CommandHandlerMessages
 
 
 class BaseCommand(ICommand):
@@ -23,7 +22,6 @@ class BaseCommand(ICommand):
             dependencies: Словарь зависимостей для команды
         """
         self.dependencies = dependencies
-        self.messages = CommandHandlerMessages()
         self.logger = logging.getLogger(self.__class__.__name__)
 
         # Для удобства доступа, извлекаем общие зависимости с явной типизацией
@@ -37,6 +35,22 @@ class BaseCommand(ICommand):
             self.diet_service: IDietService = dependencies['diet_service']
         if 'localization_service' in dependencies:
             self.localization_service: ILocalizationService = dependencies['localization_service']
+
+    def get_localized_message(self, key: str, lang: Optional[str] = None, **params) -> str:
+        """
+        Получает локализованное сообщение
+
+        Args:
+            key: Ключ сообщения
+            lang: Код языка
+            **params: Параметры для форматирования
+
+        Returns:
+            str: Локализованное сообщение
+        """
+        if hasattr(self, 'localization_service') and self.localization_service:
+            return self.localization_service.get_message(key, lang, **params)
+        return key  # Если сервис локализации недоступен, возвращаем ключ
 
     async def can_execute(self, user_id: str) -> bool:
         """
@@ -71,4 +85,4 @@ class BaseCommand(ICommand):
         Returns:
             str: Сообщение об ошибке
         """
-        return self.messages.COMMAND_NOT_FOUND
+        return self.get_localized_message("commands.errors.command_not_found")

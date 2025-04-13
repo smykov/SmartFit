@@ -1,5 +1,7 @@
+# app/services/commands/commands/help_command.py
 from typing import Dict, Any, Optional
 
+from app.constants.localization_keys import LocalizationKeys as LK
 from app.services.commands.base_command import BaseCommand
 
 
@@ -25,7 +27,7 @@ class HelpCommand(BaseCommand):
             lang = await self.localization_service.get_user_language(user_id)
 
         # Получаем локализованное сообщение справки
-        help_message = self.messages.get_help_message(lang)
+        help_message = self.get_localized_message(LK.Common.HELP_COMMANDS_LIST, lang)
 
         return {
             "success": True,
