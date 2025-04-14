@@ -3,9 +3,9 @@ from app.localization.base import LanguageBase
 from app.localization.languages.en import common
 from app.localization.languages.en import commands
 from app.localization.languages.en import onboarding
-# Импортируем другие модули когда они будут созданы
-# from app.localization.languages.en import diet
-# from app.localization.languages.en import tracking
+from app.localization.languages.en import diet
+from app.localization.languages.en import tracking
+from app.localization.languages.en import shopping
 # from app.localization.languages.en import errors
 
 # Создаем экземпляр языка
@@ -15,7 +15,7 @@ language = LanguageBase()
 language.register_module('common', common.module)
 language.register_module('commands', commands.module)
 language.register_module('onboarding', onboarding.module)
-# Регистрируем другие модули когда они будут созданы
-# language.register_module('diet', diet.module)
-# language.register_module('tracking', tracking.module)
+language.register_module('diet', diet.module)
+language.register_module('tracking', tracking.module)
+language.register_module('shopping', shopping.module)
 # language.register_module('errors', errors.module)

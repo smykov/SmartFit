@@ -9,6 +9,7 @@ import pytz
 from app.db.interfaces.message_repository_interface import IMessageRepository
 from app.services.diet.diet_service_interface import IDietService
 from app.services.localization.localization_interface import ILocalizationService
+from app.constants.localization_keys import LocalizationKeys as LK
 from app.services.onboarding.onboarding_service_interface import IOnboardingService
 from app.services.tracking.tracking_service_interface import ITrackingService
 
@@ -60,24 +61,24 @@ class MessageProcessorService:
         """
         Инициализация сервиса обработки сообщений
 
-        Args:
-            user_repository: Репозиторий для работы с пользователями
-            message_repository: Репозиторий для работы с сообщениями
-            message_service: Сервис для отправки сообщений
-            onboarding_service: Сервис онбординга
-            diet_service: Сервис для работы с диетами
-            tracking_service: Сервис для трекинга прогресса
-            command_factory: Фабрика команд для обработки команд пользователя
+    Args:
+        user_repository: Репозиторий для работы с пользователями
+        message_repository: Репозиторий для работы с сообщениями
+        message_service: Сервис для отправки сообщений
+        onboarding_service: Сервис онбординга
+        diet_service: Сервис для работы с диетами
+        tracking_service: Сервис для трекинга прогресса
+        command_factory: Фабрика команд для обработки команд пользователя
+        localization_service: Сервис локализации для сообщений
         """
         self.user_repository = user_repository
         self.message_repository = message_repository
         self.message_service = message_service
+        self.localization_service = localization_service
         self.onboarding_service = onboarding_service
         self.diet_service = diet_service
         self.tracking_service = tracking_service
-        self.command_factory = command_factory
         self.messages = MessageProcessorMessages()
-        self.localization_service = localization_service
         self.logger = logging.getLogger(self.__class__.__name__)
 
         # Регулярные выражения для определения типов сообщений
@@ -94,7 +95,7 @@ class MessageProcessorService:
             "stats": re.compile(r'^(статистика|прогресс)$', re.IGNORECASE),
             "meal_compliance": re.compile(r'^(выполнено|частично|заменил[а]?|пропустил[а]?)\s+(\w+)$', re.IGNORECASE),
             "diet_update": re.compile(r'^(измени|поменяй|обнови|замени|скорректируй)\s+(план|меню|рацион|питание)(.*)$',
-                                       re.IGNORECASE),
+                                      re.IGNORECASE),
         }
 
         # Ответы на согласование плана
@@ -119,7 +120,7 @@ class MessageProcessorService:
 
             if not phone_number or not message_text:
                 self.logger.error("Не удалось извлечь номер телефона или текст сообщения")
-                return {"success": False, "error": "Invalid message format"}
+                return {"success": False, "error": self._get_localized_message(LK.Messaging.INVALID_MESSAGE_FORMAT)}
 
             # Проверяем, обрабатывалось ли это сообщение ранее
             if await self._is_message_processed(message_id):
@@ -129,7 +130,7 @@ class MessageProcessorService:
             # Получаем пользователя по номеру телефона
             user = await self.user_repository.get_by_phone(phone_number)
 
-            # Если пользователя нет, начинаем процесс регистрации
+            # Например, заменяем в блоке if not user:
             if not user:
                 self.logger.info(f"Новый пользователь с номером {phone_number}. Начинаем регистрацию.")
                 # Отправляем приветственное сообщение
@@ -137,11 +138,10 @@ class MessageProcessorService:
                 await self._mark_message_as_processed(message_id, phone_number, message_text)
                 if result['success'] and result['user_id']:
                     user_id = result['user_id']
-                    # TODO сделать определение языка пользователя по его локали если возможно, или по тексту который он оправил
-                    if await self.localization_service.set_user_language(user_id, "ru"):
+                    # Определение языка пользователя
+                    if await self.localization_service.set_user_language(user_id, "en"):
                         # Отправляем приветственное сообщение
-                        await self.message_service.send_template_message(phone_number, "greeting", user_id)
-                        await self.message_service.send_template_message(phone_number, "onboarding.welcome", user_id)
+                        await self.message_service.send_template_message(phone_number, LK.Onboarding.WELCOME, user_id)
                     # Продолжаем онбординг
                     await self.onboarding_service.continue_onboarding(user_id, message_text)
                 return result
@@ -164,7 +164,7 @@ class MessageProcessorService:
             return result
 
         except Exception as e:
-            self.logger.error(f"Ошибка при обработке входящего сообщения: {str(e)}", exc_info=True)
+            self.logger.error(f"Error processing incoming message: {str(e)}", exc_info=True)
             return {"success": False, "error": str(e)}
 
     async def _determine_processing_strategy(self, user: Dict[str, Any], message_text: str) -> ProcessingStrategy:
@@ -259,6 +259,7 @@ class MessageProcessorService:
 
         user_id = user["id"]
         phone_number = user["phone_number"]
+        lang = await self.localization_service.get_user_language(user_id)
 
         # Определяем тип команды
         command_type = None
@@ -275,7 +276,10 @@ class MessageProcessorService:
 
         if not command_type:
             self.logger.warning(f"Не удалось определить тип команды: {message_text}")
-            await self.message_service.send_message(phone_number, self.messages.COMMAND_NOT_FOUND)
+            await self.message_service.send_message(
+                phone_number,
+                self.get_localized_message(LK.Commands.General.COMMAND_NOT_FOUND, lang)
+            )
             return {"success": False, "error": f"Unknown command for text {message_text}"}
 
         # Создаем команду через фабрику
@@ -344,16 +348,16 @@ class MessageProcessorService:
         """
         user_id = user["id"]
         phone_number = user["phone_number"]
+        lang = await self.localization_service.get_user_language(user_id)
 
         # Находим последний несогласованный план
         pending_plan = await self._get_pending_diet_plan(user_id)
 
         if not pending_plan:
             # Используем локализованное сообщение
-            await self.message_service.send_template_message(
+            await self.message_service.send_message(
                 phone_number,
-                "diet.no_pending_plan",
-                user_id
+                self.get_localized_message(LK.Diet.NoPendingPlan, lang)
             )
             return {"success": False, "action": "no_pending_plan"}
 
@@ -612,3 +616,19 @@ class MessageProcessorService:
         """
         today = datetime.now(pytz.timezone(settings.TIMEZONE)).date().isoformat()
         return today in updated_days
+
+    def _get_localized_message(self, key: str, lang: Optional[str] = None, **params) -> str:
+        """
+        Получает локализованное сообщение из сервиса локализации
+
+        Args:
+            key: Ключ сообщения
+            lang: Код языка (по умолчанию используется системный язык)
+            **params: Параметры для форматирования
+
+        Returns:
+            str: Локализованное сообщение
+        """
+        if hasattr(self, 'localization_service') and self.localization_service:
+            return self.localization_service.get_message(key, lang, **params)
+        return key

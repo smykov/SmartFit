@@ -7,8 +7,8 @@ from app.db.interfaces.user_repository_interface import IUserRepository
 from app.db.interfaces.diet_plan_repository_interface import IDietPlanRepository
 from app.db.interfaces.product_repository_interface import IProductRepository
 from app.db.interfaces.shopping_list_repository_interface import IShoppingListRepository
+from app.constants.localization_keys import LocalizationKeys as LK
 
-from app.localization.messages import DietMessages
 from app.services.diet.base_service import BaseDietService
 from app.services.formatter.diet_formatter_service import DietFormatterService
 from app.services.diet.diet_plan_manager import DietPlanManager
@@ -39,7 +39,8 @@ class DietService(BaseDietService, IDietService):
             llm_service,
             diet_plan_repository,
             product_repository,
-            user_repository
+            user_repository,
+            localization_service
         )
         self.shopping_list_manager = ShoppingListManager(
             llm_service,
@@ -48,7 +49,6 @@ class DietService(BaseDietService, IDietService):
         )
         self.formatter = DietFormatterService(localization_service)
         self.localization_service = localization_service
-        self.messages = DietMessages()
         self.message_service = message_service
         self.llm_service = llm_service
         self.user_repository = user_repository
@@ -71,7 +71,7 @@ class DietService(BaseDietService, IDietService):
             # Получаем данные пользователя
             user = await self.user_repository.get_by_id(user_id)
             if not user:
-                self.logger.error(f"Пользователь с ID {user_id} не найден")
+                self.logger.error(f"User {user_id} not found")
                 return False
 
             # Запускаем задачу генерации полного плана в фоновом режиме
@@ -79,7 +79,7 @@ class DietService(BaseDietService, IDietService):
 
             return True
         except Exception as e:
-            self.logger.error(f"Ошибка при запуске генерации полного плана: {str(e)}")
+            self.logger.error(f"Error starting full diet plan generation: {str(e)}")
             return False
 
     async def _generate_full_diet_plan_task(self, user_id: str, short_plan_id: str):
@@ -101,10 +101,9 @@ class DietService(BaseDietService, IDietService):
 
             if full_plan and "error" not in full_plan:
                 # Отправляем уведомление пользователю
-                await self.message_service.send_template_message(
+                await self.message_service.send_message(
                     phone_number,
-                    "diet.full.created",
-                    user_id
+                    self.localization_service.get_message(LK.Diet.Full.CREATED, lang)
                 )
 
                 # Отправляем сводку плана
@@ -114,14 +113,67 @@ class DietService(BaseDietService, IDietService):
                 await self.message_service.send_message(phone_number, commands_message)
             else:
                 # В случае ошибки
-                await self.message_service.send_template_message(
+                await self.message_service.send_message(
                     phone_number,
-                    "diet.full.creating_error",
-                    user_id
+                    self.localization_service.get_message(LK.Diet.Full.CREATING_ERROR, lang)
                 )
 
         except Exception as e:
-            self.logger.error(f"Ошибка в задаче генерации полного плана: {str(e)}")
+            self.logger.error(f"Error in full diet plan generation task: {str(e)}")
+
+    async def mark_product_as_purchased(self, user_id: str, product_name: str) -> Dict[str, Any]:
+        """
+        Отмечает продукт как купленный в списке покупок
+
+        Args:
+            user_id: ID пользователя
+            product_name: Название продукта
+
+        Returns:
+            Dict[str, Any]: Результат операции
+        """
+        try:
+            # Получаем язык пользователя
+            lang = await self.localization_service.get_user_language(user_id)
+
+            # Получаем текущий план диеты пользователя через репозиторий
+            current_plan = await self.diet_plan_repository.get_current_diet(user_id)
+            if not current_plan:
+                return {"success": False,
+                        "message": self.localization_service.get_message(LK.Diet.Full.NO_PLAN, lang)}
+
+            # Получаем список покупок для текущего плана через репозиторий
+            shopping_lists = await self.shopping_list_repository.get_by_diet_plan(current_plan["id"])
+
+            if not shopping_lists:
+                return {"success": False,
+                        "message": self.localization_service.get_message(LK.Shopping.NO_LIST, lang)}
+
+            # Берем последний список покупок
+            latest_list = max(shopping_lists, key=lambda x: x.get("created_at", ""))
+
+            # Отмечаем продукт как купленный
+            result = await self.shopping_list_repository.mark_item_as_purchased(
+                latest_list["id"],
+                product_name
+            )
+
+            if result:
+                return {
+                    "success": True,
+                    "message": self.localization_service.get_message(
+                        LK.Shopping.PRODUCT_MARKED, lang, product=product_name)
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": self.localization_service.get_message(
+                        LK.Shopping.PRODUCT_NOT_FOUND, lang, product=product_name)
+                }
+
+        except Exception as e:
+            self.logger.error(f"Error marking product as purchased: {str(e)}")
+            return {"success": False, "error": str(e)}
 
     async def generate_full_diet_plan(self, short_plan_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -138,7 +190,7 @@ class DietService(BaseDietService, IDietService):
             short_plan = await self.diet_plan_manager.get_diet_plan_by_id(short_plan_id)
 
             if not short_plan:
-                self.logger.error(f"Краткий план с ID {short_plan_id} не найден")
+                self.logger.error(f"Short plan with ID {short_plan_id} not found")
                 return None
 
             # Получаем данные пользователя
@@ -146,7 +198,7 @@ class DietService(BaseDietService, IDietService):
             user = await self.user_repository.get_by_id(user_id)
 
             if not user:
-                self.logger.error(f"Пользователь с ID {user_id} не найден")
+                self.logger.error(f"User with ID {user_id} not found")
                 return None
 
             # Используем прогрессивный генератор диет для создания полного плана
@@ -156,13 +208,13 @@ class DietService(BaseDietService, IDietService):
             full_plan = await generator.generate_full_plan()
 
             if not full_plan:
-                self.logger.error(f"Не удалось создать полный план диеты для плана {short_plan_id}")
+                self.logger.error(f"Failed to create full diet plan for plan {short_plan_id}")
                 return None
 
             return full_plan
 
         except Exception as e:
-            self.logger.error(f"Ошибка при генерации полного плана диеты: {str(e)}")
+            self.logger.error(f"Error generating full diet plan: {str(e)}")
             return None
 
     async def answer_nutrition_question(self, user_id: str, question: str) -> str:
@@ -176,12 +228,15 @@ class DietService(BaseDietService, IDietService):
         Returns:
             str: Ответ на вопрос
         """
+        # Получаем язык пользователя
+        lang = await self.localization_service.get_user_language(user_id)
         try:
+
             # Получаем данные пользователя для контекста
             user = await self.user_repository.get_by_id(user_id)
 
             if not user:
-                return "Извините, не удалось найти информацию о пользователе."
+                return self.localization_service.get_message(LK.User.NOT_FOUND, lang)
 
             # Отправляем запрос к LLM сервису
             response = await self.llm_service.answer_nutrition_question(user_id, question)
@@ -189,8 +244,8 @@ class DietService(BaseDietService, IDietService):
             return response
 
         except Exception as e:
-            self.logger.error(f"Ошибка при ответе на вопрос о питании: {str(e)}")
-            return "Извините, произошла ошибка при обработке вашего вопроса. Пожалуйста, попробуйте позже."
+            self.logger.error(f"Error answering nutrition question: {str(e)}")
+            return self.localization_service.get_message(LK.Errors.NUTRITION_QUESTION_ERROR, lang)
 
     # Методы делегирования для DietPlanManager
     async def generate_short_diet_plan(self, user_id: str) -> Optional[Dict[str, Any]]:
@@ -323,7 +378,6 @@ class DietService(BaseDietService, IDietService):
         """
         return await self.diet_plan_manager.update_short_diet_plan_by_request(plan_id, update_request)
 
-    # Методы делегирования для ShoppingListManager
     async def generate_shopping_list(self, diet_plan_id: str) -> Dict[str, Any]:
         """
         Создает список покупок на основе плана диеты
@@ -334,7 +388,37 @@ class DietService(BaseDietService, IDietService):
         Returns:
             Dict[str, Any]: Список покупок
         """
-        return await self.shopping_list_manager.generate_shopping_list(diet_plan_id)
+        try:
+            # Получаем язык пользователя на основе плана
+            plan = await self.diet_plan_repository.get_by_id(diet_plan_id)
+            user_id = plan.get("user_id") if plan else None
+            lang = await self.localization_service.get_user_language(user_id) if user_id else None
+
+            # Сообщаем пользователю о начале генерации списка покупок
+            if user_id:
+                user = await self.user_repository.get_by_id(user_id)
+                if user and "phone_number" in user:
+                    await self.message_service.send_message(
+                        user["phone_number"],
+                        self.localization_service.get_message(LK.Shopping.GENERATING, lang)
+                    )
+
+            # Делегируем создание списка покупок менеджеру
+            result = await self.shopping_list_manager.generate_shopping_list(diet_plan_id)
+
+            if "error" in result:
+                return {
+                    "success": False,
+                    "message": self.localization_service.get_message(LK.Shopping.ERROR, lang)
+                }
+
+            return result
+        except Exception as e:
+            self.logger.error(f"Error generating shopping list: {str(e)}")
+            return {
+                "success": False,
+                "message": self.localization_service.get_message(LK.Shopping.ERROR, lang)
+            }
 
     async def mark_product_as_purchased(self, user_id: str, product_name: str) -> Dict[str, Any]:
         """

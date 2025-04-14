@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional
 import pytz
 
+from app.constants.localization_keys import LocalizationKeys as LK
 from app.db.interfaces.message_repository_interface import IMessageRepository
 from app.services.messaging.interfaces.message_client_interface import IMessageClient
 from app.services.localization.localization_interface import ILocalizationService
@@ -70,6 +71,22 @@ class WhatsAppService:
         self.retry_interval_seconds = retry_interval_seconds
         self.max_message_size = max_message_size
         self.max_message_age_hours = max_message_age_hours
+
+    def get_localized_message(self, key: str, lang: Optional[str] = None, **params) -> str:
+        """
+        Получает локализованное сообщение из сервиса локализации
+
+        Args:
+            key: Ключ сообщения
+            lang: Код языка (по умолчанию используется системный язык)
+            **params: Параметры для форматирования
+
+        Returns:
+            str: Локализованное сообщение
+        """
+        if self.localization_service:
+            return self.localization_service.get_message(key, lang, **params)
+        return key
 
     async def initialize(self):
         """Инициализация сервиса и запуск регулярных задач"""
@@ -333,7 +350,7 @@ class WhatsAppService:
 
                     # Добавляем префикс для старых сообщений
                     if (now - timestamp).total_seconds() > 3600:  # Старше 1 часа
-                        message_text = f"📳 Отложенное сообщение:\n\n{message_text}"
+                        message_text = f"{self.get_localized_message(LK.Messaging.DELAYED_MESSAGE)}\n\n{message_text}"
 
                     # Проверяем, является ли это шаблонным сообщением
                     if "template_name" in context:

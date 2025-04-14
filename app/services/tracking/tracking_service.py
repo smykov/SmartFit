@@ -1,7 +1,7 @@
 # app/services/tracking/tracking_service.py
 import logging
 from datetime import datetime, date, timedelta
-from typing import Dict, Any, Optional, Tuple, List
+from typing import Dict, Any, Optional, Tuple, List, Coroutine
 
 import pytz
 
@@ -14,6 +14,8 @@ from app.models.tracking import (
     WeightGoalProgress
 )
 from app.services.tracking.tracking_service_interface import ITrackingService
+from app.services.localization.localization_interface import ILocalizationService
+from app.constants.localization_keys import LocalizationKeys as LK
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -27,7 +29,8 @@ class TrackingService(ITrackingService):
             user_repository: IUserRepository,
             weight_entry_repository: IWeightEntryRepository,
             water_entry_repository: IWaterEntryRepository,
-            compliance_repository: IComplianceRepository
+            compliance_repository: IComplianceRepository,
+            localization_service: ILocalizationService
     ):
         """
         Инициализация сервиса трекинга с использованием DI
@@ -37,11 +40,30 @@ class TrackingService(ITrackingService):
             weight_entry_repository: Репозиторий для работы с записями веса
             water_entry_repository: Репозиторий для работы с записями потребления воды
             compliance_repository: Репозиторий для работы с записями соблюдения диеты
+            localization_service: Сервис локализации для сообщений
         """
         self.user_repository = user_repository
         self.weight_entry_repository = weight_entry_repository
         self.water_entry_repository = water_entry_repository
         self.compliance_repository = compliance_repository
+        self.localization_service = localization_service
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+    def get_localized_message(self, key: str, lang: Optional[str] = None, **params) -> str:
+        """
+        Получает локализованное сообщение из сервиса локализации
+
+        Args:
+            key: Ключ сообщения
+            lang: Код языка (по умолчанию используется системный язык)
+            **params: Параметры для форматирования
+
+        Returns:
+            str: Локализованное сообщение
+        """
+        if hasattr(self, 'localization_service') and self.localization_service:
+            return self.localization_service.get_message(key, lang, **params)
+        return key
 
     async def record_weight(self, user_id: str, weight: float, notes: str = None) -> bool:
         """
@@ -328,7 +350,7 @@ class TrackingService(ITrackingService):
             logger.error(f"Error getting water history: {str(e)}")
             return None
 
-    async def generate_weekly_report(self, user_id: str) -> Optional[str]:
+    async def generate_weekly_report(self, user_id: str) -> None | Coroutine[Any, Any, str] | str:
         """
         Генерирует еженедельный отчет о прогрессе
 
@@ -338,12 +360,17 @@ class TrackingService(ITrackingService):
         Returns:
             Optional[str]: Текст отчета или None в случае ошибки
         """
+        # Получаем язык пользователя
+        lang = None
+        if hasattr(self, 'localization_service') and self.localization_service:
+            lang = await self.localization_service.get_user_language(user_id)
         try:
             # Получаем пользователя
             user = await self.user_repository.get_by_id(user_id)
             if not user:
                 logger.error(f"User {user_id} not found")
                 return None
+
 
             # Получаем текущую дату
             today = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
@@ -359,15 +386,12 @@ class TrackingService(ITrackingService):
 
             # Рассчитываем прогресс по весу
             weight_progress = await self.calculate_weight_progress(user_id)
-
-            # Формируем отчет
-            report = self._format_weekly_report(user, weight_history, water_history, weight_progress)
-
-            return report
+            # Возвращаем локализованное сообщение ошибки
+            return self._format_weekly_report(user, weight_history, water_history, weight_progress)
 
         except Exception as e:
-            logger.error(f"Error generating weekly report: {str(e)}")
-            return None
+            self.logger.error(f"Error generating weekly report: {str(e)}")
+            return self.get_localized_message(LK.Tracking.Stats.REPORT_ERROR, lang)
 
     def _get_start_weight(self, weight_entries: List[Dict[str, Any]]) -> Tuple[Optional[float], Optional[date]]:
         """
@@ -410,7 +434,7 @@ class TrackingService(ITrackingService):
             logger.error(f"Error getting start weight: {str(e)}")
             return None, None
 
-    def _format_weekly_report(
+    async def _format_weekly_report(
             self,
             user: Dict[str, Any],
             weight_history: Dict[str, float],
@@ -431,7 +455,16 @@ class TrackingService(ITrackingService):
         """
         # TODO вынести форматирование в отдельный сервис форматирования в будущем
         try:
-            report = f"📊 *Еженедельный отчет о прогрессе для {user.get('name', 'пользователя')}*\n\n"
+            # Получаем язык пользователя, если доступен локализационный сервис
+            lang = None
+            if hasattr(self, 'localization_service') and self.localization_service:
+                lang = await self.localization_service.get_user_language(user.get('id'))
+
+            report = self.get_localized_message(
+                LK.Tracking.Stats.WEEKLY_REPORT_HEADER,
+                lang,
+                user_name=user.get('name', self.get_localized_message(LK.Common.USER, lang))
+            )
 
             # Анализ веса
             if weight_history:
@@ -442,18 +475,36 @@ class TrackingService(ITrackingService):
 
                 weight_change = last_weight - first_weight
 
-                report += "⚖️ *Изменение веса:*\n"
-                report += f"• Начальный вес: {first_weight} кг ({dates[0]})\n"
-                report += f"• Текущий вес: {last_weight} кг ({dates[-1]})\n"
+                report += self.get_localized_message(LK.Tracking.Stats.WEIGHT_SECTION, lang)
+                report += self.get_localized_message(
+                    LK.Tracking.Stats.WEIGHT_INITIAL,
+                    lang,
+                    weight=first_weight,
+                    date=dates[0]
+                )
+                report += self.get_localized_message(
+                    LK.Tracking.Stats.WEIGHT_CURRENT,
+                    lang,
+                    weight=last_weight,
+                    date=dates[-1]
+                )
 
                 if weight_change < 0:
-                    report += f"• Изменение: -{abs(weight_change):.1f} кг 👍\n"
+                    report += self.get_localized_message(
+                        LK.Tracking.Stats.WEIGHT_CHANGE_NEGATIVE,
+                        lang,
+                        change=abs(weight_change)
+                    )
                 elif weight_change > 0:
-                    report += f"• Изменение: +{weight_change:.1f} кг\n"
+                    report += self.get_localized_message(
+                        LK.Tracking.Stats.WEIGHT_CHANGE_POSITIVE,
+                        lang,
+                        change=weight_change
+                    )
                 else:
-                    report += "• Изменение: 0 кг (вес стабилен)\n"
+                    report += self.get_localized_message(LK.Tracking.Stats.WEIGHT_CHANGE_NEUTRAL, lang)
             else:
-                report += "⚖️ *Вес:* Нет данных за последнюю неделю\n"
+                report += self.get_localized_message(LK.Tracking.Stats.WEIGHT_NO_DATA, lang)
 
             report += "\n"
 
@@ -463,35 +514,57 @@ class TrackingService(ITrackingService):
                 avg_water = total_water / len(water_history)
                 days_tracked = len(water_history)
 
-                report += "💧 *Потребление воды:*\n"
-                report += f"• Дней отслеживания: {days_tracked}/7\n"
-                report += f"• Среднее потребление: {avg_water / 1000:.1f} л/день\n"
+                report += self.get_localized_message(LK.Tracking.Stats.WATER_SECTION, lang)
+                report += self.get_localized_message(
+                    LK.Tracking.Stats.WATER_DAYS_TRACKED,
+                    lang,
+                    days=days_tracked
+                )
+                report += self.get_localized_message(
+                    LK.Tracking.Stats.WATER_AVERAGE,
+                    lang,
+                    avg=avg_water / 1000
+                )
 
                 if avg_water >= 2000:
-                    report += "• Статус: Отлично! Ты достигаешь целевого потребления воды 👍\n"
+                    report += self.get_localized_message(LK.Tracking.Stats.WATER_EXCELLENT, lang)
                 elif avg_water >= 1500:
-                    report += "• Статус: Хорошо, но можно увеличить потребление воды\n"
+                    report += self.get_localized_message(LK.Tracking.Stats.WATER_GOOD, lang)
                 else:
-                    report += "• Статус: Недостаточное потребление воды, старайся пить больше\n"
+                    report += self.get_localized_message(LK.Tracking.Stats.WATER_INSUFFICIENT, lang)
             else:
-                report += "💧 *Потребление воды:* Нет данных за последнюю неделю\n"
+                report += self.get_localized_message(LK.Tracking.Stats.WATER_NO_DATA, lang)
 
             report += "\n"
 
             # Прогресс к цели
             if weight_progress:
-                report += "🎯 *Прогресс к цели:*\n"
-                report += f"• Целевой вес: {weight_progress.target_weight} кг\n"
-                report += f"• Осталось: {abs(weight_progress.remaining_to_goal):.1f} кг\n"
-                report += f"• Прогресс: {weight_progress.goal_completion_percentage:.1f}% выполнено\n"
+                report += self.get_localized_message(LK.Tracking.Stats.GOAL_SECTION, lang)
+                report += self.get_localized_message(
+                    LK.Tracking.Stats.GOAL_TARGET,
+                    lang,
+                    target=weight_progress.target_weight
+                )
+                report += self.get_localized_message(
+                    LK.Tracking.Stats.GOAL_REMAINING,
+                    lang,
+                    remaining=abs(weight_progress.remaining_to_goal)
+                )
+                report += self.get_localized_message(
+                    LK.Tracking.Stats.GOAL_PERCENTAGE,
+                    lang,
+                    percentage=weight_progress.goal_completion_percentage
+                )
 
             report += "\n"
 
             # Мотивационное сообщение
-            report += "💪 *Продолжай в том же духе!* Ты на пути к своей цели."
+            report += self.get_localized_message(LK.Tracking.Stats.MOTIVATION, lang)
 
             return report
 
         except Exception as e:
-            logger.error(f"Error formatting weekly report: {str(e)}")
-            return "Еженедельный отчет недоступен. Пожалуйста, попробуйте позже."
+            self.logger.error(f"Error formatting weekly report: {str(e)}")
+            return self.get_localized_message(LK.Tracking.Stats.REPORT_ERROR, lang)
+
+

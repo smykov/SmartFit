@@ -10,8 +10,9 @@ from app.services.tracking.tracking_service_interface import ITrackingService
 
 from app.db.interfaces.reminder_repository_interface import IReminderRepository
 from app.db.interfaces.user_repository_interface import IUserRepository
-from app.localization.reminder_messages import ReminderMessages
 from app.services.messaging.message_interface import IMessageService
+from app.services.localization.localization_interface import ILocalizationService
+from app.constants.localization_keys import LocalizationKeys as LK
 from config import settings
 
 
@@ -33,6 +34,7 @@ class ReminderService:
             reminder_repository: IReminderRepository,
             tracking_service: ITrackingService = None,
             diet_service: IDietService = None,
+            localization_service: ILocalizationService = None
     ):
         """
         Инициализация сервиса напоминаний
@@ -43,14 +45,31 @@ class ReminderService:
             reminder_repository: Репозиторий для работы с напоминаниями
             tracking_service: Сервис трекинга (опционально)
             diet_service: Сервис диет (опционально)
+            localization_service: Сервис локализации (опционально)
         """
         self.message_service = message_service
         self.user_repository = user_repository
         self.reminder_repository = reminder_repository
         self.tracking_service = tracking_service
         self.diet_service = diet_service
-        self.messages = ReminderMessages()
+        self.localization_service = localization_service
         self.logger = logging.getLogger(self.__class__.__name__)
+
+    def get_localized_message(self, key: str, lang: str = None, **params) -> str:
+        """
+        Получает локализованное сообщение из сервиса локализации
+
+        Args:
+            key: Ключ сообщения
+            lang: Код языка (по умолчанию используется системный язык)
+            **params: Параметры для форматирования
+
+        Returns:
+            str: Локализованное сообщение
+        """
+        if hasattr(self, 'localization_service') and self.localization_service:
+            return self.localization_service.get_message(key, lang, **params)
+        return key
 
     async def initialize(self):
         """Инициализация сервиса и запуск регулярных задач"""
@@ -351,29 +370,33 @@ class ReminderService:
         except Exception as e:
             self.logger.error(f"Error recording sent reminder: {str(e)}")
 
-    def _get_onboarding_reminder(self, step: str, name: str) -> str:
+    def _get_onboarding_reminder(self, step: str, name: str, lang: str = None) -> str:
         """
         Формирует текст напоминания в зависимости от шага онбординга
 
         Args:
             step: Шаг онбординга
             name: Имя пользователя
+            lang: Код языка
 
         Returns:
             str: Текст напоминания
         """
         # Базовое обращение с именем, если оно есть
-        greeting = f"{self.messages.BASE_GREETING}{', ' + name if name else ''}! "
+        greeting = self.get_localized_message(LK.Reminders.GREETING, lang)
+        if name:
+            greeting += ", " + name
+        greeting += "! "
 
         # Выбираем сообщение в зависимости от шага онбординга
         if step == "name":
-            return greeting + self.messages.ONBOARDING_REMINDER_NAME
+            return greeting + self.get_localized_message(LK.Reminders.Onboarding.NAME, lang)
         elif step in ["age", "gender", "height"]:
-            return greeting + self.messages.ONBOARDING_REMINDER_BASIC_INFO
+            return greeting + self.get_localized_message(LK.Reminders.Onboarding.BASIC_INFO, lang)
         elif step in ["current_weight", "target_weight"]:
-            return greeting + self.messages.ONBOARDING_REMINDER_WEIGHT_INFO
+            return greeting + self.get_localized_message(LK.Reminders.Onboarding.WEIGHT_INFO, lang)
         elif step in ["activity_level", "diet_preference", "allergies", "disliked_products", "budget"]:
-            return greeting + self.messages.ONBOARDING_REMINDER_ALMOST_COMPLETE
+            return greeting + self.get_localized_message(LK.Reminders.Onboarding.ALMOST_COMPLETE, lang)
 
         # Общее сообщение по умолчанию
-        return greeting + self.messages.ONBOARDING_REMINDER_DEFAULT
+        return greeting + self.get_localized_message(LK.Reminders.Onboarding.DEFAULT, lang)

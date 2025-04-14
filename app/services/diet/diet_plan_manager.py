@@ -6,12 +6,13 @@ from typing import Dict, Any, Optional, Tuple
 
 import pytz
 
+from app.constants.localization_keys import LocalizationKeys as LK
 from app.db.interfaces.diet_plan_repository_interface import IDietPlanRepository
 from app.db.interfaces.product_repository_interface import IProductRepository
 from app.db.interfaces.user_repository_interface import IUserRepository
 
-from app.localization.messages import DietMessages
 from app.services.diet.base_service import BaseDietService
+from app.services.localization.localization_interface import ILocalizationService
 from app.templates.prompts import (
     create_diet_system_prompt,
     create_short_diet_system_prompt,
@@ -30,7 +31,8 @@ class DietPlanManager(BaseDietService):
             llm_service,
             diet_plan_repository: IDietPlanRepository,
             product_repository: IProductRepository,
-            user_repository: IUserRepository
+            user_repository: IUserRepository,
+            localization_service: ILocalizationService = None
     ):
         """
         Инициализация менеджера планов диет
@@ -40,13 +42,30 @@ class DietPlanManager(BaseDietService):
             diet_plan_repository: Репозиторий для работы с планами диет
             product_repository: Репозиторий для работы с продуктами
             user_repository: Репозиторий для работы с пользователями
+            localization_service: Сервис локализации
         """
         super().__init__()
         self.llm_service = llm_service
         self.diet_plan_repository = diet_plan_repository
         self.product_repository = product_repository
         self.user_repository = user_repository
-        self.messages = DietMessages()
+        self.localization_service = localization_service
+
+    def get_localized_message(self, key: str, lang: Optional[str] = None, **params) -> str:
+        """
+        Получает локализованное сообщение
+
+        Args:
+            key: Ключ сообщения
+            lang: Код языка
+            **params: Параметры для форматирования
+
+        Returns:
+            str: Локализованное сообщение
+        """
+        if hasattr(self, 'localization_service') and self.localization_service:
+            return self.localization_service.get_message(key, lang, **params)
+        return key
 
     async def generate_short_diet_plan(self, user_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -164,14 +183,20 @@ class DietPlanManager(BaseDietService):
             # Получаем план диеты
             diet_plan = await self.diet_plan_repository.get_by_id(plan_id)
 
+            # Получаем язык пользователя
+            lang = None
+            user_id = diet_plan.get("user_id") if diet_plan else None
+            if hasattr(self, 'localization_service') and self.localization_service and user_id:
+                lang = await self.localization_service.get_user_language(user_id)
+
             if not diet_plan:
                 self.logger.error(f"План с ID {plan_id} не найден")
-                return False, {"error": "План питания не найден"}
+                return False, {"error": self.get_localized_message(LK.Diet.Short.NO_PLAN, lang)}
 
             # Проверяем, что это краткая версия
             if diet_plan.get("version") != "short":
                 self.logger.error(f"План {plan_id} не является краткой версией")
-                return False, {"error": "План не является краткой версией"}
+                return False, {"error": self.get_localized_message(LK.Diet.Short.INVALID_VERSION, lang)}
 
             # Обновляем только указанные дни недели
             if "daily_plans" not in diet_plan:
@@ -214,7 +239,7 @@ class DietPlanManager(BaseDietService):
                 return True, diet_plan
             else:
                 self.logger.error(f"Не удалось обновить краткий план питания {plan_id}")
-                return False, {"error": "Не удалось обновить план питания"}
+                return False, {"error": self.get_localized_message(LK.Diet.Short.UPDATE_FAILED, lang)}
 
         except Exception as e:
             self.logger.error(f"Ошибка при обновлении краткого плана диеты: {str(e)}")
@@ -237,9 +262,15 @@ class DietPlanManager(BaseDietService):
             # Получаем план диеты
             diet_plan = await self.diet_plan_repository.get_by_id(plan_id)
 
+            # Получаем язык пользователя
+            lang = None
+            user_id = diet_plan.get("user_id") if diet_plan else None
+            if hasattr(self, 'localization_service') and self.localization_service and user_id:
+                lang = await self.localization_service.get_user_language(user_id)
+
             if not diet_plan:
                 self.logger.error(f"План с ID {plan_id} не найден")
-                return False, {"error": "План питания не найден"}
+                return False, {"error": self.get_localized_message(LK.Diet.Full.NO_PLAN, lang)}
 
             # Обновляем только указанные дни
             if "daily_plans" not in diet_plan:
@@ -287,7 +318,7 @@ class DietPlanManager(BaseDietService):
                 return True, diet_plan
             else:
                 self.logger.error(f"Не удалось обновить план питания {plan_id}")
-                return False, {"error": "Не удалось обновить план питания"}
+                return False, {"error": self.get_localized_message(LK.Diet.Full.UPDATE_FAILED, lang)}
 
         except Exception as e:
             self.logger.error(f"Ошибка при обновлении плана диеты: {str(e)}")
@@ -333,7 +364,6 @@ class DietPlanManager(BaseDietService):
         except Exception as e:
             self.logger.error(f"Error getting current diet: {str(e)}")
             return None
-
 
     async def get_diet_for_day(self, user_id: str, day_date: date) -> Optional[Dict[str, Any]]:
         """
@@ -432,8 +462,14 @@ class DietPlanManager(BaseDietService):
             # Получаем план диеты
             diet_plan = await self.diet_plan_repository.get_by_id(plan_id)
 
+            # Получаем язык пользователя
+            lang = None
+            user_id = diet_plan.get("user_id") if diet_plan else None
+            if hasattr(self, 'localization_service') and self.localization_service and user_id:
+                lang = await self.localization_service.get_user_language(user_id)
+
             if not diet_plan:
-                return {"error": "План диеты не найден"}
+                return {"error": self.get_localized_message(LK.Diet.Full.NO_PLAN, lang)}
 
             # Создаем промпт для обновления
             user_prompt = update_diet_user_prompt(update_request)
@@ -449,27 +485,28 @@ class DietPlanManager(BaseDietService):
                 updates = json.loads(response)
             except json.JSONDecodeError:
                 self.logger.error(f"Не удалось распарсить ответ LLM: {response}")
-                return {"error": "Ошибка при обработке ответа"}
+                return {"error": self.get_localized_message(LK.Diet.Update.PARSING_ERROR, lang)}
 
             # Проверяем структуру ответа
             if "updated_days" not in updates:
-                return {"error": "Некорректный формат ответа от ИИ"}
+                return {"error": self.get_localized_message(LK.Diet.Update.INVALID_FORMAT, lang)}
 
             # Обновляем план
             success, updated_plan = await self.update_diet_plan_partially(
                 plan_id,
                 updates["updated_days"],
-                updates.get("comment", "План питания обновлен согласно запросу")
+                updates.get("comment", self.get_localized_message(LK.Diet.Update.DEFAULT_COMMENT, lang))
             )
 
             if success:
                 return {
                     "success": True,
                     "plan": updated_plan,
-                    "comment": updates.get("comment", "План питания обновлен")
+                    "comment": updates.get("comment", self.get_localized_message(LK.Diet.Update.DEFAULT_COMMENT, lang)),
+                    "updated_days": updates.get("updated_days", {})
                 }
             else:
-                return {"error": "Не удалось обновить план питания"}
+                return {"error": self.get_localized_message(LK.Diet.Update.UPDATE_FAILED, lang)}
 
         except Exception as e:
             self.logger.error(f"Ошибка при обновлении плана диеты: {str(e)}")
@@ -490,8 +527,14 @@ class DietPlanManager(BaseDietService):
             # Получаем план диеты
             diet_plan = await self.diet_plan_repository.get_by_id(plan_id)
 
+            # Получаем язык пользователя
+            lang = None
+            user_id = diet_plan.get("user_id") if diet_plan else None
+            if hasattr(self, 'localization_service') and self.localization_service and user_id:
+                lang = await self.localization_service.get_user_language(user_id)
+
             if not diet_plan:
-                return {"error": "План диеты не найден"}
+                return {"error": self.get_localized_message(LK.Diet.Short.NO_PLAN, lang)}
 
             # Создаем промпт для обновления краткого плана
             user_prompt = update_short_diet_user_prompt(update_request, diet_plan)
@@ -505,27 +548,28 @@ class DietPlanManager(BaseDietService):
                 updates = json.loads(response)
             except json.JSONDecodeError:
                 self.logger.error(f"Не удалось распарсить ответ LLM: {response}")
-                return {"error": "Ошибка при обработке ответа"}
+                return {"error": self.get_localized_message(LK.Diet.Update.PARSING_ERROR, lang)}
 
             # Проверяем структуру ответа
             if "updated_days" not in updates:
-                return {"error": "Некорректный формат ответа от ИИ"}
+                return {"error": self.get_localized_message(LK.Diet.Update.INVALID_FORMAT, lang)}
 
             # Обновляем план
             success, updated_plan = await self.update_short_diet_plan(
                 plan_id,
                 updates["updated_days"],
-                updates.get("comment", "План питания обновлен согласно запросу")
+                updates.get("comment", self.get_localized_message(LK.Diet.Update.DEFAULT_COMMENT, lang))
             )
 
             if success:
                 return {
                     "success": True,
                     "plan": updated_plan,
-                    "comment": updates.get("comment", "План питания обновлен")
+                    "comment": updates.get("comment", self.get_localized_message(LK.Diet.Update.DEFAULT_COMMENT, lang)),
+                    "updated_days": updates.get("updated_days", {})
                 }
             else:
-                return {"error": "Не удалось обновить план питания"}
+                return {"error": self.get_localized_message(LK.Diet.Short.UPDATE_FAILED, lang)}
 
         except Exception as e:
             self.logger.error(f"Ошибка при обновлении краткого плана диеты: {str(e)}")
@@ -564,7 +608,6 @@ class DietPlanManager(BaseDietService):
             # Получаем все планы диеты пользователя
             diet_plans = await self.diet_plan_repository.get_user_plans(user_id)
 
-            # Фильтруем планы по статусу "pending" и версии "short"
             pending_plans = [
                 plan for plan in diet_plans
                 if plan.get("user_id") == "user_id" and plan.get("version") == "short"

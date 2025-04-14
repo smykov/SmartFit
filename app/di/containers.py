@@ -4,12 +4,14 @@ from dependency_injector import containers, providers
 from app.db.repositories.compliance_repository import FirebaseComplianceRepository
 # Репозитории
 from app.db.repositories.message_repository import FirebaseMessageRepository
+from app.db.repositories.reminder_repository import FirebaseReminderRepository
 from app.db.repositories.user_repository import FirebaseUserRepository
 from app.db.repositories.diet_plan_repository import FirebaseDietPlanRepository
 from app.db.repositories.product_repository import FirebaseProductRepository
 from app.db.repositories.shopping_list_repository import FirebaseShoppingListRepository
 from app.db.repositories.water_entry_repository import FirebaseWaterEntryRepository
 from app.db.repositories.weight_entry_repository import FirebaseWeightEntryRepository
+from app.services.diet.shopping_list_manager import ShoppingListManager
 from app.services.formatter.diet_formatter_service import DietFormatterService
 from app.services.formatter.tracking_formatter_service import TrackingFormatterService
 
@@ -19,6 +21,7 @@ from app.services.diet.diet_service import DietService
 from app.services.localization.localization_service import LocalizationService
 from app.services.messaging.clients.twilio_whatsapp_client import TwilioWhatsAppClient
 from app.services.messaging.whatsapp_service import WhatsAppService
+from app.services.reminders.reminder_service import ReminderService
 from app.services.tracking.tracking_service import TrackingService
 from app.utils.text_splitter import TextSplitter
 from app.services.messaging.message_processor_service import MessageProcessorService
@@ -67,6 +70,12 @@ class Container(containers.DeclarativeContainer):
 
     shopping_list_repository = providers.Singleton(
         FirebaseShoppingListRepository,
+        firebase_client=firebase_client
+    )
+
+    # Репозиторий напоминаний
+    reminder_repository = providers.Singleton(
+        FirebaseReminderRepository,
         firebase_client=firebase_client
     )
 
@@ -184,7 +193,13 @@ class Container(containers.DeclarativeContainer):
         TrackingFormatterService,
         localization_service=localization_service
     )
-
+    shopping_list_manager = providers.Singleton(
+        ShoppingListManager,
+        llm_service=llm_service,
+        diet_plan_repository=diet_plan_repository,
+        shopping_list_repository=shopping_list_repository,
+        localization_service=localization_service  # Добавить этот параметр
+    )
     # Сервис обработки сообщений
     message_processor_service = providers.Singleton(
         MessageProcessorService,
@@ -196,4 +211,15 @@ class Container(containers.DeclarativeContainer):
         diet_service=diet_service,
         tracking_service=tracking_service,
         command_factory=command_factory
+    )
+
+    # Сервис напоминаний
+    reminder_service = providers.Singleton(
+        ReminderService,
+        message_service=whatsapp_service,
+        user_repository=user_repository,
+        reminder_repository=reminder_repository,
+        tracking_service=tracking_service,
+        diet_service=diet_service,
+        localization_service=localization_service  # Добавляем сервис локализации
     )

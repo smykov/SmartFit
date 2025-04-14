@@ -6,10 +6,11 @@ from typing import Dict, Any
 
 import pytz
 
+from app.constants.localization_keys import LocalizationKeys as LK
 from app.db.interfaces.diet_plan_repository_interface import IDietPlanRepository
 from app.db.interfaces.shopping_list_repository_interface import IShoppingListRepository
-from app.localization.messages import DietMessages
 from app.services.diet.base_service import BaseDietService
+from app.services.localization.localization_interface import ILocalizationService
 from app.templates.prompts import create_shopping_list_system_prompt, create_shopping_list_user_prompt
 from config import settings
 
@@ -21,7 +22,8 @@ class ShoppingListManager(BaseDietService):
             self,
             llm_service,
             diet_plan_repository: IDietPlanRepository,
-            shopping_list_repository: IShoppingListRepository
+            shopping_list_repository: IShoppingListRepository,
+            localization_service: ILocalizationService
     ):
         """
         Инициализация менеджера списков покупок
@@ -30,19 +32,37 @@ class ShoppingListManager(BaseDietService):
             llm_service: Сервис LLM для генерации списков покупок
             diet_plan_repository: Репозиторий для работы с планами диет
             shopping_list_repository: Репозиторий для работы со списками покупок
+            localization_service: Сервис локализации
         """
         super().__init__()
         self.llm_service = llm_service
         self.diet_plan_repository = diet_plan_repository
         self.shopping_list_repository = shopping_list_repository
-        self.messages = DietMessages()
+        self.localization_service = localization_service
 
-    async def generate_shopping_list(self, diet_plan_id: str) -> Dict[str, Any]:
+    def get_localized_message(self, key: str, lang: str = None, **params) -> str:
+        """
+        Получает локализованное сообщение
+
+        Args:
+            key: Ключ сообщения
+            lang: Код языка (опционально)
+            **params: Параметры для подстановки
+
+        Returns:
+            str: Локализованное сообщение
+        """
+        if hasattr(self, 'localization_service') and self.localization_service:
+            return self.localization_service.get_message(key, lang, **params)
+        return key
+
+    async def generate_shopping_list(self, diet_plan_id: str, lang: str = None) -> Dict[str, Any]:
         """
         Создает список покупок на основе плана диеты
 
         Args:
             diet_plan_id: ID плана диеты
+            lang: Код языка (опционально)
 
         Returns:
             Dict[str, Any]: Список покупок или словарь с ошибкой
@@ -53,7 +73,7 @@ class ShoppingListManager(BaseDietService):
 
             if not diet_plan:
                 self.logger.error(f"Diet plan {diet_plan_id} not found")
-                return {"error": "Diet plan not found"}
+                return {"error": self.get_localized_message(LK.Shopping.DIET_PLAN_NOT_FOUND, lang)}
 
             # Проверяем наличие существующего списка покупок для этого плана
             existing_lists = await self.shopping_list_repository.get_by_diet_plan(diet_plan_id)
@@ -89,7 +109,7 @@ class ShoppingListManager(BaseDietService):
                 shopping_list = json.loads(response)
             except json.JSONDecodeError:
                 self.logger.error(f"Failed to parse JSON response for shopping list: {response}")
-                return {"error": "Failed to parse shopping list response"}
+                return {"error": self.get_localized_message(LK.Shopping.PARSING_ERROR, lang)}
 
             # Если был найден предыдущий список покупок, переносим информацию о покупках в новый список
             if existing_lists:
@@ -126,7 +146,7 @@ class ShoppingListManager(BaseDietService):
 
             if not list_id:
                 self.logger.error("Failed to save shopping list to database")
-                return {"error": "Failed to save shopping list"}
+                return {"error": self.get_localized_message(LK.Shopping.SAVE_FAILED, lang)}
 
             # Добавляем ID в список
             shopping_list_data["id"] = list_id
@@ -135,15 +155,16 @@ class ShoppingListManager(BaseDietService):
 
         except Exception as e:
             self.logger.error(f"Error generating shopping list: {str(e)}")
-            return {"error": str(e)}
+            return {"error": self.get_localized_message(LK.Shopping.GENERATING_ERROR, lang)}
 
-    async def mark_product_as_purchased(self, user_id: str, product_name: str) -> Dict[str, Any]:
+    async def mark_product_as_purchased(self, user_id: str, product_name: str, lang: str = None) -> Dict[str, Any]:
         """
         Отмечает продукт как купленный в списке покупок
 
         Args:
             user_id: ID пользователя
             product_name: Название продукта
+            lang: Код языка (опционально)
 
         Returns:
             Dict[str, Any]: Результат операции
@@ -152,13 +173,19 @@ class ShoppingListManager(BaseDietService):
             # Получаем текущий план диеты пользователя через репозиторий
             current_plan = await self.diet_plan_repository.get_current_diet(user_id)
             if not current_plan:
-                return {"success": False, "message": self.messages.NO_DIET_PLAN}
+                return {
+                    "success": False,
+                    "message": self.get_localized_message(LK.Shopping.NO_DIET_PLAN, lang)
+                }
 
             # Получаем список покупок для текущего плана через репозиторий
             shopping_lists = await self.shopping_list_repository.get_by_diet_plan(current_plan["id"])
 
             if not shopping_lists:
-                return {"success": False, "message": self.messages.NO_SHOPPING_LIST}
+                return {
+                    "success": False,
+                    "message": self.get_localized_message(LK.Shopping.NO_LIST, lang)
+                }
 
             # Берем последний список покупок
             latest_list = max(shopping_lists, key=lambda x: x.get("created_at", ""))
@@ -172,14 +199,25 @@ class ShoppingListManager(BaseDietService):
             if result:
                 return {
                     "success": True,
-                    "message": self.messages.PRODUCT_MARKED.format(product=product_name)
+                    "message": self.get_localized_message(
+                        LK.Shopping.PRODUCT_MARKED,
+                        lang,
+                        product=product_name
+                    )
                 }
             else:
                 return {
                     "success": False,
-                    "message": self.messages.PRODUCT_NOT_FOUND.format(product=product_name)
+                    "message": self.get_localized_message(
+                        LK.Shopping.PRODUCT_NOT_FOUND,
+                        lang,
+                        product=product_name
+                    )
                 }
 
         except Exception as e:
             self.logger.error(f"Error marking product as purchased: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return {
+                "success": False,
+                "message": self.get_localized_message(LK.Shopping.MARKING_ERROR, lang)
+            }
