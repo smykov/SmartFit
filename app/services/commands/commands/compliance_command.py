@@ -50,105 +50,90 @@ class ComplianceCommand(BaseCommand):
         for language_code in ["en", "ru", "es"]:
             try:
                 # Получаем маппинги статусов из локализационных модулей
-                status_keywords_str = self.get_localized_message("commands.compliance.statusKeywords", language_code)
-                if status_keywords_str and not status_keywords_str.startswith("commands.compliance"):
-                    # Конвертируем строковое представление в словарь
-                    try:
-                        status_keywords = eval(status_keywords_str)
-                        for key, value in status_keywords.items():
-                            # Преобразуем строковые значения в константы MealComplianceStatus
-                            if value == 'followed':
-                                status_value = MealComplianceStatus.FOLLOWED
-                            elif value == 'partially':
-                                status_value = MealComplianceStatus.PARTIALLY
-                            elif value == 'substituted':
-                                status_value = MealComplianceStatus.SUBSTITUTED
-                            elif value == 'skipped':
-                                status_value = MealComplianceStatus.SKIPPED
-                            else:
-                                status_value = value
+                status_keywords = self.get_localized_message("commands.compliance.statusKeywords", language_code)
 
-                            self._status_keywords[key] = status_value
-                    except Exception as e:
-                        self.logger.error(f"Error parsing status keywords for language {language_code}: {e}")
+                # Проверяем, что получили словарь, а не строку
+                if isinstance(status_keywords, dict):
+                    for key, value in status_keywords.items():
+                        # Преобразуем строковые значения в константы MealComplianceStatus
+                        if value == 'followed':
+                            status_value = MealComplianceStatus.FOLLOWED
+                        elif value == 'partially':
+                            status_value = MealComplianceStatus.PARTIALLY
+                        elif value == 'substituted':
+                            status_value = MealComplianceStatus.SUBSTITUTED
+                        elif value == 'skipped':
+                            status_value = MealComplianceStatus.SKIPPED
+                        else:
+                            status_value = value
+
+                        self._status_keywords[key] = status_value
 
                 # Получаем маппинги типов приема пищи из локализационных модулей
-                meal_type_keywords_str = self.get_localized_message("commands.compliance.mealTypeKeywords",
-                                                                    language_code)
-                if meal_type_keywords_str and not meal_type_keywords_str.startswith("commands.compliance"):
-                    try:
-                        meal_type_keywords = eval(meal_type_keywords_str)
-                        self._meal_type_keywords.update(meal_type_keywords)
-                    except Exception as e:
-                        self.logger.error(f"Error parsing meal type keywords for language {language_code}: {e}")
+                meal_type_keywords = self.get_localized_message("commands.compliance.mealTypeKeywords", language_code)
+                if isinstance(meal_type_keywords, dict):
+                    self._meal_type_keywords.update(meal_type_keywords)
 
                 # Получаем маппинги отображения типов приема пищи
-                meal_type_display_str = self.get_localized_message("commands.compliance.mealTypeDisplay", language_code)
-                if meal_type_display_str and not meal_type_display_str.startswith("commands.compliance"):
-                    try:
-                        meal_type_display = eval(meal_type_display_str)
-                        if language_code not in self._meal_type_display:
-                            self._meal_type_display[language_code] = {}
-                        self._meal_type_display[language_code].update(meal_type_display)
-                    except Exception as e:
-                        self.logger.error(f"Error parsing meal type display for language {language_code}: {e}")
+                meal_type_display = self.get_localized_message("commands.compliance.mealTypeDisplay", language_code)
+                if isinstance(meal_type_display, dict):
+                    if language_code not in self._meal_type_display:
+                        self._meal_type_display[language_code] = {}
+                    self._meal_type_display[language_code].update(meal_type_display)
+
             except Exception as e:
                 self.logger.error(f"Error loading mappings for language {language_code}: {e}")
 
         # Если не удалось загрузить маппинги из локализационных модулей, используем дефолтные
         if not self._status_keywords:
-            self.logger.warning("Using default status keywords mapping")
-            self._status_keywords = {
-                # Английские ключевые слова
+            self.logger.info("Initializing status keywords mapping from localization service")
+            self._status_keywords = {}
+
+            # Получение локализованных ключевых слов для всех поддерживаемых языков
+            for status_key, status_value in {
+                LK.Commands.Compliance.FOLLOWED: MealComplianceStatus.FOLLOWED,
+                LK.Commands.Compliance.PARTIALLY: MealComplianceStatus.PARTIALLY,
+                LK.Commands.Compliance.SUBSTITUTED: MealComplianceStatus.SUBSTITUTED,
+                LK.Commands.Compliance.SKIPPED: MealComplianceStatus.SKIPPED
+            }.items():
+                # Получаем перевод для каждого языка
+                for lang_code in ["en", "ru", "es"]:
+                    keyword = self.get_localized_message(status_key, lang_code).lower()
+                    if keyword:
+                        self._status_keywords[keyword] = status_value
+
+            # Добавляем также английские альтернативы для обратной совместимости
+            self._status_keywords.update({
                 "completed": MealComplianceStatus.FOLLOWED,
-                "followed": MealComplianceStatus.FOLLOWED,
-                "partially": MealComplianceStatus.PARTIALLY,
-                "substituted": MealComplianceStatus.SUBSTITUTED,
-                "skipped": MealComplianceStatus.SKIPPED,
-
-                # Русские ключевые слова
-                "выполнено": MealComplianceStatus.FOLLOWED,
-                "частично": MealComplianceStatus.PARTIALLY,
-                "заменил": MealComplianceStatus.SUBSTITUTED,
-                "пропустил": MealComplianceStatus.SKIPPED,
-
-                # Испанские ключевые слова
-                "completado": MealComplianceStatus.FOLLOWED,
-                "parcial": MealComplianceStatus.PARTIALLY,
-                "sustituido": MealComplianceStatus.SUBSTITUTED,
-                "omitido": MealComplianceStatus.SKIPPED
-            }
+                "followed": MealComplianceStatus.FOLLOWED
+            })
 
         if not self._meal_type_keywords:
-            self.logger.warning("Using default meal type keywords mapping")
-            self._meal_type_keywords = {
-                # Английские ключевые слова
-                "breakfast": "breakfast",
-                "lunch": "lunch",
-                "dinner": "dinner",
-                "snack": "snack",
+            self.logger.info("Initializing meal type keywords mapping from localization service")
+            self._meal_type_keywords = {}
 
-                # Русские ключевые слова
-                "завтрак": "breakfast",
-                "обед": "lunch",
-                "ужин": "dinner",
-                "перекус": "snack",
+            # Маппинг для всех типов приемов пищи
+            meal_types = ["breakfast", "lunch", "dinner", "snack"]
 
-                # Испанские ключевые слова
-                "desayuno": "breakfast",
-                "almuerzo": "lunch",
-                "cena": "dinner",
-                "merienda": "snack"
-            }
+            # Получаем переводы для каждого типа и языка
+            for meal_type in meal_types:
+                for lang_code in ["en", "ru", "es"]:
+                    keyword = self.get_localized_message(f"common.meal_types.{meal_type}", lang_code).lower()
+                    if keyword:
+                        self._meal_type_keywords[keyword] = meal_type
 
         if not self._meal_type_display:
-            self.logger.warning("Using default meal type display mapping")
-            self._meal_type_display = {
-                "en": {"breakfast": "breakfast", "lunch": "lunch", "dinner": "dinner", "snack": "snack"},
-                "ru": {"breakfast": "завтрак", "lunch": "обед", "dinner": "ужин", "snack": "перекус"},
-                "es": {"breakfast": "desayuno", "lunch": "almuerzo", "dinner": "cena", "snack": "merienda"}
-            }
+            self.logger.info("Initializing meal type display mapping from localization service")
+            self._meal_type_display = {}
 
+            # Создаем словарь переводов для каждого языка
+            for lang_code in ["en", "ru", "es"]:
+                self._meal_type_display[lang_code] = {}
+                for meal_type in ["breakfast", "lunch", "dinner", "snack"]:
+                    self._meal_type_display[lang_code][meal_type] = self.get_localized_message(
+                        f"common.meal_types.{meal_type}",
+                        lang_code
+                    )
         self.logger.info(f"Mappings initialized: {len(self._status_keywords)} status keywords, " +
                          f"{len(self._meal_type_keywords)} meal type keywords, " +
                          f"{len(self._meal_type_display)} languages for display")

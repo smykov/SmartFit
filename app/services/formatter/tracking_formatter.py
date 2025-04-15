@@ -4,7 +4,7 @@ import logging
 from typing import Dict, Any, Optional, List
 
 from app.constants.localization_keys import LocalizationKeys as LK
-from app.models.tracking import MealComplianceStatus
+from app.models.tracking import MealComplianceStatus, WeightGoalProgress
 from app.services.formatter.base_formatter import BaseFormatter
 from app.services.localization.localization_interface import ILocalizationService
 from app.utils.date_helper import DateHelper
@@ -327,6 +327,6 @@ class TrackingFormatter(BaseFormatter):
             return self.handle_exception(
                 e,
                 "Error formatting stats message",
-                "tracking.stats_error",
+                LK.Commands.Stats.ERROR,
                 lang
             )

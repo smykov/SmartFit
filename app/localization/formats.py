@@ -190,62 +190,6 @@ class StringUtils:
     """
 
     @staticmethod
-    def interpolate(text: str, params: Dict[str, Any]) -> str:
-        """
-        Расширенная интерполяция строк с поддержкой вложенных параметров
-
-        Args:
-            text: Исходная строка с плейсхолдерами
-            params: Словарь параметров для подстановки
-
-        Returns:
-            str: Строка с подставленными параметрами
-        """
-        # Обрабатываем обычные плейсхолдеры {name}
-        result = text
-
-        # Находим все плейсхолдеры в строке
-        placeholders = re.findall(r'\{([^{}]+)\}', text)
-
-        for placeholder in placeholders:
-            # Проверяем, есть ли в плейсхолдере вложенные параметры
-            if '.' in placeholder:
-                # Обрабатываем вложенные параметры вида {user.name}
-                parts = placeholder.split('.')
-                value = params
-                for part in parts:
-                    if isinstance(value, dict) and part in value:
-                        value = value[part]
-                    else:
-                        value = f"{{{placeholder}}}"  # Оставляем как есть, если параметр не найден
-                        break
-
-                # Заменяем плейсхолдер на значение
-                result = result.replace(f"{{{placeholder}}}", str(value))
-            else:
-                # Обычный параметр
-                if placeholder in params:
-                    value = params[placeholder]
-                    result = result.replace(f"{{{placeholder}}}", str(value))
-
-        return result
-
-    @staticmethod
-    def capitalize_first(text: str) -> str:
-        """
-        Делает первую букву строки заглавной
-
-        Args:
-            text: Исходная строка
-
-        Returns:
-            str: Строка с заглавной первой буквой
-        """
-        if not text:
-            return text
-        return text[0].upper() + text[1:]
-
-    @staticmethod
     def apply_style(text: str, style: str) -> str:
         """
         Применяет стилевое оформление для мессенджеров

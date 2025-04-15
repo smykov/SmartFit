@@ -17,6 +17,7 @@ strings = {
 
     # Water command
     'water.recorded': LocalizationString('💧 Great! I recorded your water intake: {amount} glasses (~{ml_amount} ml).'),
+    'water.recorded': LocalizationString('💧 Great! I recorded your water intake: {amount} glasses (~{ml_amount} ml).'),
     'water.invalidFormat': LocalizationString(
         'Please enter your water intake in the format: "water X", where X is the number of glasses you drank.'),
     'water.outOfRange': LocalizationString('The number of glasses must be between 0 and 20.'),

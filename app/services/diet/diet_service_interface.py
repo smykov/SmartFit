@@ -211,15 +211,17 @@ class IDietService(ABC):
         pass
 
     @abstractmethod
-    def get_day_diet_plan(self, diet_plan: Dict[str, Any], day_date: date = None) -> str:
+    def get_day_diet_plan(self, diet_plan: Dict[str, Any], day_date: date = None,
+                          lang: Optional[str] = None) -> List[str]:
         """
         Создает детальный план диеты на конкретный день
 
         Args:
             diet_plan: План диеты
             day_date: Дата, на которую нужен план
+            lang: Код языка
 
         Returns:
-            str: Сообщение с планом на день
+            List[str]: Сообщения с планом на день
         """
         pass

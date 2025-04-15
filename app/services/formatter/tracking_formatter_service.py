@@ -1,8 +1,10 @@
 # app/services/formatter/tracking_formatter_service.py
 from typing import Dict, Any, Optional
 
+from app.models.tracking import WeightGoalProgress, DailyTrackingStatus
 from app.services.formatter.tracking_formatter import TrackingFormatter
 from app.services.localization.localization_interface import ILocalizationService
+from app.utils.format_helper import FormatHelper
 
 
 class TrackingFormatterService:
@@ -21,7 +23,7 @@ class TrackingFormatterService:
         self.tracking_formatter = TrackingFormatter(localization_service)
         self.logger = self.tracking_formatter.logger
 
-    def format_weight_recorded_message(self, weight: float, progress: Optional[Dict[str, Any]] = None,
+    def format_weight_recorded_message(self, weight: float, progress: Optional[WeightGoalProgress] = None,
                                        lang: Optional[str] = None) -> str:
         """
         Форматирует сообщение о записи веса
@@ -34,7 +36,9 @@ class TrackingFormatterService:
         Returns:
             str: Отформатированное сообщение
         """
-        return self.tracking_formatter.format_weight_recorded_message(weight, progress, lang)
+        # Преобразуем объект прогресса в словарь
+        progress_dict = self._convert_to_dict(progress)
+        return self.tracking_formatter.format_weight_recorded_message(weight, progress_dict, lang)
 
     def format_water_recorded_message(self, amount: float, ml_amount: float,
                                       status: Optional[Dict[str, Any]] = None,
@@ -70,8 +74,8 @@ class TrackingFormatterService:
         """
         return self.tracking_formatter.format_compliance_message(meal_type, status, compliance_data, lang)
 
-    def format_stats_message(self, weight_progress: Optional[Dict[str, Any]],
-                             today_status: Optional[Dict[str, Any]],
+    def format_stats_message(self, weight_progress: Optional[WeightGoalProgress],
+                             today_status: Optional[DailyTrackingStatus],
                              compliance_data: Optional[Dict[str, Any]],
                              lang: Optional[str] = None) -> str:
         """
@@ -86,4 +90,12 @@ class TrackingFormatterService:
         Returns:
             str: Отформатированное сообщение
         """
-        return self.tracking_formatter.format_stats_message(weight_progress, today_status, compliance_data, lang)
+        # Преобразуем объекты прогресса в словарь
+        weight_progress_dict = self._convert_to_dict(weight_progress)
+        today_status_dict = self._convert_to_dict(today_status)
+
+        return self.tracking_formatter.format_stats_message(weight_progress_dict, today_status_dict, compliance_data, lang)
+
+    def _convert_to_dict(self, obj: Any) -> Dict[str, Any]:
+        return FormatHelper.convert_to_dict(obj)
+

@@ -4,6 +4,7 @@ from typing import Dict, Any, Optional
 from app.db.interfaces.user_repository_interface import IUserRepository
 from app.services.commands.interfaces.command_interface import ICommand
 from app.services.diet.diet_service_interface import IDietService
+from app.services.formatter.tracking_formatter_service import TrackingFormatterService
 from app.services.tracking.tracking_service_interface import ITrackingService
 from app.services.messaging.message_interface import IMessageService
 from app.services.localization.localization_interface import ILocalizationService
@@ -31,6 +32,8 @@ class BaseCommand(ICommand):
             self.message_service: IMessageService = dependencies['message_service']
         if 'tracking_service' in dependencies:
             self.tracking_service: ITrackingService = dependencies['tracking_service']
+        if 'tracking_formatter_service' in dependencies:
+            self.tracking_formatter_service: TrackingFormatterService = dependencies['tracking_formatter_service']
         if 'diet_service' in dependencies:
             self.diet_service: IDietService = dependencies['diet_service']
         if 'localization_service' in dependencies:

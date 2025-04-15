@@ -453,7 +453,7 @@ class DietFormatter(BaseFormatter):
             day_date: Конкретная дата дня
 
         Returns:
-            str: Сообщение с планом на день
+            List[str]: Сообщения с планом на день
         """
         day_plan = diet_plan["daily_plans"][day_key]
 
@@ -463,12 +463,17 @@ class DietFormatter(BaseFormatter):
 
         weekday_key = day_date.strftime("%A").lower()
         day_name = self.get_localized_message(
-            LK.Common.WEEKDAY_NAMES.format(weekday_key),
+            f"common.weekday_names.{weekday_key}",
             lang
         ).capitalize()
 
-        date_format = self.get_localized_message(LK.Common.DAY_FORMAT, lang)
-        date_formatted = DateHelper.format_date(day_date, date_format)
+        try:
+            date_format = self.get_localized_message(LK.Common.DAY_FORMAT, lang)
+            date_formatted = DateHelper.format_date(day_date, date_format)
+        except Exception as e:
+            self.logger.error(f"Error formatting date: {e}")
+            # Запасной вариант форматирования
+            date_formatted = day_date.strftime("%d.%m.%Y")
 
         # Определяем префикс ключей локализации и формат заголовка в зависимости от типа сообщения
         if is_full_plan:

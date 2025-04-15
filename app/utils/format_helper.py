@@ -1,6 +1,6 @@
 # app/utils/format_helper.py
 import re
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 from app.constants.localization_keys import ProductCategory
 
@@ -122,3 +122,33 @@ class FormatHelper:
 
         # Если ни одна категория не подошла
         return ProductCategory.OTHER.value
+
+
+    @staticmethod
+    def convert_to_dict(obj: Any) -> Optional[Dict[str, Any]]:
+        """
+        Преобразует объект в словарь, если это возможно
+
+        Args:
+            obj: Объект для преобразования
+
+        Returns:
+            Optional[Dict[str, Any]]: Словарь с данными или None
+        """
+        if obj is None:
+            return None
+
+        # Для объектов с методом to_dict
+        if hasattr(obj, 'to_dict') and callable(getattr(obj, 'to_dict')):
+            return obj.to_dict()
+
+        # Для Pydantic-моделей
+        if hasattr(obj, 'dict') and callable(getattr(obj, 'dict')):
+            return obj.dict()
+
+        # Для WeightGoalProgress и подобных классов с атрибутами
+        if hasattr(obj, '__dict__'):
+            return {k: v for k, v in obj.__dict__.items() if not k.startswith('_')}
+
+        # Возвращаем None, если его нельзя преобразовать
+        return None

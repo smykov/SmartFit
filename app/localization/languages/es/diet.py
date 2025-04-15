@@ -49,6 +49,25 @@ strings = {
         }
     },
     'day': {
+        # План на день
+        'header': LocalizationString('🗓️ MENÚ PARA {day_name}, {date_formatted}:\n\n'),
+        'total_calories': LocalizationString('🔥 Calorías totales: {calories} kcal\n'),
+        'macro_ratio': LocalizationString('📊 Ratio de macronutrientes: {ratio}\n'),
+        'macros': LocalizationString(
+            '🥩 Proteínas: {proteins}g | 🧀 Grasas: {fats}g | 🍚 Carbohidratos: {carbs}g\n\n'),
+        'meal_header': LocalizationString('🍽️ {emoji} {meal_type}: *{title}* {relevance}\n\n'),
+        'ingredients_header': LocalizationString('📋 *Ingredientes:*\n'),
+        'ingredient_format': LocalizationString('• {name}: {quantity} {unit}\n'),
+        'nutrition_header': LocalizationString('\n📊 *Valor nutricional:*\n'),
+        'calories': LocalizationString('• Calorías: {calories} kcal\n'),
+        'proteins': LocalizationString('• Proteínas: {proteins} g\n'),
+        'fats': LocalizationString('• Grasas: {fats} g\n'),
+        'carbs': LocalizationString('• Carbohidratos: {carbs} g\n'),
+        'fiber': LocalizationString('• Fibra: {fiber} g\n'),
+        'why_recommended_header': LocalizationString('\n💡 *Por qué se recomienda:* {why_recommended}\n'),
+        'preparation_header': LocalizationString('\n👨‍🍳 *Preparación:* {preparation}\n'),
+        'tip': LocalizationString('\n💎 *Consejo para hoy:* {tip}\n'),
+
         'creating_error': 'Error al crear el plan de dieta diario. Por favor, inténtelo de nuevo más tarde.',
         'no_plan': 'Desafortunadamente, no hay un plan de comidas para la fecha especificada.',
         'tracking': {

@@ -42,7 +42,7 @@ strings = {
     'stats.weight_change_positive': LocalizationString('• Cambio: +{change:.1f} kg\n'),
     'stats.weight_change_neutral': LocalizationString('• Cambio: 0 kg (peso estable)\n'),
     'stats.weight_goal_remaining': LocalizationString('• Restante para el objetivo: {remaining:.1f} kg\n'),
-    'stats.weight_goal_percentage': LocalizationString('• Cumplimiento del objetivo: {percentage:.1f}%\n\n'),
+    'stats.weight.goal_percentage': LocalizationString('• Cumplimiento del objetivo: {percentage:.1f}%\n\n'),
     'stats.water_section': LocalizationString('*💧 Consumo de agua hoy:*\n'),
     'stats.water_consumed': LocalizationString('• Consumido: {intake} ml\n'),
     'stats.water_goal': LocalizationString('• Objetivo: {goal} ml\n'),

@@ -4,12 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.router import api_router
-from app.db.interfaces.message_repository_interface import IMessageRepository
-from app.db.interfaces.user_repository_interface import IUserRepository
 from app.di.container import container
-from app.services.messaging.interfaces.message_client_interface import IMessageClient
-from app.services.messaging.message_processor_service import MessageProcessorService
-from app.services.messaging.whatsapp_service import WhatsAppService
 from config import settings
 
 # Настройка логирования

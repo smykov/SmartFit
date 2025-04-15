@@ -29,20 +29,32 @@ class LocalizationService(ILocalizationService):
         Получает локализованное сообщение по ключу
 
         Args:
-            key: Ключ сообщения (может быть вложенным через точку, например 'diet.created')
+            key: Ключ сообщения
             lang: Код языка (по умолчанию используется системный язык)
             **params: Параметры для форматирования сообщения
 
         Returns:
             str: Локализованное сообщение с подставленными параметрами
         """
+
         # Если язык не указан, используем язык по умолчанию
         if not lang:
             lang = self.DEFAULT_LANGUAGE
 
         try:
-            # Используем функцию из реестра локализаций
-            return get_message(key, lang, **params)
+            # Копируем параметры, чтобы избежать модификации исходного словаря
+            params_copy = params.copy()
+
+            # Убедимся, что 'lang' не дублируется
+            if 'lang' in params_copy:
+                # Если lang не передан явно, используем из params
+                if lang is None:
+                    lang = params_copy['lang']
+                # Удаляем из параметров, чтобы избежать дублирования
+                del params_copy['lang']
+
+            # Теперь безопасно передаем lang отдельно
+            return get_message(key, lang, **params_copy)
         except Exception as e:
             logger.error(f"Error getting localized message: {e}")
             # В случае ошибки возвращаем ключ
@@ -63,6 +75,7 @@ class LocalizationService(ILocalizationService):
             user = await self.user_repository.get_by_id(user_id)
 
             if not user:
+                logger.warning(f"User (id: {user_id}) not found")
                 return self.DEFAULT_LANGUAGE
 
             # Получаем язык из данных пользователя, если он есть

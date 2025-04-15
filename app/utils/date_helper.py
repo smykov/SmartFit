@@ -1,7 +1,7 @@
 # app/utils/date_helper.py
 from datetime import datetime, date, timedelta
 import pytz
-from typing import Dict
+import logging
 
 from config import settings
 
@@ -108,18 +108,27 @@ class DateHelper:
         return nearest_date
 
     @staticmethod
-    def format_date(date_val: date, date_format: str) -> str:
+    def format_date(date_value: date, format_str: str) -> str:
         """
-        Форматирует дату по указанному формату
+        Форматирует дату согласно заданному формату
 
         Args:
-            date_val: Дата для форматирования
-            date_format: Формат даты (например, "%d.%m.%Y")
+            date_value: Дата для форматирования
+            format_str: Строка формата даты
 
         Returns:
             str: Отформатированная дата
         """
-        return date_val.strftime(date_format)
+        try:
+            # Добавить проверку и логирование формата
+            if not format_str or format_str == "common.day_format":
+                # Если получен ключ локализации вместо формата, используем стандартный формат
+                return date_value.strftime("%d.%m.%Y")
+            return date_value.strftime(format_str)
+        except Exception as e:
+            # В случае ошибки используем стандартный формат
+            logging.error(f"Error formatting date with format '{format_str}': {e}")
+            return date_value.strftime("%d.%m.%Y")
 
     @staticmethod
     def parse_date_string(date_string: str, format_string: str = "%Y-%m-%d") -> date:

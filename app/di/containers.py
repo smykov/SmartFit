@@ -153,11 +153,13 @@ class Container(containers.DeclarativeContainer):
     # Сервис обработки команд
     command_handler_service = providers.Singleton(
         CommandHandlerService,
-        user_repository=user_repository,
-        message_service=whatsapp_service,
-        diet_service=diet_service,
-        tracking_service=tracking_service,
-        localization_service=localization_service
+        dependencies = providers.Dict({
+            "user_repository": user_repository,
+            "message_service": whatsapp_service,
+            "diet_service": diet_service,
+            "tracking_service": tracking_service,
+            "localization_service": localization_service,
+        })
     )
 
     # Сервис онбординга
@@ -168,19 +170,6 @@ class Container(containers.DeclarativeContainer):
         diet_service=diet_service,
         command_handler_service=command_handler_service,
         localization_service=localization_service
-    )
-
-    # Фабрика команд
-    command_factory = providers.Factory(
-        CommandFactory,
-        dependencies=providers.Dict({
-            "user_repository": user_repository,
-            "message_service": whatsapp_service,
-            "diet_service": diet_service,
-            "tracking_service": tracking_service,
-            "localization_service": localization_service,
-            "llm_service": llm_service
-        })
     )
 
     # Форматтеры
@@ -198,8 +187,23 @@ class Container(containers.DeclarativeContainer):
         llm_service=llm_service,
         diet_plan_repository=diet_plan_repository,
         shopping_list_repository=shopping_list_repository,
-        localization_service=localization_service  # Добавить этот параметр
+        localization_service=localization_service
     )
+
+    # Фабрика команд
+    command_factory = providers.Factory(
+        CommandFactory,
+        dependencies=providers.Dict({
+            "user_repository": user_repository,
+            "message_service": whatsapp_service,
+            "diet_service": diet_service,
+            "tracking_service": tracking_service,
+            "tracking_formatter_service": tracking_formatter_service,
+            "localization_service": localization_service,
+            "llm_service": llm_service
+        })
+    )
+
     # Сервис обработки сообщений
     message_processor_service = providers.Singleton(
         MessageProcessorService,
@@ -221,5 +225,5 @@ class Container(containers.DeclarativeContainer):
         reminder_repository=reminder_repository,
         tracking_service=tracking_service,
         diet_service=diet_service,
-        localization_service=localization_service  # Добавляем сервис локализации
+        localization_service=localization_service
     )

@@ -9,6 +9,15 @@ strings = {
     'unknownCommand': LocalizationString('Неизвестная команда: {text}'),
     'prerequisitesNotMet': LocalizationString('Невозможно выполнить эту команду в данный момент'),
     'processingCommand': LocalizationString('Обрабатываю вашу команду...'),
+    'delayedMassage': LocalizationString('Отложенное сообщение: '),
+
+    # Keys for message processor
+    'userNotFound': LocalizationString('Пользователь не найден'),
+    'noPendingPlan': LocalizationString('Ожидающий план диеты не найден'),
+    'noDietPlan': LocalizationString('У вас нет активного плана диеты. Используйте команду "диета" для создания.'),
+    'updatingPlan': LocalizationString('Обновляю ваш план диеты...'),
+    'updateFailed': LocalizationString('Не удалось обновить план диеты. Пожалуйста, попробуйте снова.'),
+
 }
 
 # Create localization module

@@ -45,7 +45,8 @@ class DietService(BaseDietService, IDietService):
         self.shopping_list_manager = ShoppingListManager(
             llm_service,
             diet_plan_repository,
-            shopping_list_repository
+            shopping_list_repository,
+            localization_service
         )
         self.formatter = DietFormatterService(localization_service)
         self.localization_service = localization_service

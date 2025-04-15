@@ -14,8 +14,8 @@ class LocalizationKeys:
         WEEKDAY_NAMES = "common.weekday_names.{}"
         MEAL_TYPES = "common.meal_types.{}"
         MEAL_EMOJIS = "common.meal_emojis.{}"
-        DAY_FORMAT = "diet.common.day_format"
-        HELP_COMMANDS_LIST = "help_commands_list"
+        DAY_FORMAT = "common.day_format"
+        HELP_COMMANDS_LIST = "common.help_commands_list"
 
     class Diet:
         """Ключи локализации для диет"""
@@ -279,6 +279,10 @@ class LocalizationKeys:
             ERROR = "commands.stats.error"
 
         class Compliance:
+            SKIPPED = "commands.compliance.skipped"
+            SUBSTITUTED = "commands.compliance.substituted"
+            PARTIALLY = "commands.compliance.partially"
+            FOLLOWED = "commands.compliance.followed"
             INVALID_FORMAT = "commands.compliance.invalidFormat"
             INVALID_TYPE = "commands.compliance.invalidType"
             INVALID_MEAL_TYPE = "commands.compliance.invalidMealType"
@@ -298,6 +302,17 @@ class LocalizationKeys:
         INVALID_MESSAGE_FORMAT = "messaging.invalidMessageFormat"
         WELCOME_NEW_USER = "messaging.welcomeNewUser"
         MESSAGE_ALREADY_PROCESSED = "messaging.messageAlreadyProcessed"
+
+    class MessageProcessor:
+        """Ключи для процессора сообщений"""
+        USER_NOT_FOUND = "messageProcessor.userNotFound"
+        UNKNOWN_COMMAND = "messageProcessor.unknownCommand"
+        COMMAND_NOT_FOUND = "messageProcessor.commandNotFound"
+        PREREQUISITES_NOT_MET = "messageProcessor.prerequisitesNotMet"
+        NO_PENDING_PLAN = "messageProcessor.noPendingPlan"
+        NO_DIET_PLAN = "messageProcessor.noDietPlan"
+        UPDATING_PLAN = "messageProcessor.updatingPlan"
+        UPDATE_FAILED = "messageProcessor.updateFailed"
 
     class Tracking:
         """Ключи для трекинга"""

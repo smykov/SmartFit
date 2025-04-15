@@ -21,36 +21,27 @@ class StatsCommand(BaseCommand):
         Returns:
             Dict[str, Any]: Результат выполнения команды
         """
+        # Получаем язык пользователя
+        lang = None
+        if hasattr(self, 'localization_service') and self.localization_service:
+            lang = await self.localization_service.get_user_language(user_id)
         try:
-            # Получаем язык пользователя
-            lang = None
-            if hasattr(self, 'localization_service') and self.localization_service:
-                lang = await self.localization_service.get_user_language(user_id)
-
             # Получаем прогресс по весу
-            weight_progress = await self.dependencies['tracking_service'].calculate_weight_progress(user_id)
+            weight_progress = await self.tracking_service.calculate_weight_progress(user_id)
 
             # Получаем статус трекинга на сегодня
-            today_status = await self.dependencies['tracking_service'].get_daily_status(user_id)
+            today_status = await self.tracking_service.get_daily_status(user_id)
 
             # Получаем данные о соблюдении плана на сегодня
-            today_compliance = await self.dependencies['tracking_service'].get_diet_compliance(user_id)
+            today_compliance = await self.tracking_service.get_diet_compliance(user_id)
 
-            # Форматируем статистику через форматтер, если он доступен
-            tracking_formatter = self.dependencies.get('tracking_formatter_service')
-            if tracking_formatter:
-                stats_message = tracking_formatter.format_stats_message(
-                    weight_progress,
-                    today_status,
-                    today_compliance,
-                    lang
-                )
-            else:
-                # Если форматтер недоступен, используем простое сообщение
-                stats_message = self.get_localized_message(
-                    "tracking.stats_default_message",
-                    lang
-                )
+            # Форматируем статистику через форматтер
+            stats_message = self.tracking_formatter_service.format_stats_message(
+                weight_progress,
+                today_status,
+                today_compliance,
+                lang
+            )
 
             return {
                 "success": True,

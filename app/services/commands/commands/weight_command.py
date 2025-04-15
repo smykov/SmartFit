@@ -10,6 +10,7 @@ class WeightCommand(BaseCommand):
     """
     Команда для записи веса пользователя
     """
+    # TODO переделать на форматтер все сообщения
 
     async def can_execute(self, user_id: str) -> bool:
         """
@@ -85,14 +86,15 @@ class WeightCommand(BaseCommand):
             if progress:
                 # Добавляем информацию о прогрессе
                 progress_message = self.get_localized_message(
-                    "tracking.weight_progress",
+                    LK.Tracking.Weight.PROGRESS,
                     lang,
                     context=context,
-                    change=change
+                    weight_change=change,
+                    percentage=progress.goal_completion_percentage
                 )
 
                 goal_message = self.get_localized_message(
-                    "tracking.weight_goal_remaining",
+                    LK.Tracking.Weight.GOAL_REMAINING,
                     lang,
                     remaining=abs(progress.remaining_to_goal),
                     target=progress.target_weight
@@ -102,7 +104,7 @@ class WeightCommand(BaseCommand):
 
                 # Добавляем информацию о процентном выполнении цели
                 message += "\n" + self.get_localized_message(
-                    "tracking.weight_goal_percentage",
+                    LK.Tracking.Weight.GOAL_PERCENTAGE,
                     lang,
                     percentage=progress.goal_completion_percentage
                 )

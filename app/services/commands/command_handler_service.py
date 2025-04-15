@@ -16,40 +16,32 @@ class CommandHandlerService:
     Сервис для обработки команд пользователя
     """
 
-    def __init__(
-            self,
-            user_repository: IUserRepository,
-            message_service: IMessageService,
-            tracking_service: Optional[ITrackingService] = None,
-            diet_service: Optional[IDietService] = None,
-            localization_service: Optional[ILocalizationService] = None
-    ):
+    def __init__(self, dependencies: Dict[str, Any]):
+
         """
         Инициализация сервиса обработки команд
 
         Args:
-            user_repository: Репозиторий пользователей
-            message_service: Сервис отправки сообщений
-            tracking_service: Сервис трекинга (опционально)
-            diet_service: Сервис диет (опционально)
-            localization_service: Сервис локализации (опционально)
+            dependencies: Словарь зависимостей для команды
         """
-        self.user_repository = user_repository
-        self.message_service = message_service
-        self.tracking_service = tracking_service
-        self.diet_service = diet_service
-        self.localization_service = localization_service
-        self.messages = CommandHandlerMessages()
+        super().__init__()
+
+        self.dependencies = dependencies
         self.logger = logging.getLogger(self.__class__.__name__)
 
-        # Создаем фабрику команд с типизированными зависимостями
-        self.command_factory = CommandFactory(
-            user_repository=user_repository,
-            message_service=message_service,
-            tracking_service=tracking_service,
-            diet_service=diet_service,
-            localization_service=localization_service
-        )
+        # Для удобства доступа, извлекаем общие зависимости с явной типизацией
+        if 'user_repository' in dependencies:
+            self.user_repository: IUserRepository = dependencies['user_repository']
+        if 'message_service' in dependencies:
+            self.message_service: IMessageService = dependencies['message_service']
+        if 'tracking_service' in dependencies:
+            self.tracking_service: ITrackingService = dependencies['tracking_service']
+        if 'diet_service' in dependencies:
+            self.diet_service: IDietService = dependencies['diet_service']
+        if 'localization_service' in dependencies:
+            self.localization_service: ILocalizationService = dependencies['localization_service']
+
+        self.command_factory = CommandFactory(dependencies)
 
     async def handle_command(self, user: Dict[str, Any], command_type: str,
                              command_params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:

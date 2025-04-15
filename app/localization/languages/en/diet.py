@@ -18,23 +18,23 @@ strings = {
             'An error occurred while creating the diet plan. Please try again later.'),
         'no_updates': LocalizationString('No updates were made to the diet plan.'),
         'summary': {
-            'header': '*📋 PERSONAL DIET PLAN*\n\n',
-            'deficit': '🔥 *Estimated calorie deficit:* \n{deficit}\n\n',
-            'proficit': '🔥 *Estimated calorie surplus:* \n{proficit}\n\n',
-            'recommendations': '📝 *General recommendations:* \n{recommendations}\n\n',
-            'price': '💰 *Estimated cost:* \n{price} {currency} per week\n\n',
-            'day_menu_example': '📅 *Sample menu for {day_name}, {date_formatted}:*\n',
-            'meal_format': '{emoji} *{meal_type}*: \n{title} {relevance}\n',
-            'calories_format': '  Calories: {calories} kcal\n',
-            'why_recommended': '  _Why recommended: {why_recommended}_\n'
+            'header': LocalizationString('*📋 PERSONAL DIET PLAN*\n\n'),
+            'deficit': LocalizationString('🔥 *Estimated calorie deficit:* \n{deficit}\n\n'),
+            'proficit': LocalizationString('🔥 *Estimated calorie surplus:* \n{proficit}\n\n'),
+            'recommendations': LocalizationString('📝 *General recommendations:* \n{recommendations}\n\n'),
+            'price': LocalizationString('💰 *Estimated cost:* \n{price} {currency} per week\n\n'),
+            'day_menu_example': LocalizationString('📅 *Sample menu for {day_name}, {date_formatted}:*\n'),
+            'meal_format': LocalizationString('{emoji} *{meal_type}*: \n{title} {relevance}\n'),
+            'calories_format': LocalizationString('  Calories: {calories} kcal\n'),
+            'why_recommended': LocalizationString('  _Why recommended: {why_recommended}_\n')
         },
         'plan': {
-            'commands_message': '''*📱 Commands for interacting with the plan:*
-- Type 'full plan' to view the plan for the entire week
-- Type 'today\'s plan' or 'today\'s menu' for a detailed plan for today
-- Type 'shopping list' to get a list of products
-- Type 'completed/partially/substituted/skipped breakfast/lunch/dinner/snack' to mark plan compliance
-'''
+            'commands_message': LocalizationString('''*📱 Commands for interacting with the plan:*
+        - Type 'full plan' to view the plan for the entire week
+        - Type 'today\'s plan' or 'today\'s menu' for a detailed plan for today
+        - Type 'shopping list' to get a list of products
+        - Type 'completed/partially/substituted/skipped breakfast/lunch/dinner/snack' to mark plan compliance
+        ''')
         }
     },
     'short': {
@@ -49,6 +49,24 @@ strings = {
         }
     },
     'day': {
+        # План на день
+        'header': LocalizationString('🗓️ MENU FOR {day_name}, {date_formatted}:\n\n'),
+        'total_calories': LocalizationString('🔥 Total calories: {calories} kcal\n'),
+        'macro_ratio': LocalizationString('📊 Macronutrient ratio: {ratio}\n'),
+        'macros': LocalizationString('🥩 Proteins: {proteins}g | 🧀 Fats: {fats}g | 🍚 Carbs: {carbs}g\n\n'),
+        'meal_header': LocalizationString('🍽️ {emoji} {meal_type}: *{title}* {relevance}\n\n'),
+        'ingredients_header': LocalizationString('📋 *Ingredients:*\n'),
+        'ingredient_format': LocalizationString('• {name}: {quantity} {unit}\n'),
+        'nutrition_header': LocalizationString('\n📊 *Nutritional value:*\n'),
+        'calories': LocalizationString('• Calories: {calories} kcal\n'),
+        'proteins': LocalizationString('• Proteins: {proteins} g\n'),
+        'fats': LocalizationString('• Fats: {fats} g\n'),
+        'carbs': LocalizationString('• Carbs: {carbs} g\n'),
+        'fiber': LocalizationString('• Fiber: {fiber} g\n'),
+        'why_recommended_header': LocalizationString('\n💡 *Why recommended:* {why_recommended}\n'),
+        'preparation_header': LocalizationString('\n👨‍🍳 *Preparation:* {preparation}\n'),
+        'tip': LocalizationString('\n💎 *Tip for today:* {tip}\n'),
+
         'creating_error': 'Error creating day diet plan. Please try again later.',
         'no_plan': 'Unfortunately, there is no meal plan for the specified date.',
         'tracking': {

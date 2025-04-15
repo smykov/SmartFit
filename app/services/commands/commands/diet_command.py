@@ -32,26 +32,34 @@ class DietCommand(BaseCommand):
                 lang = await self.localization_service.get_user_language(user_id)
 
             # Получаем текущий план диеты
-            diet_plan = await self.dependencies['diet_service'].get_current_diet(user_id)
+            diet_plan = await self.diet_service.get_current_diet(user_id)
 
-            phone_number = self.dependencies['user'].get('phone_number', '')
+            # Получаем пользователя из репозитория
+            user = await self.user_repository.get_by_id(user_id)
+            if not user:
+                return {
+                    "success": False,
+                    "message": self.get_localized_message(LK.User.NOT_FOUND, lang)
+                }
+
+            phone_number = user.get('phone_number', '')
 
             if not diet_plan:
                 # Запускаем генерацию нового плана диеты
-                await self.dependencies['message_service'].send_message(
+                await self.message_service.send_message(
                     phone_number,
                     self.get_localized_message(LK.Commands.Diet.DIET_GENERATION_STARTED, lang)
                 )
-                await self.dependencies['message_service'].send_message(
+                await self.message_service.send_message(
                     phone_number,
                     self.get_localized_message(LK.Commands.Diet.DIET_GENERATION_DETAILS, lang)
                 )
 
                 # Запускаем генерацию короткого плана диеты
-                diet_plan = await self.dependencies['diet_service'].generate_short_diet_plan(user_id)
+                diet_plan = await self.diet_service.generate_short_diet_plan(user_id)
 
                 if not diet_plan or "error" in diet_plan:
-                    await self.dependencies['message_service'].send_template_message(
+                    await self.message_service.send_template_message(
                         phone_number,
                         LK.Diet.Short.CREATED,
                         user_id)
@@ -62,19 +70,19 @@ class DietCommand(BaseCommand):
 
             if diet_plan.get('version') == "short" and diet_plan.get('status') == "pending":
                 # Отправляем сводку плана для согласования
-                summary = await self.dependencies['diet_service'].get_short_diet_summary(diet_plan, lang)
-                await self.dependencies['message_service'].send_message(
+                summary = await self.diet_service.get_short_diet_summary(diet_plan, lang)
+                await self.message_service.send_message(
                     phone_number,
                     summary
                 )
                 # Отправляем информация о следующих шагах
-                next_steps = self.dependencies['diet_service'].get_short_diet_next_steps(lang)
-                await self.dependencies['message_service'].send_message(
+                next_steps = self.diet_service.get_short_diet_next_steps(lang)
+                await self.message_service.send_message(
                     phone_number,
                     next_steps
                 )
                 # Отправляем информация о согласовании
-                await self.dependencies['message_service'].send_template_message(
+                await self.message_service.send_template_message(
                     phone_number,
                     LK.Diet.Short.CONFORMATION,
                     user_id)
@@ -89,7 +97,7 @@ class DietCommand(BaseCommand):
             today = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
 
             # Получаем план на сегодня
-            today_plan = await self.dependencies['diet_service'].get_diet_for_day(user_id, today)
+            today_plan = await self.diet_service.get_diet_for_day(user_id, today)
 
             if not today_plan:
                 return {
@@ -97,8 +105,8 @@ class DietCommand(BaseCommand):
                     "message": self.get_localized_message(LK.Commands.Diet.NO_DIET_FOR_TODAY, lang)
                 }
             # Форматируем и отправляем план на сегодня
-            formatted_plan_messages = self.dependencies['diet_service'].get_day_diet_plan(diet_plan, today, lang)
-            tracking_info_message = self.dependencies['diet_service'].get_diet_tracking_info_message(lang)
+            formatted_plan_messages = self.diet_service.get_day_diet_plan(diet_plan, today, lang)
+            tracking_info_message = self.diet_service.get_diet_tracking_info_message(lang)
 
             # TODO добавить список продуктов\покупок на день + обработка запросов на отметку что есть из списка
 

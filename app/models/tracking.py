@@ -1,10 +1,13 @@
 from datetime import datetime, date
 from enum import Enum
 from typing import Optional, Dict
+import logging
 
 from pydantic import BaseModel
 
 from app.models.diet import MealType
+
+logger = logging.getLogger(__name__)
 
 
 class MealComplianceStatus(str, Enum):
@@ -104,7 +107,7 @@ class DailyTrackingStatus(BaseModel):
     def calculate_water_percentage(self):
         """Рассчитывает процент выполнения цели по воде"""
         if self.water_goal > 0:
-            self.water_percentage = min(100, (self.current_water_intake / self.water_goal) * 100)
+            self.water_percentage = min(100.0, (self.current_water_intake / self.water_goal) * 100)
         return self.water_percentage
 
 
@@ -122,23 +125,26 @@ class WeightGoalProgress(BaseModel):
     @classmethod
     def calculate(cls, user_id: str, start_weight: float, current_weight: float, target_weight: float):
         """Рассчитывает прогресс в достижении цели по весу"""
+        logger.info(f"start_weight: {start_weight}, current_weight: {current_weight}, target_weight: {target_weight}")
         total_weight_change = current_weight - start_weight
 
         # Вычисляем оставшийся вес до цели
-        remaining_to_goal = current_weight - target_weight
+        remaining_to_goal = target_weight - current_weight
 
         # Общая цель по изменению веса
-        total_goal = start_weight - target_weight
+        total_goal = target_weight - start_weight
 
         # Процент изменения от начального веса
-        weight_change_percentage = (total_weight_change / start_weight) * 100
+        weight_change_percentage = (total_weight_change / total_goal) * 100
 
         # Процент выполнения цели
         goal_completion_percentage = 0
         if total_goal != 0:
-            completed_change = start_weight - current_weight
-            goal_completion_percentage = min(100, max(0, (completed_change / abs(total_goal)) * 100))
-
+            completed_change = current_weight - start_weight
+            logger.info(f"completed_change: {completed_change}")
+            goal_completion_percentage = min(100.0, max(0.0, (completed_change / total_goal) * 100))
+        logger.info(
+            f"goal_completion_percentage: {goal_completion_percentage}, total_weight_change: {total_weight_change}, remaining_to_goal: {remaining_to_goal}, total_goal: {total_goal}, weight_change_percentage: {weight_change_percentage}")
         return cls(
             user_id=user_id,
             start_weight=start_weight,

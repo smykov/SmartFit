@@ -14,7 +14,6 @@ from app.services.onboarding.onboarding_service_interface import IOnboardingServ
 from app.services.tracking.tracking_service_interface import ITrackingService
 
 from app.db.interfaces.user_repository_interface import IUserRepository
-from app.localization.message_processor_messages import MessageProcessorMessages
 from app.services.commands.command_factory import CommandFactory
 from app.services.messaging.message_interface import IMessageService
 from config import settings
@@ -78,7 +77,7 @@ class MessageProcessorService:
         self.onboarding_service = onboarding_service
         self.diet_service = diet_service
         self.tracking_service = tracking_service
-        self.messages = MessageProcessorMessages()
+        self.command_factory = command_factory
         self.logger = logging.getLogger(self.__class__.__name__)
 
         # Регулярные выражения для определения типов сообщений
@@ -104,6 +103,22 @@ class MessageProcessorService:
             "disapprove": re.compile(r'^(не согласен|не согласна|не подтверждаю|нет|не ок|не хорошо)$', re.IGNORECASE),
         }
 
+    def get_localized_message(self, key: str, lang: Optional[str] = None, **params) -> str:
+        """
+        Получает локализованное сообщение из сервиса локализации
+
+        Args:
+            key: Ключ сообщения
+            lang: Код языка (по умолчанию используется системный язык)
+            **params: Параметры для форматирования
+
+        Returns:
+            str: Локализованное сообщение
+        """
+        if self.localization_service:
+            return self.localization_service.get_message(key, lang, **params)
+        return key
+
     async def process_incoming_message(self, body: Dict[str, Any]) -> Dict[str, Any]:
         """
         Обрабатывает входящее сообщение из WhatsApp
@@ -120,7 +135,7 @@ class MessageProcessorService:
 
             if not phone_number or not message_text:
                 self.logger.error("Не удалось извлечь номер телефона или текст сообщения")
-                return {"success": False, "error": self._get_localized_message(LK.Messaging.INVALID_MESSAGE_FORMAT)}
+                return {"success": False, "error": self.get_localized_message(LK.Messaging.INVALID_MESSAGE_FORMAT)}
 
             # Проверяем, обрабатывалось ли это сообщение ранее
             if await self._is_message_processed(message_id):
@@ -280,7 +295,7 @@ class MessageProcessorService:
                 phone_number,
                 self.get_localized_message(LK.Commands.General.COMMAND_NOT_FOUND, lang)
             )
-            return {"success": False, "error": f"Unknown command for text {message_text}"}
+            return {"success": False, "error": self.get_localized_message(LK.MessageProcessor.UNKNOWN_COMMAND, lang, message_text=message_text)}
 
         # Создаем команду через фабрику
         command = self.command_factory.create_command(command_type)
@@ -288,15 +303,18 @@ class MessageProcessorService:
         # Проверяем, удалось ли создать команду
         if command is None:
             self.logger.error(f"Не удалось создать команду типа: {command_type}")
-            await self.message_service.send_message(phone_number, self.messages.COMMAND_NOT_FOUND)
-            return {"success": False, "error": f"Command type '{command_type}' not found"}
+            await self.message_service.send_message(
+                phone_number,
+                self.get_localized_message(LK.MessageProcessor.COMMAND_NOT_FOUND, lang)
+            )
+            return {"success": False, "error": self.get_localized_message(LK.MessageProcessor.COMMAND_NOT_FOUND, lang)}
 
         # Проверяем предварительные условия
         if not await command.can_execute(user_id):
             # Сообщение о невозможности выполнить команду
             error_message = command.get_error_message()
             await self.message_service.send_message(phone_number, error_message)
-            return {"success": False, "error": "Command prerequisites not met"}
+            return {"success": False, "error": self.get_localized_message(LK.MessageProcessor.PREREQUISITES_NOT_MET, lang)}
 
         # Выполняем команду
         result = await command.execute(user_id, command_params)
@@ -357,7 +375,7 @@ class MessageProcessorService:
             # Используем локализованное сообщение
             await self.message_service.send_message(
                 phone_number,
-                self.get_localized_message(LK.Diet.NoPendingPlan, lang)
+                self.get_localized_message(LK.MessageProcessor.NO_PENDING_PLAN, lang)
             )
             return {"success": False, "action": "no_pending_plan"}
 
@@ -408,6 +426,7 @@ class MessageProcessorService:
         """
         user_id = user["id"]
         phone_number = user["phone_number"]
+        lang = await self.localization_service.get_user_language(user_id)
 
         # Проверяем наличие активного плана
         diet_plan = await self.diet_service.get_current_diet(user_id)
@@ -415,14 +434,14 @@ class MessageProcessorService:
         if not diet_plan:
             await self.message_service.send_message(
                 phone_number,
-                self.messages.NO_DIET_PLAN
+                self.get_localized_message(LK.MessageProcessor.NO_DIET_PLAN, lang)
             )
             return {"success": False, "action": "no_diet_plan_for_update"}
 
         # Сообщаем пользователю, что корректируем план
         await self.message_service.send_message(
             phone_number,
-            self.messages.UPDATING_PLAN
+            self.get_localized_message(LK.MessageProcessor.UPDATING_PLAN, lang)
         )
 
         # Проверяем, нужно ли обновлять краткий или полный план
@@ -440,29 +459,30 @@ class MessageProcessorService:
         if "error" in result:
             await self.message_service.send_message(
                 phone_number,
-                self.messages.UPDATE_FAILED
+                self.get_localized_message(LK.MessageProcessor.UPDATE_FAILED, lang)
             )
             return {"success": False, "action": "diet_update_error", "error": result.get("error")}
 
         # Формируем и отправляем сообщение о результате обновления
         if "success" in result and result["success"]:
-            update_message = self.messages.format_update_success_message(
-                result.get("comment", ""),
-                result.get("updated_days", {}).keys()
+            update_message = self.get_localized_message(
+                LK.Diet.Update.SUCCESS_HEADER,
+                lang,
+                comment=result.get("comment", "")
             )
             await self.message_service.send_message(phone_number, update_message)
 
             # Если был обновлен план на сегодня, отправляем его
             if self._is_today_updated(result.get("updated_days", {})):
-                today_plan = self.diet_service.get_day_diet_plan(result["plan"], datetime.now().date())
+                today_plan = self.diet_service.get_day_diet_plan(result["plan"], datetime.now().date(), lang)
                 if today_plan:
-                    await self.message_service.send_message(phone_number, today_plan)
+                    await self.message_service.send_messages(phone_number, today_plan)
 
             return {"success": True, "action": "diet_plan_updated"}
         else:
             await self.message_service.send_message(
                 phone_number,
-                self.messages.UPDATE_FAILED
+                self.get_localized_message(LK.MessageProcessor.UPDATE_FAILED, lang)
             )
             return {"success": False, "action": "update_failed"}
 
@@ -534,7 +554,7 @@ class MessageProcessorService:
             return phone_number, message_text, message_type, message_id
 
         except Exception as e:
-            self.logger.error(f"Ошибка при извлечении данных сообщения: {str(e)}")
+            self.logger.error(f"Error when extracting message data: {str(e)}")
             return None, None, None, None
 
     async def _is_message_processed(self, message_id: str) -> bool:
@@ -616,19 +636,3 @@ class MessageProcessorService:
         """
         today = datetime.now(pytz.timezone(settings.TIMEZONE)).date().isoformat()
         return today in updated_days
-
-    def _get_localized_message(self, key: str, lang: Optional[str] = None, **params) -> str:
-        """
-        Получает локализованное сообщение из сервиса локализации
-
-        Args:
-            key: Ключ сообщения
-            lang: Код языка (по умолчанию используется системный язык)
-            **params: Параметры для форматирования
-
-        Returns:
-            str: Локализованное сообщение
-        """
-        if hasattr(self, 'localization_service') and self.localization_service:
-            return self.localization_service.get_message(key, lang, **params)
-        return key

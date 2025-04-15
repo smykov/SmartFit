@@ -1,3 +1,4 @@
+import logging
 from typing import Dict, Any, Optional
 import importlib
 import os
@@ -5,6 +6,7 @@ from pathlib import Path
 
 from app.localization.base import LanguageBase
 
+logger = logging.getLogger(__name__)
 
 class LocalizationRegistry:
     """Реестр всех доступных локализаций"""
@@ -49,6 +51,10 @@ class LocalizationRegistry:
 
         # Определяем язык
         language_code = lang or self.default_language
+        # logger.info(f"data - {language_code}, {self.languages}, {params}")
+        # logger.info(f"data ru - {'ru'}, {self.languages['ru'].get(key, **params)}")
+        # logger.info(f"data en - {language_code}, {self.languages['en'].get(key, **params)}")
+        # logger.info(f"data es - {language_code}, {self.languages['es'].get(key, **params)}")
 
         # Если запрошенного языка нет, используем язык по умолчанию
         if language_code not in self.languages:
@@ -68,6 +74,7 @@ class LocalizationRegistry:
 
         return result
 
+    # Добавьте в registry.py, в метод load_languages()
     def load_languages(self):
         """Загружает все доступные языки из модуля languages"""
         languages_dir = Path(__file__).parent / 'languages'
@@ -86,14 +93,25 @@ class LocalizationRegistry:
                     lang_module = importlib.import_module(f"app.localization.languages.{lang_code}")
 
                     if hasattr(lang_module, 'language'):
+                        # Проверка структуры языка
+                        modules = getattr(lang_module.language, 'modules', {})
+                        logger.info(f"Loaded language '{lang_code}' with modules: {list(modules.keys())}")
+
+                        # Подробная диагностика
+                        for module_name, module in modules.items():
+                            if hasattr(module, 'strings'):
+                                logger.info(f"Module '{module_name}' has {len(module.strings)} strings")
+                            else:
+                                logger.warning(f"Module '{module_name}' has no strings attribute!")
+
                         self.register_language(lang_code, lang_module.language)
                         loaded_languages += 1
                     else:
-                        print(f"Warning: Language module '{lang_code}' has no 'language' attribute")
+                        logger.warning(f"Warning: Language module '{lang_code}' has no 'language' attribute")
                 except (ImportError, AttributeError) as e:
-                    print(f"Error loading language '{lang_code}': {e}")
+                    logger.error(f"Error loading language '{lang_code}': {e}")
 
-        print(f"Loaded {loaded_languages} languages")
+        logger.info(f"Loaded {loaded_languages} languages")
 
 
 # Создаем глобальный экземпляр реестра
