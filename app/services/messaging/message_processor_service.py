@@ -424,6 +424,7 @@ class MessageProcessorService:
         Returns:
             Dict[str, Any]: Результат обработки
         """
+        today = datetime.now(pytz.timezone(settings.TIMEZONE))
         user_id = user["id"]
         phone_number = user["phone_number"]
         lang = await self.localization_service.get_user_language(user_id)
@@ -474,7 +475,7 @@ class MessageProcessorService:
 
             # Если был обновлен план на сегодня, отправляем его
             if self._is_today_updated(result.get("updated_days", {})):
-                today_plan = self.diet_service.get_day_diet_plan(result["plan"], datetime.now().date(), lang)
+                today_plan = self.diet_service.get_day_diet_plan(result["plan"], today, lang)
                 if today_plan:
                     await self.message_service.send_messages(phone_number, today_plan)
 

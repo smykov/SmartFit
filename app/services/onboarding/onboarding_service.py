@@ -252,7 +252,7 @@ class OnboardingService(IOnboardingService):
             "user_id": user_id
         }
 
-    def get_next_onboarding_step(self, current_step: str) -> str:
+    async def get_next_onboarding_step(self, current_step: str) -> str:
         """
         Возвращает следующий шаг онбординга
 
