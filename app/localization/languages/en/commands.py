@@ -3,9 +3,16 @@ from app.localization.base import LocalizationString, LocalizationModule
 # Strings for commands module
 strings = {
     # General command messages
-    'general.commandNotFound': LocalizationString('Command not found. Type "help" to see available commands.'),
-    'general.executionError': LocalizationString(
-        'An error occurred while executing the command. Please try again later.'),
+    'general': {
+        'commandNotFound': LocalizationString(
+            'Command not found. Type "help" to see available commands.'),
+        'executionError': LocalizationString(
+            'An error occurred while executing the command. Please try again later.'),
+        'unknownCommand': LocalizationString(
+            'Unknown command. Type "help" to get a list of available commands.'),
+        'prerequisitesNotMet': LocalizationString(
+            'The prerequisites for executing the command are not met.')
+    },
 
     # Weight command
     'weight.recorded': LocalizationString('✅ Great! I recorded your weight: {weight} kg.'),
