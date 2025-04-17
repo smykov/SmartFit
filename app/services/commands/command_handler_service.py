@@ -6,18 +6,18 @@ from app.services.tracking.tracking_service_interface import ITrackingService
 from app.services.messaging.message_interface import IMessageService
 from app.db.interfaces.user_repository_interface import IUserRepository
 from app.services.localization.localization_interface import ILocalizationService
+from app.constants.localization_keys import LocalizationKeys as LK
 
 from app.services.commands.command_factory import CommandFactory
-from app.localization.command_handler_messages import CommandHandlerMessages
+from app.services.commands.interfaces.command_handler_interface import ICommandHandler
 
 
-class CommandHandlerService:
+class CommandHandlerService(ICommandHandler):
     """
     Сервис для обработки команд пользователя
     """
 
     def __init__(self, dependencies: Dict[str, Any]):
-
         """
         Инициализация сервиса обработки команд
 
@@ -43,6 +43,22 @@ class CommandHandlerService:
 
         self.command_factory = CommandFactory(dependencies)
 
+    def get_localized_message(self, key: str, lang: Optional[str] = None, **params) -> str:
+        """
+        Получает локализованное сообщение
+
+        Args:
+            key: Ключ сообщения
+            lang: Код языка
+            **params: Параметры для форматирования
+
+        Returns:
+            str: Локализованное сообщение
+        """
+        if hasattr(self, 'localization_service') and self.localization_service:
+            return self.localization_service.get_message(key, lang, **params)
+        return key  # Если сервис локализации недоступен, возвращаем ключ
+
     async def handle_command(self, user: Dict[str, Any], command_type: str,
                              command_params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
@@ -61,26 +77,27 @@ class CommandHandlerService:
             if not user or 'id' not in user:
                 return {
                     "success": False,
-                    "error": "User not found"
+                    "error": self.get_localized_message(LK.MessageProcessor.USER_NOT_FOUND)
                 }
+
+            # Получаем язык пользователя
+            lang = await self.localization_service.get_user_language(user['id']) if self.localization_service else None
 
             # Создаем команду через фабрику
             command = self.command_factory.create_command(command_type)
 
             # Если команда не найдена
             if not command:
-                language = await self.localization_service.get_user_language(
-                    user['id']) if self.localization_service else None
                 return {
                     "success": False,
-                    "message": self.messages.COMMAND_NOT_FOUND
+                    "message": self.get_localized_message(LK.Commands.General.COMMAND_NOT_FOUND, lang)
                 }
 
             # Проверяем предварительные условия выполнения команды
             if not await command.can_execute(user['id']):
                 return {
                     "success": False,
-                    "message": command.get_error_message()
+                    "message": self.get_localized_message(LK.Commands.General.PREREQUISITES_NOT_MET, lang)
                 }
 
             # Выполняем команду
@@ -91,9 +108,14 @@ class CommandHandlerService:
         except Exception as e:
             # Логируем неожиданные ошибки
             self.logger.error(f"Ошибка при обработке команды: {str(e)}", exc_info=True)
+
+            # Получаем язык пользователя
+            lang = await self.localization_service.get_user_language(
+                user['id']) if self.localization_service and 'id' in user else None
+
             return {
                 "success": False,
-                "message": str(e)
+                "message": self.get_localized_message(LK.Commands.General.EXECUTION_ERROR, lang)
             }
 
     def get_help_message(self, lang: Optional[str] = None) -> str:
@@ -106,4 +128,4 @@ class CommandHandlerService:
         Returns:
             str: Справочное сообщение
         """
-        return self.messages.get_help_message(lang)
+        return self.get_localized_message(LK.Common.HELP_COMMANDS_LIST, lang)
