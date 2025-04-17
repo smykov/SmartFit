@@ -127,3 +127,16 @@ class FirebaseUserRepository(IUserRepository):
         except Exception as e:
             logger.error(f"Error finding users with incomplete onboarding: {str(e)}")
             return []
+
+    async def find_with_completed_onboarding(self) -> List[Dict[str, Any]]:
+        """
+        Находит пользователей с завершенным онбордингом
+
+        Returns:
+            List[Dict[str, Any]]: Список пользователей с завершенным онбордингом
+        """
+        try:
+            return self.firebase_client.query_documents("users", "is_onboarding_completed", "==", True)
+        except Exception as e:
+            logger.error(f"Error finding users with completed onboarding: {str(e)}")
+            return []

@@ -215,3 +215,19 @@ class FirebaseDietPlanRepository(IDietPlanRepository):
         except Exception as e:
             logger.error(f"Error updating daily plan: {str(e)}")
             return False
+
+    async def find_by_status(self, status: str) -> List[Dict[str, Any]]:
+        """
+        Находит планы диет по статусу
+
+        Args:
+            status: Статус планов для поиска
+
+        Returns:
+            List[Dict[str, Any]]: Список планов с указанным статусом
+        """
+        try:
+            return self.firebase_client.query_documents("diet_plans", "status", "==", status)
+        except Exception as e:
+            logger.error(f"Error finding diet plans by status: {str(e)}")
+            return []

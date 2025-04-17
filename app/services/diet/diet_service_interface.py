@@ -197,6 +197,16 @@ class IDietService(ABC):
         pass
 
     @abstractmethod
+    async def get_pending_plans(self) -> List[Dict[str, Any]]:
+        """
+        Получает все планы диет со статусом "pending"
+
+        Returns:
+            List[Dict[str, Any]]: Список планов диет в ожидании одобрения
+        """
+        pass
+
+    @abstractmethod
     async def update_short_diet_plan_by_request(self, plan_id: str, update_request: str) -> Dict[str, Any]:
         """
         Обновляет краткий план диеты на основе запроса пользователя

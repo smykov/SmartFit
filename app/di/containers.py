@@ -21,13 +21,15 @@ from app.services.diet.diet_service import DietService
 from app.services.localization.localization_service import LocalizationService
 from app.services.messaging.clients.twilio_whatsapp_client import TwilioWhatsAppClient
 from app.services.messaging.whatsapp_service import WhatsAppService
-from app.services.reminders.reminder_service import ReminderService
 from app.services.tracking.tracking_service import TrackingService
 from app.utils.text_splitter import TextSplitter
 from app.services.messaging.message_processor_service import MessageProcessorService
 from app.services.onboarding.onboarding_service import OnboardingService
 from app.services.commands.command_handler_service import CommandHandlerService
 from app.services.commands.command_factory import CommandFactory
+from app.services.reminders.reminder_service import ReminderService
+from app.services.reminders.reminder_service_interface import IReminderService
+
 
 # Добавляем Firebase клиент
 from app.db.firebase import FirebaseClient
@@ -226,4 +228,10 @@ class Container(containers.DeclarativeContainer):
         tracking_service=tracking_service,
         diet_service=diet_service,
         localization_service=localization_service
+    )
+
+    # Зарегистрировать интерфейс
+    reminder_service_interface = providers.Factory(
+        lambda reminder_service: reminder_service,
+        reminder_service=reminder_service
     )

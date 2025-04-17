@@ -102,3 +102,16 @@ class IDietPlanRepository(ABC):
             bool: Результат обновления
         """
         pass
+
+    @abstractmethod
+    async def find_by_status(self, status: str) -> List[Dict[str, Any]]:
+        """
+        Находит планы диет по статусу
+
+        Args:
+            status: Статус планов для поиска
+
+        Returns:
+            List[Dict[str, Any]]: Список планов с указанным статусом
+        """
+        pass

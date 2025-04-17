@@ -528,3 +528,20 @@ class DietService(BaseDietService, IDietService):
         except Exception as e:
             self.logger.error(f"Ошибка при получении ожидающего плана диеты: {str(e)}")
             return None
+
+
+async def get_pending_plans(self) -> List[Dict[str, Any]]:
+    """
+    Получает все планы диет со статусом "pending"
+
+    Returns:
+        List[Dict[str, Any]]: Список планов диет в ожидании одобрения
+    """
+    try:
+        # Предполагаем, что в репозитории есть соответствующий метод
+        # Если его нет, нужно добавить и в репозиторий тоже
+        plans = await self.diet_plan_repository.find_by_status("pending")
+        return plans
+    except Exception as e:
+        self.logger.error(f"Error getting pending diet plans: {str(e)}")
+        return []

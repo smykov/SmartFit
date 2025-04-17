@@ -3,8 +3,10 @@
 import asyncio
 import logging
 from datetime import datetime
+from typing import Dict, Any, Optional
 
 import pytz
+from app.constants.localization_keys import LocalizationKeys as LK
 from app.services.diet.diet_service_interface import IDietService
 from app.services.tracking.tracking_service_interface import ITrackingService
 
@@ -12,11 +14,13 @@ from app.db.interfaces.reminder_repository_interface import IReminderRepository
 from app.db.interfaces.user_repository_interface import IUserRepository
 from app.services.messaging.message_interface import IMessageService
 from app.services.localization.localization_interface import ILocalizationService
-from app.constants.localization_keys import LocalizationKeys as LK
+from app.services.reminders.reminder_service_interface import IReminderService
+from app.services.reminders.reminder_factory import ReminderFactory
+from app.services.reminders.reminder_strategies import ReminderStrategy, PlanApprovalReminderStrategy
 from config import settings
 
 
-class ReminderService:
+class ReminderService(IReminderService):
     """
     Сервис для управления системой напоминаний пользователям
 
@@ -55,6 +59,9 @@ class ReminderService:
         self.localization_service = localization_service
         self.logger = logging.getLogger(self.__class__.__name__)
 
+        # Инициализация стратегий напоминаний
+        self.reminder_strategies = ReminderFactory.create_all_strategies()
+
     def get_localized_message(self, key: str, lang: str = None, **params) -> str:
         """
         Получает локализованное сообщение из сервиса локализации
@@ -87,12 +94,11 @@ class ReminderService:
         """Запускает регулярные задачи для проверки и отправки напоминаний"""
         while True:
             try:
-                # Текущее время
-                now = datetime.now(pytz.timezone(settings.TIMEZONE))
-                current_hour = now.hour
+                # Создаем контекст времени
+                context = self._create_time_context()
 
                 # Пропускаем отправку напоминаний в ночное время
-                if 23 <= current_hour or current_hour < 7:
+                if context["is_night"]:
                     await asyncio.sleep(1800)  # 30 минут
                     continue
 
@@ -103,7 +109,7 @@ class ReminderService:
                 await self.send_plan_approval_reminders()
 
                 # Отправляем напоминания о трекинге в зависимости от времени суток
-                await self.send_tracking_reminders()
+                await self.send_tracking_reminders(context)
 
                 # Ждем 30 минут до следующей проверки
                 await asyncio.sleep(1800)
@@ -132,6 +138,9 @@ class ReminderService:
                     if not phone_number:
                         continue
 
+                    # Получаем язык пользователя
+                    lang = await self.localization_service.get_user_language(user_id)
+
                     # Получаем информацию о последнем взаимодействии
                     last_interaction = None
                     if "last_interaction" in user:
@@ -145,19 +154,25 @@ class ReminderService:
                         current_step = user.get("onboarding_step", "welcome")
 
                         # Формируем сообщение-напоминание
-                        reminder_message = self._get_onboarding_reminder(current_step, user.get("name", ""))
+                        reminder_message = self._get_onboarding_reminder(current_step, user.get("name", ""), lang)
 
-                        # Проверяем, можно ли отправить напоминание
-                        if await self.can_send_reminder(phone_number, self.messages.REMINDER_TYPE_ONBOARDING,
-                                                        86400):  # 24 часа
+                        # Получаем константы для типа напоминания
+                        reminder_type = self.get_localized_message(LK.Reminders.REMINDER_TYPE_ONBOARDING, lang)
+
+                        # Создаем контекст для напоминания
+                        context = {"onboarding_step": current_step}
+
+                        # Отправляем напоминание
+                        if await self.can_send_reminder(phone_number, reminder_type, 86400):  # 24 часа
+                            # Специальный случай для онбординга - сообщение уже сформировано
                             await self.message_service.send_message(
                                 phone_number,
                                 reminder_message,
-                                current_step
+                                context
                             )
 
                             # Записываем информацию об отправленном напоминании
-                            await self.record_reminder_sent(phone_number, self.messages.REMINDER_TYPE_ONBOARDING)
+                            await self.record_reminder_sent(phone_number, reminder_type)
 
                             self.logger.info(f"Sent onboarding reminder to user {user_id} for step {current_step}")
                 except Exception as user_error:
@@ -180,6 +195,12 @@ class ReminderService:
             # Получаем планы со статусом pending
             pending_plans = await self.diet_service.get_pending_plans()
 
+            # Создаем стратегию для напоминаний о согласовании плана
+            plan_approval_strategy = self._get_reminder_strategy(LK.Reminders.REMINDER_TYPE_PLAN_APPROVAL)
+            if not plan_approval_strategy:
+                self.logger.warning("Plan approval reminder strategy not found")
+                return
+
             for plan in pending_plans:
                 try:
                     user_id = plan.get("user_id")
@@ -191,59 +212,51 @@ class ReminderService:
 
                     phone_number = user["phone_number"]
 
+                    # Получаем язык пользователя
+                    lang = await self.localization_service.get_user_language(user_id)
+
                     # Проверяем, когда был создан план
                     created_at = datetime.fromisoformat(plan.get("created_at", "2000-01-01T00:00:00"))
 
                     # Рассчитываем, сколько времени прошло с момента создания
                     hours_passed = (now - created_at).total_seconds() / 3600
 
-                    # Проверяем, можно ли отправить напоминание
-                    if await self.can_send_reminder(phone_number, self.messages.REMINDER_TYPE_PLAN_APPROVAL,
-                                                    14400):  # 4 часа
-                        # Выбираем тип напоминания в зависимости от времени ожидания
-                        if hours_passed < 4:
-                            reminder_message = self.messages.PLAN_APPROVAL_REMINDER_INITIAL
-                        elif hours_passed < 24:
-                            reminder_message = self.messages.PLAN_APPROVAL_REMINDER_SAME_DAY
-                        else:
-                            days_passed = int(hours_passed / 24)
-                            reminder_message = self.messages.PLAN_APPROVAL_REMINDER_DAYS.format(days=days_passed)
+                    # Создаем контекст с необходимой информацией
+                    context = {
+                        "days": int(hours_passed / 24) if hours_passed >= 24 else None
+                    }
 
-                        # Отправляем напоминание
-                        await self.message_service.send_message(
-                            phone_number,
-                            reminder_message
-                        )
-
-                        # Записываем информацию об отправленном напоминании
-                        await self.record_reminder_sent(phone_number, self.messages.REMINDER_TYPE_PLAN_APPROVAL)
-
-                        self.logger.info(f"Sent plan approval reminder to user {user_id}")
+                    await self._send_reminder(user_id, phone_number, plan_approval_strategy, lang, context)
                 except Exception as plan_error:
                     self.logger.error(f"Error processing plan approval reminder: {str(plan_error)}")
         except Exception as e:
             self.logger.error(f"Error sending plan approval reminders: {str(e)}")
 
-    async def send_tracking_reminders(self):
-        """Отправляет напоминания о трекинге с учетом времени суток"""
+    async def send_tracking_reminders(self, context: Dict[str, Any] = None):
+        """
+        Отправляет напоминания о трекинге с учетом времени суток
+
+        Args:
+            context: Контекст выполнения (время суток и т.д.)
+        """
         try:
             # Проверяем наличие tracking_service
             if not self.tracking_service:
                 self.logger.warning("Tracking service is not available for tracking reminders")
                 return
 
+            # Если контекст не передан, создаем его
+            if context is None:
+                context = self._create_time_context()
+
             # Получаем пользователей с завершенным онбордингом
             users = await self.user_repository.find_with_completed_onboarding()
 
-            # Текущее время и дата
-            now = datetime.now(pytz.timezone(settings.TIMEZONE))
-            today = now.date()
-            current_hour = now.hour
-
-            # Определяем время суток
-            is_morning = 5 <= current_hour < 11  # 5:00 - 10:59
-            is_afternoon = 11 <= current_hour < 16  # 11:00 - 15:59
-            is_evening = 16 <= current_hour < 23  # 16:00 - 22:59
+            # Получаем все стратегии напоминаний (кроме онбординга и согласования плана)
+            reminder_strategies = [
+                strategy for strategy in self.reminder_strategies
+                if not isinstance(strategy, PlanApprovalReminderStrategy)  # Исключаем напоминания о согласовании плана
+            ]
 
             for user in users:
                 try:
@@ -253,73 +266,30 @@ class ReminderService:
                     if not phone_number:
                         continue
 
+                    # Получаем язык пользователя
+                    lang = await self.localization_service.get_user_language(user_id)
+
                     # Получаем данные трекинга на сегодня
                     tracking_status = await self.tracking_service.get_daily_status(user_id)
 
                     if not tracking_status:
                         continue
 
-                    # Напоминание о весе по утрам
-                    if is_morning and not tracking_status.weight_recorded:
-                        if await self.can_send_reminder(phone_number, self.messages.REMINDER_TYPE_WEIGHT,
-                                                        86400):  # 24 часа
-                            await self.message_service.send_message(
-                                phone_number,
-                                self.messages.WEIGHT_REMINDER
-                            )
-                            await self.record_reminder_sent(phone_number, self.messages.REMINDER_TYPE_WEIGHT)
+                    # Конвертируем объект статуса в словарь для упрощения обработки
+                    tracking_data = {
+                        "weight_recorded": tracking_status.weight_recorded,
+                        "current_water_intake": tracking_status.current_water_intake,
+                        "water_goal": tracking_status.water_goal,
+                        "water_percentage": tracking_status.water_percentage,
+                        "meal_compliance": tracking_status.meal_compliance,
+                        "overall_compliance_score": tracking_status.overall_compliance_score
+                    }
 
-                    # Напоминание о воде
-                    if tracking_status.water_percentage < 50:
-                        if await self.can_send_reminder(phone_number, self.messages.REMINDER_TYPE_WATER,
-                                                        21600):  # 6 часов
-                            await self.message_service.send_message(
-                                phone_number,
-                                self.messages.WATER_REMINDER.format(
-                                    percentage=tracking_status.water_percentage
-                                )
-                            )
-                            await self.record_reminder_sent(phone_number, self.messages.REMINDER_TYPE_WATER)
-
-                    # Напоминания о приемах пищи
-                    meal_compliance = tracking_status.meal_compliance
-
-                    # Завтрак (утро)
-                    if is_morning and "breakfast" not in meal_compliance:
-                        if await self.can_send_reminder(phone_number, self.messages.REMINDER_TYPE_BREAKFAST, 86400):
-                            await self.message_service.send_message(
-                                phone_number,
-                                self.messages.BREAKFAST_REMINDER
-                            )
-                            await self.record_reminder_sent(phone_number, self.messages.REMINDER_TYPE_BREAKFAST)
-
-                    # Обед (день)
-                    if is_afternoon and "lunch" not in meal_compliance:
-                        if await self.can_send_reminder(phone_number, self.messages.REMINDER_TYPE_LUNCH, 86400):
-                            await self.message_service.send_message(
-                                phone_number,
-                                self.messages.LUNCH_REMINDER
-                            )
-                            await self.record_reminder_sent(phone_number, self.messages.REMINDER_TYPE_LUNCH)
-
-                    # Ужин (вечер)
-                    if is_evening and "dinner" not in meal_compliance:
-                        if await self.can_send_reminder(phone_number, self.messages.REMINDER_TYPE_DINNER, 86400):
-                            await self.message_service.send_message(
-                                phone_number,
-                                self.messages.DINNER_REMINDER
-                            )
-                            await self.record_reminder_sent(phone_number, self.messages.REMINDER_TYPE_DINNER)
-
-                    # Еженедельный отчет по воскресеньям
-                    if today.weekday() == 6 and is_evening:  # Воскресенье вечером
-                        if await self.can_send_reminder(phone_number, self.messages.REMINDER_TYPE_WEEKLY_REPORT,
-                                                        604800):  # 7 дней
-                            # Генерируем еженедельный отчет
-                            report = await self.tracking_service.generate_weekly_report(user_id)
-                            if report:
-                                await self.message_service.send_message(phone_number, report)
-                                await self.record_reminder_sent(phone_number, self.messages.REMINDER_TYPE_WEEKLY_REPORT)
+                    for strategy in reminder_strategies:
+                        # Проверяем, нужно ли отправлять напоминание согласно стратегии
+                        if await strategy.should_send(user, tracking_data, context):
+                            # Отправляем напоминание с использованием вспомогательного метода
+                            await self._send_reminder(user_id, phone_number, strategy, lang, context)
                 except Exception as user_error:
                     self.logger.error(
                         f"Error processing tracking reminders for user {user.get('id')}: {str(user_error)}"
@@ -400,3 +370,106 @@ class ReminderService:
 
         # Общее сообщение по умолчанию
         return greeting + self.get_localized_message(LK.Reminders.Onboarding.DEFAULT, lang)
+
+    def _get_reminder_strategy(self, reminder_type: str) -> Optional[ReminderStrategy]:
+        """
+        Возвращает стратегию напоминания по типу
+
+        Args:
+            reminder_type: Тип напоминания
+
+        Returns:
+            Optional[ReminderStrategy]: Стратегия напоминания или None
+        """
+        for strategy in self.reminder_strategies:
+            if strategy.get_reminder_type() == reminder_type:
+                return strategy
+        return None
+
+    async def _send_reminder(self, user_id: str, phone_number: str, strategy: ReminderStrategy,
+                             lang: str = None, context: Dict[str, Any] = None) -> bool:
+        """
+        Отправляет напоминание с использованием стратегии
+
+        Args:
+            user_id: ID пользователя
+            phone_number: Номер телефона пользователя
+            strategy: Стратегия напоминания
+            lang: Код языка
+            context: Дополнительный контекст
+
+        Returns:
+            bool: Успешность отправки
+        """
+        try:
+            # Получаем константу для типа напоминания
+            reminder_type = self.get_localized_message(strategy.get_reminder_type(), lang)
+
+            # Проверяем, можно ли отправить напоминание
+            if not await self.can_send_reminder(phone_number, reminder_type, strategy.get_interval_seconds()):
+                return False
+
+            # Получаем ключ сообщения
+            message_key = strategy.get_message_key()
+
+            # Для еженедельного отчета формируем сообщение через сервис трекинга
+            if message_key is None and reminder_type == self.get_localized_message(
+                    LK.Reminders.REMINDER_TYPE_WEEKLY_REPORT, lang):
+                message = await self.tracking_service.generate_weekly_report(user_id)
+            else:
+                # Передаем дополнительные параметры из контекста (например, дни для LK.Reminders.PLAN_APPROVAL_REMINDER_DAYS)
+                params = {}
+                if context:
+                    params.update({k: v for k, v in context.items() if k in ["days"]})
+
+                message = self.get_localized_message(message_key, lang, **params)
+
+            # Отправляем напоминание
+            if message:
+                reminder_context = {
+                    "reminder_type": reminder_type,
+                    **(context or {})
+                }
+
+                await self.message_service.send_message(
+                    phone_number,
+                    message,
+                    reminder_context
+                )
+
+                # Записываем информацию об отправленном напоминании
+                await self.record_reminder_sent(phone_number, reminder_type)
+
+                self.logger.info(f"Sent {reminder_type} reminder to user {user_id}")
+                return True
+
+            return False
+        except Exception as e:
+            self.logger.error(f"Error sending reminder: {str(e)}")
+            return False
+
+    def _create_time_context(self, now: datetime = None) -> Dict[str, Any]:
+        """
+        Создает контекст времени суток для напоминаний
+
+        Args:
+            now: Текущее время (если None, используется текущее время системы)
+
+        Returns:
+            Dict[str, Any]: Контекст времени суток
+        """
+        if now is None:
+            now = datetime.now(pytz.timezone(settings.TIMEZONE))
+
+        current_hour = now.hour
+        today = now.date()
+
+        return {
+            "is_morning": 5 <= current_hour < 11,  # 5:00 - 10:59
+            "is_afternoon": 11 <= current_hour < 16,  # 11:00 - 15:59
+            "is_evening": 16 <= current_hour < 23,  # 16:00 - 22:59
+            "is_night": 23 <= current_hour or current_hour < 5,  # 23:00 - 4:59
+            "is_sunday": today.weekday() == 6,  # Воскресенье
+            "current_hour": current_hour,
+            "today": today
+        }

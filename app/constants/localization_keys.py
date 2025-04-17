@@ -381,6 +381,8 @@ class LocalizationKeys:
     class Reminders:
         """Ключи для напоминаний"""
         GREETING = "reminders.greeting"
+
+        # Типы напоминаний
         REMINDER_TYPE_ONBOARDING = "reminders.type.onboarding"
         REMINDER_TYPE_WEIGHT = "reminders.type.weight"
         REMINDER_TYPE_WATER = "reminders.type.water"
@@ -390,12 +392,14 @@ class LocalizationKeys:
         REMINDER_TYPE_WEEKLY_REPORT = "reminders.type.weekly_report"
         REMINDER_TYPE_PLAN_APPROVAL = "reminders.type.plan_approval"
 
+        # Напоминания
         WEIGHT_REMINDER = "reminders.weight"
         WATER_REMINDER = "reminders.water"
         BREAKFAST_REMINDER = "reminders.breakfast"
         LUNCH_REMINDER = "reminders.lunch"
         DINNER_REMINDER = "reminders.dinner"
 
+        # Напоминания согласования плана
         PLAN_APPROVAL_REMINDER_INITIAL = "reminders.plan_approval.initial"
         PLAN_APPROVAL_REMINDER_SAME_DAY = "reminders.plan_approval.same_day"
         PLAN_APPROVAL_REMINDER_DAYS = "reminders.plan_approval.days"
