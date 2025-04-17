@@ -1,6 +1,6 @@
 import os
 import json
-from typing import Dict, Any
+from typing import Dict
 from pydantic import BaseSettings
 from dotenv import load_dotenv
 
@@ -12,6 +12,18 @@ class Settings(BaseSettings):
     APP_NAME: str = "GuateFit"
     APP_VERSION: str = "0.1.0"
     DEBUG: bool = os.getenv("DEBUG", "False").lower() == "true"
+
+    # PostgreSQL настройки
+    POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
+    POSTGRES_PORT = int(os.getenv("POSTGRES_PORT", "5432"))
+    POSTGRES_USER = os.getenv("POSTGRES_USER", "guatefit")
+    POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "guatefit_password")
+    POSTGRES_DATABASE = os.getenv("POSTGRES_DB", "guatefit")
+    POSTGRES_MIN_CONN = int(os.getenv("POSTGRES_MIN_CONN", "5"))
+    POSTGRES_MAX_CONN = int(os.getenv("POSTGRES_MAX_CONN", "20"))
+
+    # Выбор движка БД по умолчанию: firebase или postgres
+    DB_ENGINE = os.getenv("DB_ENGINE", "firebase")
 
     # Настройки Firebase
     FIREBASE_CREDENTIALS: str = os.getenv("FIREBASE_CREDENTIALS", "")

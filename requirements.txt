@@ -8,6 +8,9 @@ email-validator>=2.0.0  # Для валидации электронной по�
 # Firebase
 firebase-admin>=6.1.0
 
+# PostgreSQL
+asyncpg==0.27.0
+
 # OpenAI
 openai>=1.0.0
 

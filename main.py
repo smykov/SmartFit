@@ -1,7 +1,10 @@
 import logging
+import os
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from app.db.postgres import PostgresClient
 
 from app.api.router import api_router
 from app.di.container import container
@@ -44,6 +47,7 @@ app.container = container
 # Подключение API роутеров
 app.include_router(api_router)
 
+
 # Обработка исключений
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -53,6 +57,7 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"message": "Произошла внутренняя ошибка сервера"},
     )
 
+
 @app.get("/")
 async def root():
     return {
@@ -61,13 +66,23 @@ async def root():
         "status": "running"
     }
 
+
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
 
+
 # Код для запуска инициализации при старте приложения
 @app.on_event("startup")
 async def startup_event():
+    """Действия при запуске приложения"""
+
+    # Проверяем, используется ли PostgreSQL
+    if os.getenv("DB_ENGINE", settings.DB_ENGINE) == "postgres":
+        # Инициализируем PostgreSQL клиент
+        postgres_client = container.postgres_client()
+        await postgres_client.initialize()
+
     # Проверка необходимых переменных окружения
     required_env_vars = ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"]
     missing_vars = [var for var in required_env_vars if not getattr(settings, var, None)]
@@ -103,8 +118,23 @@ async def startup_event():
     await whatsapp_service.initialize()
     logger.info("WhatsApp service initialized")
 
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Действия при остановке приложения"""
+    # Проверяем, используется ли PostgreSQL
+    if os.getenv("DB_ENGINE", settings.DB_ENGINE) == "postgres":
+        # Закрываем соединения с PostgreSQL
+        postgres_client = container.postgres_client()
+        if postgres_client:
+            await postgres_client.close()
+
+
+app.add_event_handler("startup", startup_event)
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
