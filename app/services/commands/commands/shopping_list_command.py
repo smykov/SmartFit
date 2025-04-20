@@ -76,11 +76,11 @@ class ShoppingListCommand(BaseCommand):
             )
 
             # Генерируем список покупок
-            shopping_list = await self.dependencies['diet_service'].generate_shopping_list(diet_plan["id"])
+            shopping_list = await self.dependencies['diet_service'].generate_shopping_list(diet_plan["id"], lang)
 
             if shopping_list and "error" not in shopping_list:
                 # Форматируем список покупок
-                formatted_list = self.dependencies['diet_service'].format_shopping_list(shopping_list)
+                formatted_list = self.dependencies['diet_service'].format_shopping_list(shopping_list, lang)
 
                 return {
                     "success": True,

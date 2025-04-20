@@ -116,7 +116,7 @@ class DietPlanManager(BaseDietService):
                 short_plan["daily_plans"] = {}
 
             # Сохраняем план в базу данных
-            plan_id = self.diet_plan_repository.create(short_plan)
+            plan_id = await self.diet_plan_repository.create(short_plan)
             if not plan_id:
                 self.logger.error("Failed to save short diet plan to database")
                 return None
@@ -489,6 +489,7 @@ class DietPlanManager(BaseDietService):
 
             # Проверяем структуру ответа
             if "updated_days" not in updates:
+                self.logger.error(f"updated_days not found in response LLM: {response}")
                 return {"error": self.get_localized_message(LK.Diet.Update.INVALID_FORMAT, lang)}
 
             # Обновляем план
@@ -610,7 +611,7 @@ class DietPlanManager(BaseDietService):
 
             pending_plans = [
                 plan for plan in diet_plans
-                if plan.get("user_id") == "user_id" and plan.get("version") == "short"
+                if plan.get("user_id") == user_id and plan.get("version") == "short" and plan.get("status") == "pending"
             ]
 
             if not pending_plans:

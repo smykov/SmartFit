@@ -518,7 +518,7 @@ class MessageProcessorService:
         phone_number = user["phone_number"]
 
         # Получаем ответ от ИИ через сервис диет
-        response = await self.diet_service.answer_nutrition_question(user_id, message_text)
+        response = await self.diet_service.answer_nutrition_question(user_id, message_text, user["language"])
 
         context = {
             "message_type": "ai_response",

@@ -11,7 +11,7 @@ from app.db.interfaces.water_entry_repository_interface import IWaterEntryReposi
 from app.db.interfaces.compliance_repository_interface import IComplianceRepository
 from app.models.tracking import (
     DailyTrackingStatus,
-    WeightGoalProgress
+    WeightGoalProgress, MealComplianceStatus
 )
 from app.services.tracking.tracking_service_interface import ITrackingService
 from app.services.localization.localization_interface import ILocalizationService
@@ -109,7 +109,7 @@ class TrackingService(ITrackingService):
             user_id: str,
             date_val: date,
             meal_type: str,
-            status: str,
+            status: MealComplianceStatus,
             notes: str = None,
             alternative_meal: str = None
     ) -> bool:
@@ -128,13 +128,17 @@ class TrackingService(ITrackingService):
             bool: Результат операции
         """
         try:
-            # Используем репозиторий соблюдения плана
+            # Записываем соблюдение режима питания
             compliance_id = await self.compliance_repository.add_meal_compliance(
                 user_id, date_val, meal_type, status, notes, alternative_meal
             )
+
+            # Обновляем общую статистику соблюдения плана питания за день
+            await self.compliance_repository.update_daily_compliance(user_id, date_val)
+
             return compliance_id is not None
         except Exception as e:
-            logger.error(f"Error recording meal compliance: {str(e)}")
+            self.logger.error(f"Error recording meal compliance: {str(e)}")
             return False
 
     async def calculate_weight_progress(self, user_id: str) -> Optional[WeightGoalProgress]:

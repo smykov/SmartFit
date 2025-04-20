@@ -42,7 +42,7 @@ class FirebaseDietPlanRepository(IDietPlanRepository):
                 diet_plan_data['created_at'] = now
             diet_plan_data['updated_at'] = now
 
-            plan_id = self.firebase_client.add_document("diet_plans", diet_plan_data)
+            plan_id = await self.firebase_client.add_document("diet_plans", diet_plan_data)
 
             if not plan_id:
                 logger.error("Failed to create diet plan")
@@ -64,7 +64,7 @@ class FirebaseDietPlanRepository(IDietPlanRepository):
             Optional[Dict[str, Any]]: Данные плана диеты или None, если план не найден
         """
         try:
-            plan = self.firebase_client.get_document("diet_plans", plan_id)
+            plan = await self.firebase_client.get_document("diet_plans", plan_id)
             return plan
         except Exception as e:
             logger.error(f"Error getting diet plan by ID: {str(e)}")
@@ -85,7 +85,7 @@ class FirebaseDietPlanRepository(IDietPlanRepository):
             # Добавляем timestamp обновления
             update_data['updated_at'] = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
 
-            result = self.firebase_client.update_document("diet_plans", plan_id, update_data)
+            result = await self.firebase_client.update_document("diet_plans", plan_id, update_data)
             return result
         except Exception as e:
             logger.error(f"Error updating diet plan: {str(e)}")
@@ -102,7 +102,7 @@ class FirebaseDietPlanRepository(IDietPlanRepository):
             bool: Результат удаления
         """
         try:
-            result = self.firebase_client.delete_document("diet_plans", plan_id)
+            result = await self.firebase_client.delete_document("diet_plans", plan_id)
             return result
         except Exception as e:
             logger.error(f"Error deleting diet plan: {str(e)}")
@@ -120,7 +120,7 @@ class FirebaseDietPlanRepository(IDietPlanRepository):
         """
         try:
             # Получаем все планы пользователя
-            diet_plans = self.firebase_client.query_documents("diet_plans", "user_id", "==", user_id)
+            diet_plans = await self.firebase_client.query_documents("diet_plans", "user_id", "==", user_id)
 
             if not diet_plans:
                 return None
@@ -165,7 +165,7 @@ class FirebaseDietPlanRepository(IDietPlanRepository):
             List[Dict[str, Any]]: Список планов пользователя
         """
         try:
-            pending_plans = self.firebase_client.query_documents("diet_plans", "user_id", "==", user_id)
+            pending_plans =await self.firebase_client.query_documents("diet_plans", "user_id", "==", user_id)
             return pending_plans
         except Exception as e:
             logger.error(f"Error getting user plans: {str(e)}")
@@ -201,7 +201,7 @@ class FirebaseDietPlanRepository(IDietPlanRepository):
             plan["updated_at"] = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
 
             # Сохраняем обновленный план
-            result = self.firebase_client.update_document(
+            result = await self.firebase_client.update_document(
                 "diet_plans",
                 plan_id,
                 {
@@ -227,7 +227,7 @@ class FirebaseDietPlanRepository(IDietPlanRepository):
             List[Dict[str, Any]]: Список планов с указанным статусом
         """
         try:
-            return self.firebase_client.query_documents("diet_plans", "status", "==", status)
+            return await self.firebase_client.query_documents("diet_plans", "status", "==", status)
         except Exception as e:
             logger.error(f"Error finding diet plans by status: {str(e)}")
             return []

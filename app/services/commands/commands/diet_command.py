@@ -70,7 +70,7 @@ class DietCommand(BaseCommand):
 
             if diet_plan.get('version') == "short" and diet_plan.get('status') == "pending":
                 # Отправляем сводку плана для согласования
-                summary = await self.diet_service.get_short_diet_summary(diet_plan, lang)
+                summary = self.diet_service.get_short_diet_summary(diet_plan, lang)
                 await self.message_service.send_message(
                     phone_number,
                     summary

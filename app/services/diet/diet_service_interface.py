@@ -22,6 +22,33 @@ class IDietService(ABC):
         pass
 
     @abstractmethod
+    def get_short_diet_summary(self, diet_plan: Dict[str, Any], lang: str) -> str:
+        """
+        Создает сводку плана диеты и сообщение с командами
+
+        Args:
+            diet_plan: План диеты
+            lang: Код языка (по умолчанию используется системный язык)
+
+        Returns:
+            Tuple[str, str]: (сводка плана, команды для взаимодействия)
+        """
+        pass
+
+    @abstractmethod
+    def get_short_diet_next_steps(self, lang: Optional[str] = None) -> str:
+        """
+        Создает сообщение о следующих шагах после создания краткого плана диеты
+
+        Args:
+            lang: Код языка
+
+        Returns:
+            str: Информация о следующих шагах
+        """
+        pass
+
+    @abstractmethod
     async def generate_full_diet_plan(self, short_plan_id: str) -> Optional[Dict[str, Any]]:
         """
         Генерирует полную версию плана диеты
@@ -31,6 +58,19 @@ class IDietService(ABC):
 
         Returns:
             Optional[Dict[str, Any]]: Полный план диеты или None
+        """
+        pass
+
+    @abstractmethod
+    def get_diet_tracking_info_message(self, lang: Optional[str] = None) -> str:
+        """
+        Создает сообщение с информацией о командах трекинга диеты
+
+        Args:
+            lang: Код языка
+
+        Returns:
+            str: Сообщение с информацией по трекингу
         """
         pass
 
@@ -103,13 +143,13 @@ class IDietService(ABC):
         pass
 
     @abstractmethod
-    async def generate_shopping_list(self, diet_plan_id: str) -> Dict[str, Any]:
+    async def generate_shopping_list(self, diet_plan_id: str, lang: Optional[str]) -> Dict[str, Any]:
         """
         Создает список покупок на основе плана диеты
 
         Args:
             diet_plan_id: ID плана диеты
-
+            lang: язык пользователя
         Returns:
             Dict[str, Any]: Список покупок
         """
@@ -130,13 +170,14 @@ class IDietService(ABC):
         pass
 
     @abstractmethod
-    async def answer_nutrition_question(self, user_id: str, question: str) -> str:
+    async def answer_nutrition_question(self, user_id: str, question: str, lang: Optional[str]) -> str:
         """
         Отвечает на вопрос пользователя о питании
 
         Args:
             user_id: ID пользователя
             question: Вопрос о питании
+            lang: Язык пользователя
 
         Returns:
             str: Ответ на вопрос
