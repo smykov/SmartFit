@@ -1,0 +1,18 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Установка переменных окружения
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
+
+# Установка зависимостей для тестирования
+COPY requirements.txt requirements-dev.txt ./
+RUN pip install --no-cache-dir -r requirements.txt -r requirements-dev.txt
+
+# Копирование исходного кода и тестов
+COPY . .
+
+# Команда по умолчанию (будет переопределена в docker-compose)
+CMD ["pytest", "-xvs"]

@@ -1,4 +1,7 @@
 /.venv/
 /.env
+/.env.test
 /firebase-credentials.json
 /.idea
+/.coverage
+/coverage.xml
