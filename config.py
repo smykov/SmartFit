@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     WHATSAPP_MAX_MESSAGE_SIZE: int = 1500
     WHATSAPP_MAX_MESSAGE_AGE_HOURS: int = 72  # 3 дня
 
+    # Настройки Telegram
+    TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    TELEGRAM_RETRY_INTERVAL_SECONDS = int(os.getenv("TELEGRAM_RETRY_INTERVAL_SECONDS", "300"))
+    TELEGRAM_MAX_MESSAGE_SIZE = int(os.getenv("TELEGRAM_MAX_MESSAGE_SIZE", "4000"))
+    TELEGRAM_MAX_MESSAGE_AGE_HOURS = int(os.getenv("TELEGRAM_MAX_MESSAGE_AGE_HOURS", "72"))
     # Временная зона для Гватемалы
     TIMEZONE: str = "America/Guatemala"
 

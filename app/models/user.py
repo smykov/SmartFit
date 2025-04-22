@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 
 import pytz
 from pydantic import BaseModel, Field, EmailStr, validator
@@ -65,6 +65,9 @@ class UserBase(BaseModel):
     disliked_products: Optional[List[str]] = []
     local_cuisine_preference: Optional[bool] = True
 
+    # Поле для предпочитаемого мессенджера
+    preferred_messenger: Optional[str] = "telegram"  # По умолчанию telegram
+
     @validator('age')
     def validate_age(cls, v):
         if v is not None and (v < 18 or v > 100):
@@ -124,6 +127,13 @@ class UserInDB(UserBase):
     # Метаданные
     last_interaction: Optional[datetime] = None
     registration_source: str = "whatsapp"
+
+    # Список всех связанных идентификаторов пользователя в разных мессенджерах
+    messenger_accounts: Dict[str, str] = {}  # тип мессенджера: идентификатор
+
+    # Предыдущее взаимодействие пользователя
+    last_interaction_messenger: str = "whatsapp"  # мессенджер последнего взаимодействия
+    last_conversation_context: Optional[Dict[str, Any]] = None  # контекст последнего разговора
 
     class Config:
         orm_mode = True

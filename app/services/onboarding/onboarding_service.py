@@ -75,12 +75,13 @@ class OnboardingService(IOnboardingService):
         self.localization_service = localization_service
         self.logger = logging.getLogger(self.__class__.__name__)
 
-    async def start_registration(self, phone_number: str) -> Dict[str, Any]:
+    async def start_registration(self, phone_number: str, messenger_type: str = "whatsapp") -> Dict[str, Any]:
         """
         Начинает процесс регистрации нового пользователя
 
         Args:
             phone_number: Номер телефона пользователя
+            messenger_type: Мессенджер
 
         Returns:
             Dict[str, Any]: Результат обработки
@@ -92,8 +93,8 @@ class OnboardingService(IOnboardingService):
                 "name": "",
                 "is_onboarding_completed": False,
                 "onboarding_step": self.STEP_WELCOME,
-                # TODO сохранять реально источник
-                "registration_source": "whatsapp"
+                "registration_source": messenger_type,
+                "preferred_messenger": messenger_type
             }
 
             # Сохраняем в базу данных
@@ -141,7 +142,7 @@ class OnboardingService(IOnboardingService):
             self.logger.info(f"Processing onboarding step: '{current_step}'")
 
             # Определяем следующий шаг
-            next_step = self.get_next_onboarding_step(current_step)
+            next_step = await self.get_next_onboarding_step(current_step)
 
             # Обрабатываем текущий шаг и обновляем данные пользователя
             update_data = self._process_step(current_step, message_text)
@@ -179,7 +180,7 @@ class OnboardingService(IOnboardingService):
 
                 # Пропускаем шаг запроса цели по весу
                 if next_step == self.STEP_WEIGHT_GOAL:
-                    next_step = self.get_next_onboarding_step(next_step)
+                    next_step = await self.get_next_onboarding_step(next_step)
 
             # Обновляем данные пользователя
             update_data["onboarding_step"] = next_step
@@ -317,7 +318,7 @@ class OnboardingService(IOnboardingService):
             return None
 
     # Методы обработки шагов онбординга...
-    def _process_welcome(self) -> Optional[Dict[str, Any]]:
+    def _process_welcome(self, message_text: str) -> Optional[Dict[str, Any]]:
         """Обработка приветствия"""
         return {"onboarding_step": self.STEP_NAME}
 
@@ -584,10 +585,17 @@ class OnboardingService(IOnboardingService):
         # Получаем ключ для шага
         key = step_keys.get(step)
         if not key:
+            self.logger.error(f"No localization key found for step '{step}'")
             return f"Step {step}"
+
+        self.logger.debug(f"Getting localized message for key '{key}' with lang '{lang}'")
 
         # Получаем сообщение для шага
         message = self.localization_service.get_message(key, lang)
+
+        # Проверяем, не вернулся ли ключ вместо текста (признак ошибки)
+        if message == key:
+            self.logger.error(f"Localization failed for key '{key}', returned key itself")
 
         # Получаем пример для шага, если есть
         example_key = f"{key}Example"
@@ -597,6 +605,7 @@ class OnboardingService(IOnboardingService):
                 message += f"\n\n{example}"
         except:
             # Если примера нет, игнорируем
+            self.logger.debug(f"No example found for key '{example_key}': {str(e)}")
             pass
 
         return message

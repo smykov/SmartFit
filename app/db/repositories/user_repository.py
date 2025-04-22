@@ -81,6 +81,25 @@ class FirebaseUserRepository(IUserRepository):
             logger.error(f"Error retrieving user by phone: {str(e)}")
             return None
 
+    async def get_by_chat_id(self, chat_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Получает пользователя по номеру телефона
+
+        Args:
+            chat_id: Номер телефона пользователя
+
+        Returns:
+            Optional[Dict[str, Any]]: Данные пользователя или None, если пользователь не найден
+        """
+        try:
+            users = self.firebase_client.query_documents("users", "chat_id", "==", chat_id)
+            if not users:
+                return None
+            return users[0]
+        except Exception as e:
+            logger.error(f"Error retrieving user by phone: {str(e)}")
+            return None
+
     async def update(self, user_id: str, update_data: Dict[str, Any]) -> bool:
         """
         Обновляет данные пользователя
@@ -140,3 +159,31 @@ class FirebaseUserRepository(IUserRepository):
         except Exception as e:
             logger.error(f"Error finding users with completed onboarding: {str(e)}")
             return []
+
+
+    async def find_by_messenger_account(self, messenger_type: str,
+                                        messenger_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Находит пользователя по аккаунту мессенджера
+
+        Args:
+            messenger_type: Тип мессенджера
+            messenger_id: ID в мессенджере
+
+        Returns:
+            Optional[Dict[str, Any]]: Данные пользователя или None
+        """
+        try:
+            # Создаем путь к вложенному полю
+            field_path = f"messenger_accounts.{messenger_type}"
+
+            # Выполняем запрос к Firebase
+            users = self.firebase_client.query_documents("users", field_path, "==", messenger_id)
+
+            if not users:
+                return None
+
+            return users[0]
+        except Exception as e:
+            self.logger.error(f"Error finding user by messenger account: {str(e)}")
+            return None

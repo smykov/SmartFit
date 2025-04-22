@@ -1,4 +1,5 @@
 from app.localization.base import LocalizationString, LocalizationModule
+from app.localization.base import LocalizationString, LocalizationModule
 
 # Общие строки
 strings = {

@@ -1,21 +1,22 @@
+# app/services/messaging/message_processor_service.py
 import logging
 import re
 from datetime import datetime
 from enum import Enum
-from time import sleep
 from typing import Dict, Any, Optional, Tuple
 
 import pytz
-from app.db.interfaces.message_repository_interface import IMessageRepository
-from app.services.diet.diet_service_interface import IDietService
-from app.services.localization.localization_interface import ILocalizationService
 from app.constants.localization_keys import LocalizationKeys as LK
-from app.services.onboarding.onboarding_service_interface import IOnboardingService
-from app.services.tracking.tracking_service_interface import ITrackingService
-
+from app.services.messaging.messenger_registry import MessengerRegistry
+from app.services.user.user_identity_service import UserIdentityService
+from app.db.interfaces.message_repository_interface import IMessageRepository
 from app.db.interfaces.user_repository_interface import IUserRepository
+from app.services.onboarding.onboarding_service_interface import IOnboardingService
+from app.services.localization.localization_interface import ILocalizationService
 from app.services.commands.command_factory import CommandFactory
 from app.services.messaging.message_interface import IMessageService
+from app.services.tracking.tracking_service_interface import ITrackingService
+from app.services.diet.diet_service_interface import IDietService
 from config import settings
 
 
@@ -42,12 +43,13 @@ class ProcessingStrategy(str, Enum):
 
 class MessageProcessorService:
     """
-    Сервис для обработки входящих сообщений, определения их типа и делегирования обработки
-    соответствующим компонентам системы.
+    Сервис для обработки входящих сообщений из разных мессенджеров
     """
 
     def __init__(
             self,
+            messenger_registry: MessengerRegistry,
+            user_identity_service: UserIdentityService,
             user_repository: IUserRepository,
             message_repository: IMessageRepository,
             message_service: IMessageService,
@@ -70,11 +72,13 @@ class MessageProcessorService:
         command_factory: Фабрика команд для обработки команд пользователя
         localization_service: Сервис локализации для сообщений
         """
+        self.messenger_registry = messenger_registry
+        self.user_identity_service = user_identity_service
         self.user_repository = user_repository
+        self.onboarding_service = onboarding_service
+        self.localization_service = localization_service
         self.message_repository = message_repository
         self.message_service = message_service
-        self.localization_service = localization_service
-        self.onboarding_service = onboarding_service
         self.diet_service = diet_service
         self.tracking_service = tracking_service
         self.command_factory = command_factory
@@ -119,22 +123,41 @@ class MessageProcessorService:
             return self.localization_service.get_message(key, lang, **params)
         return key
 
-    async def process_incoming_message(self, body: Dict[str, Any]) -> Dict[str, Any]:
+    async def process_incoming_message(self, data: Dict[str, Any],
+                                       messenger_type: str) -> Dict[str, Any]:
         """
-        Обрабатывает входящее сообщение из WhatsApp
+        Универсальный метод обработки входящих сообщений
 
         Args:
-            body: Данные входящего сообщения
+            data: Данные сообщения
+            messenger_type: Тип мессенджера
 
         Returns:
             Dict[str, Any]: Результат обработки
         """
         try:
-            # Извлекаем данные сообщения
-            phone_number, message_text, message_type, message_id = self._extract_message_data(body)
+            # Получаем мессенджер из реестра
+            messenger = self.messenger_registry.get_messenger(messenger_type)
+            if not messenger:
+                self.logger.error(f"Messenger '{messenger_type}' not found")
+                return {"success": False, "error": self.get_localized_message(LK.Messaging.ERROR)}
 
-            if not phone_number or not message_text:
-                self.logger.error("Не удалось извлечь номер телефона или текст сообщения")
+            # Парсим данные сообщения через мессенджер
+            parsed_message = messenger.parse_incoming_message(data)
+            if not parsed_message:
+                self.logger.error("Failed to parse message")
+                return {"success": False, "error": self.get_localized_message(LK.Messaging.ERROR)}
+
+            # Извлекаем необходимые данные
+            sender_id = parsed_message.get("sender_id")
+            message_text = parsed_message.get("message_text")
+            message_type = parsed_message.get("message_type", "text")
+            message_id = parsed_message.get("message_id")
+            lang = parsed_message.get("language_code", "en")
+            # TODO проверка на доступные языки и сообщать какие поддерживаемые
+
+            if not sender_id or not message_text:
+                self.logger.error("Missing required message data")
                 return {"success": False, "error": self.get_localized_message(LK.Messaging.INVALID_MESSAGE_FORMAT)}
 
             # Проверяем, обрабатывалось ли это сообщение ранее
@@ -142,44 +165,70 @@ class MessageProcessorService:
                 self.logger.info(f"Сообщение {message_id} уже обработано")
                 return {"success": True, "action": "already_processed"}
 
-            # Получаем пользователя по номеру телефона
-            user = await self.user_repository.get_by_phone(phone_number)
+            # Получаем пользователя
+            # Сначала ищем через сервис управления идентичностью
+            user = await self.user_identity_service.get_user_by_messenger_id(messenger_type, sender_id)
 
-            # Например, заменяем в блоке if not user:
+            # Если пользователь не найден, начинаем регистрацию
             if not user:
-                self.logger.info(f"Новый пользователь с номером {phone_number}. Начинаем регистрацию.")
-                # Отправляем приветственное сообщение
-                result = await self.onboarding_service.start_registration(phone_number)
-                await self._mark_message_as_processed(message_id, phone_number, message_text)
-                if result['success'] and result['user_id']:
-                    user_id = result['user_id']
-                    # Определение языка пользователя
-                    if await self.localization_service.set_user_language(user_id, "en"):
-                        # Отправляем приветственное сообщение
-                        await self.message_service.send_template_message(phone_number, LK.Onboarding.WELCOME, user_id)
-                    # Продолжаем онбординг
-                    await self.onboarding_service.continue_onboarding(user_id, message_text)
-                return result
+                self.logger.info(f"New user from {messenger_type} with ID {sender_id}")
+                return await self._handle_new_user(sender_id, message_text, message_id, messenger_type, lang)
 
-            # Обновляем время последнего взаимодействия
+            # Обновляем информацию о последнем взаимодействии
             await self.user_repository.update(user["id"], {
-                "last_interaction": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+                "last_interaction": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat(),
+                "last_interaction_messenger": messenger_type
             })
 
-            # Определяем стратегию обработки сообщения
+            # Определяем стратегию обработки сообщения (сохраняем существующую логику)
             strategy = await self._determine_processing_strategy(user, message_text)
-            self.logger.info(f"Выбрана стратегия обработки: {strategy} для пользователя {phone_number}")
+            self.logger.info(f"Выбрана стратегия обработки: {strategy} для пользователя {sender_id}")
 
             # Обрабатываем сообщение в соответствии с выбранной стратегией
             result = await self._process_with_strategy(strategy, user, message_text, message_type)
 
             # Отмечаем сообщение как обработанное
-            await self._mark_message_as_processed(message_id, phone_number, message_text)
+            await self._mark_message_as_processed(message_id, sender_id, message_text)
 
             return result
 
         except Exception as e:
-            self.logger.error(f"Error processing incoming message: {str(e)}", exc_info=True)
+            self.logger.error(f"Ошибка обработки сообщения: {str(e)}", exc_info=True)
+            return {"success": False, "error": str(e)}
+
+    async def _handle_new_user(self, sender_id: str, message_text: str, message_id: str,
+                               messenger_type: str, lang: str) -> Dict[str, Any]:
+        """Обработка сообщения от нового пользователя"""
+        try:
+            # Запускаем процесс регистрации
+            result = await self.onboarding_service.start_registration(sender_id, messenger_type)
+
+            # Отмечаем сообщение как обработанное
+            await self._mark_message_as_processed(message_id, sender_id, message_text)
+
+            if result['success'] and result['user_id']:
+                user_id = result['user_id']
+
+                # Явно устанавливаем язык при создании аккаунта
+                await self.localization_service.set_user_language(user_id, lang)
+
+                # Связываем ID мессенджера с пользователем
+                await self.user_identity_service.link_messenger_account(
+                    user_id, messenger_type, sender_id
+                )
+
+                # Отправляем приветственное сообщение
+                messenger = self.messenger_registry.get_messenger(messenger_type)
+                await messenger.send_template_message(
+                    sender_id, LK.Onboarding.WELCOME, user_id
+                )
+
+                # Продолжаем онбординг с полученным сообщением
+                await self.onboarding_service.continue_onboarding(user_id, message_text)
+
+            return result
+        except Exception as e:
+            self.logger.error(f"Ошибка при обработке нового пользователя: {str(e)}")
             return {"success": False, "error": str(e)}
 
     async def _determine_processing_strategy(self, user: Dict[str, Any], message_text: str) -> ProcessingStrategy:
@@ -295,7 +344,8 @@ class MessageProcessorService:
                 phone_number,
                 self.get_localized_message(LK.Commands.General.COMMAND_NOT_FOUND, lang)
             )
-            return {"success": False, "error": self.get_localized_message(LK.MessageProcessor.UNKNOWN_COMMAND, lang, message_text=message_text)}
+            return {"success": False, "error": self.get_localized_message(LK.MessageProcessor.UNKNOWN_COMMAND, lang,
+                                                                          message_text=message_text)}
 
         # Создаем команду через фабрику
         command = self.command_factory.create_command(command_type)
@@ -314,7 +364,8 @@ class MessageProcessorService:
             # Сообщение о невозможности выполнить команду
             error_message = command.get_error_message()
             await self.message_service.send_message(phone_number, error_message)
-            return {"success": False, "error": self.get_localized_message(LK.MessageProcessor.PREREQUISITES_NOT_MET, lang)}
+            return {"success": False,
+                    "error": self.get_localized_message(LK.MessageProcessor.PREREQUISITES_NOT_MET, lang)}
 
         # Выполняем команду
         result = await command.execute(user_id, command_params)
@@ -530,7 +581,39 @@ class MessageProcessorService:
 
         return {"success": True, "action": "ai_response_sent"}
 
-    def _extract_message_data(self, body: Dict[str, Any]) -> Tuple[
+    def _extract_telegram_message_data(self, body: Dict[str, Any]) -> Tuple[
+        Optional[str], Optional[str], Optional[str], Optional[str]]:
+        """
+        Извлекает данные из входящего сообщения Telegram
+
+        Args:
+            body: Данные сообщения
+
+        Returns:
+            Tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
+            (ID чата, текст сообщения, тип сообщения, ID сообщения)
+        """
+        try:
+            if 'message' not in body:
+                return None, None, None, None
+
+            message = body['message']
+            chat_id = str(message.get('chat', {}).get('id', ''))
+            message_text = message.get('text', '')
+            message_type = MessageType.TEXT  # По умолчанию текстовое сообщение
+            message_id = str(message.get('message_id', ''))
+
+            # Проверяем, есть ли фото или другие типы сообщений
+            if 'photo' in message:
+                message_type = MessageType.MEDIA
+
+            return chat_id, message_text, message_type, message_id
+
+        except Exception as e:
+            self.logger.error(f"Error when extracting Telegram message data: {str(e)}")
+            return None, None, None, None
+
+    def _extract_whatsapp_message_data(self, body: Dict[str, Any]) -> Tuple[
         Optional[str], Optional[str], Optional[str], Optional[str]]:
         """
         Извлекает данные из входящего сообщения WhatsApp
@@ -570,18 +653,18 @@ class MessageProcessorService:
         """
         return await self.message_repository.is_processed(message_id)
 
-    async def _mark_message_as_processed(self, message_id: str, phone_number: str, message_text: str) -> None:
+    async def _mark_message_as_processed(self, message_id: str, sender_id: str, message_text: str) -> None:
         """
         Отмечает сообщение как обработанное
 
         Args:
             message_id: ID сообщения
-            phone_number: Номер телефона отправителя
+            sender_id: Номер отправителя
             message_text: Текст сообщения
         """
         await self.message_repository.mark_as_processed(
             message_id,
-            phone_number,
+            sender_id,
             message_text,
             datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
         )

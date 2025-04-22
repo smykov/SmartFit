@@ -35,9 +35,16 @@ from app.services.formatter.tracking_formatter_service import TrackingFormatterS
 from app.services.llm.llm_factory import LLMFactory
 from app.services.diet.diet_service import DietService
 from app.services.localization.localization_service import LocalizationService
+from app.services.messaging.clients.telegram_client import TelegramClient
 from app.services.messaging.clients.twilio_whatsapp_client import TwilioWhatsAppClient
+from app.services.messaging.messenger_registry import MessengerRegistry
+from app.services.messaging.messenger_service import MessengerService
+from app.services.messaging.messengers.telegram_messenger import TelegramMessenger
+from app.services.messaging.messengers.whatsapp_messenger import WhatsAppMessenger
+from app.services.messaging.telegram_service import TelegramService
 from app.services.messaging.whatsapp_service import WhatsAppService
 from app.services.tracking.tracking_service import TrackingService
+from app.services.user.user_identity_service import UserIdentityService
 from app.utils.text_splitter import TextSplitter
 from app.services.messaging.message_processor_service import MessageProcessorService
 from app.services.onboarding.onboarding_service import OnboardingService
@@ -87,7 +94,6 @@ class Container(containers.DeclarativeContainer):
         firebase=firebase_client,
         postgres=postgres_client
     )
-    # TODO Дописать для всех репозиториев
 
     diet_plan_repository = providers.Factory(
         lambda engine, firebase, postgres:
@@ -164,7 +170,13 @@ class Container(containers.DeclarativeContainer):
     )
 
     # Клиенты API
-    message_client = providers.Singleton(
+    telegram_client = providers.Singleton(
+        TelegramClient,
+        token=settings.TELEGRAM_BOT_TOKEN,
+        localization_service=localization_service
+    )
+
+    whatsapp_client = providers.Singleton(
         TwilioWhatsAppClient,
         account_sid=settings.TWILIO_ACCOUNT_SID,
         auth_token=settings.TWILIO_AUTH_TOKEN,
@@ -173,9 +185,21 @@ class Container(containers.DeclarativeContainer):
     )
 
     # Сервисы
+    telegram_service = providers.Singleton(
+        TelegramService,
+        message_client=telegram_client,
+        message_repository=message_repository,
+        localization_service=localization_service,
+        text_splitter=text_splitter,
+        bot_token=settings.TELEGRAM_BOT_TOKEN,
+        retry_interval_seconds=getattr(settings, "TELEGRAM_RETRY_INTERVAL_SECONDS", 300),
+        max_message_size=getattr(settings, "TELEGRAM_MAX_MESSAGE_SIZE", 4000),
+        max_message_age_hours=getattr(settings, "TELEGRAM_MAX_MESSAGE_AGE_HOURS", 72)
+    )
+
     whatsapp_service = providers.Singleton(
         WhatsAppService,
-        message_client=message_client,
+        message_client=whatsapp_client,
         message_repository=message_repository,
         localization_service=localization_service,
         text_splitter=text_splitter,
@@ -183,6 +207,14 @@ class Container(containers.DeclarativeContainer):
         retry_interval_seconds=getattr(settings, "WHATSAPP_RETRY_INTERVAL_SECONDS", 300),
         max_message_size=getattr(settings, "WHATSAPP_MAX_MESSAGE_SIZE", 1500),
         max_message_age_hours=getattr(settings, "WHATSAPP_MAX_MESSAGE_AGE_HOURS", 72)
+    )
+
+    # Фасадный сервис мессенджеров
+    messenger_service = providers.Singleton(
+        MessengerService,
+        whatsapp_service=whatsapp_service,
+        telegram_service=telegram_service,
+        user_repository=user_repository
     )
 
     # Сервис трекинга
@@ -199,7 +231,7 @@ class Container(containers.DeclarativeContainer):
     diet_service = providers.Singleton(
         DietService,
         user_repository=user_repository,
-        message_service=whatsapp_service,
+        message_service=messenger_service,
         localization_service=localization_service,
         diet_plan_repository=diet_plan_repository,
         product_repository=product_repository,
@@ -212,7 +244,7 @@ class Container(containers.DeclarativeContainer):
         CommandHandlerService,
         dependencies=providers.Dict({
             "user_repository": user_repository,
-            "message_service": whatsapp_service,
+            "message_service": messenger_service,
             "diet_service": diet_service,
             "tracking_service": tracking_service,
             "localization_service": localization_service,
@@ -223,7 +255,7 @@ class Container(containers.DeclarativeContainer):
     onboarding_service = providers.Singleton(
         OnboardingService,
         user_repository=user_repository,
-        message_service=whatsapp_service,
+        message_service=messenger_service,
         diet_service=diet_service,
         command_handler_service=command_handler_service,
         localization_service=localization_service
@@ -252,7 +284,7 @@ class Container(containers.DeclarativeContainer):
         CommandFactory,
         dependencies=providers.Dict({
             "user_repository": user_repository,
-            "message_service": whatsapp_service,
+            "message_service": messenger_service,
             "diet_service": diet_service,
             "tracking_service": tracking_service,
             "tracking_formatter_service": tracking_formatter_service,
@@ -261,12 +293,41 @@ class Container(containers.DeclarativeContainer):
         })
     )
 
+    user_identity_service = providers.Singleton(
+        UserIdentityService,
+        user_repository=user_repository
+    )
+
+    messenger_registry = providers.Singleton(MessengerRegistry)
+
+    # Мессенджеры
+    whatsapp_messenger = providers.Singleton(
+        WhatsAppMessenger,
+        client=whatsapp_client,
+        message_repository=message_repository,
+        localization_service=localization_service,
+        text_splitter=text_splitter,
+        from_phone_number=settings.TWILIO_PHONE_NUMBER,
+        max_message_size=getattr(settings, "WHATSAPP_MAX_MESSAGE_SIZE", 1500)
+    )
+
+    telegram_messenger = providers.Singleton(
+        TelegramMessenger,
+        client=telegram_client,
+        message_repository=message_repository,
+        localization_service=localization_service,
+        text_splitter=text_splitter,
+        max_message_size=getattr(settings, "TELEGRAM_MAX_MESSAGE_SIZE", 4000)
+    )
+
     # Сервис обработки сообщений
     message_processor_service = providers.Singleton(
         MessageProcessorService,
+        messenger_registry=messenger_registry,
+        user_identity_service=user_identity_service,
         user_repository=user_repository,
         message_repository=message_repository,
-        message_service=whatsapp_service,
+        message_service=messenger_service,
         localization_service=localization_service,
         onboarding_service=onboarding_service,
         diet_service=diet_service,
@@ -277,7 +338,7 @@ class Container(containers.DeclarativeContainer):
     # Сервис напоминаний
     reminder_service = providers.Singleton(
         ReminderService,
-        message_service=whatsapp_service,
+        message_service=messenger_service,
         user_repository=user_repository,
         reminder_repository=reminder_repository,
         tracking_service=tracking_service,

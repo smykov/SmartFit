@@ -45,6 +45,19 @@ class IUserRepository(ABC):
         pass
 
     @abstractmethod
+    async def get_by_chat_id(self, chat_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Получает пользователя по номеру телефона
+
+        Args:
+            chat_id: Номер телефона пользователя
+
+        Returns:
+            Optional[Dict[str, Any]]: Данные пользователя или None, если пользователь не найден
+        """
+        pass
+
+    @abstractmethod
     async def update(self, user_id: str, update_data: Dict[str, Any]) -> bool:
         """
         Обновляет данные пользователя
@@ -88,5 +101,20 @@ class IUserRepository(ABC):
 
         Returns:
             List[Dict[str, Any]]: Список пользователей с завершенным онбордингом
+        """
+        pass
+
+    @abstractmethod
+    async def find_by_messenger_account(self, messenger_type: str,
+                                        messenger_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Находит пользователя по аккаунту мессенджера
+
+        Args:
+            messenger_type: Тип мессенджера
+            messenger_id: ID в мессенджере
+
+        Returns:
+            Optional[Dict[str, Any]]: Данные пользователя или None
         """
         pass
