@@ -14,7 +14,8 @@ def services(firebase_repositories, llm_service_mock, whatsapp_service_mock, loc
     from app.services.commands.command_factory import CommandFactory
     from app.services.reminders.reminder_service import ReminderService
     from app.services.messaging.message_processor_service import MessageProcessorService
-
+    messenger_registry = AsyncMock()
+    user_identity_service = AsyncMock()
     # Создаем форматтеры
     diet_formatter_service = DietFormatterService(localization_service_mock)
     tracking_formatter_service = TrackingFormatterService(localization_service_mock)
@@ -31,7 +32,7 @@ def services(firebase_repositories, llm_service_mock, whatsapp_service_mock, loc
     # Создаем сервис диет
     diet_service = DietService(
         user_repository=firebase_repositories["user_repository"],
-        message_service=whatsapp_service_mock,
+        messenger_service=whatsapp_service_mock,
         localization_service=localization_service_mock,
         diet_plan_repository=firebase_repositories["diet_plan_repository"],
         product_repository=firebase_repositories["product_repository"],
@@ -42,7 +43,7 @@ def services(firebase_repositories, llm_service_mock, whatsapp_service_mock, loc
     # Создаем обработчик команд
     command_factory = CommandFactory({
         "user_repository": firebase_repositories["user_repository"],
-        "message_service": whatsapp_service_mock,
+        "messenger_service": whatsapp_service_mock,
         "diet_service": diet_service,
         "tracking_service": tracking_service,
         "tracking_formatter_service": tracking_formatter_service,
@@ -52,7 +53,7 @@ def services(firebase_repositories, llm_service_mock, whatsapp_service_mock, loc
 
     command_handler_service = CommandHandlerService({
         "user_repository": firebase_repositories["user_repository"],
-        "message_service": whatsapp_service_mock,
+        "messenger_service": whatsapp_service_mock,
         "diet_service": diet_service,
         "tracking_service": tracking_service,
         "localization_service": localization_service_mock
@@ -61,7 +62,7 @@ def services(firebase_repositories, llm_service_mock, whatsapp_service_mock, loc
     # Создаем сервис онбординга
     onboarding_service = OnboardingService(
         user_repository=firebase_repositories["user_repository"],
-        message_service=whatsapp_service_mock,
+        messenger_service=whatsapp_service_mock,
         diet_service=diet_service,
         command_handler_service=command_handler_service,
         localization_service=localization_service_mock
@@ -69,9 +70,11 @@ def services(firebase_repositories, llm_service_mock, whatsapp_service_mock, loc
 
     # Создаем сервис процессора сообщений
     message_processor_service = MessageProcessorService(
+        messenger_registry=messenger_registry,
+        user_identity_service=user_identity_service,
         user_repository=firebase_repositories["user_repository"],
         message_repository=firebase_repositories["message_repository"],
-        message_service=whatsapp_service_mock,
+        messenger_service=whatsapp_service_mock,
         localization_service=localization_service_mock,
         onboarding_service=onboarding_service,
         diet_service=diet_service,
@@ -81,7 +84,7 @@ def services(firebase_repositories, llm_service_mock, whatsapp_service_mock, loc
 
     # Создаем сервис напоминаний
     reminder_service = ReminderService(
-        message_service=whatsapp_service_mock,
+        messenger_service=whatsapp_service_mock,
         user_repository=firebase_repositories["user_repository"],
         reminder_repository=firebase_repositories["reminder_repository"],
         tracking_service=tracking_service,

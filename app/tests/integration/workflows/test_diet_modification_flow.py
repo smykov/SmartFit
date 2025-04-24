@@ -14,6 +14,8 @@ class TestDietModificationFlow:
     def setup_services(self, firebase_mock, llm_service_mock, message_client_mock, localization_service_mock):
         """Настройка всех необходимых сервисов для тестирования потока."""
         # Создаем репозитории
+        messenger_registry = AsyncMock()
+        user_identity_service = AsyncMock()
         user_repository = AsyncMock()
         diet_plan_repository = AsyncMock()
         message_repository = AsyncMock()
@@ -21,8 +23,8 @@ class TestDietModificationFlow:
         shopping_list_repository = AsyncMock()
 
         # Создаем сервисы
-        message_service = AsyncMock()
-        message_service.send_message = message_client_mock.send_message
+        messenger_service = AsyncMock()
+        messenger_service.send_message = message_client_mock.send_message
 
         # Настраиваем необходимые моки
         user_repository.get_by_id.return_value = {
@@ -68,7 +70,7 @@ class TestDietModificationFlow:
         # Создаем сервис диет
         diet_service = DietService(
             user_repository=user_repository,
-            message_service=message_service,
+            messenger_service=messenger_service,
             localization_service=localization_service_mock,
             diet_plan_repository=diet_plan_repository,
             product_repository=product_repository,
@@ -123,9 +125,11 @@ class TestDietModificationFlow:
         command_factory = AsyncMock()
 
         message_processor = MessageProcessorService(
+            messenger_registry=messenger_registry,
+            user_identity_service=user_identity_service,
             user_repository=user_repository,
             message_repository=message_repository,
-            message_service=message_service,
+            messenger_service=messenger_service,
             localization_service=localization_service_mock,
             onboarding_service=onboarding_service,
             diet_service=diet_service,
@@ -139,7 +143,7 @@ class TestDietModificationFlow:
                 result = await diet_service.update_short_diet_plan_by_request("test-diet-plan-id", message_text)
                 if result["success"]:
                     summary = diet_service.get_diet_summary(result["plan"], "ru")
-                    await message_service.send_message("+1234567890", summary)
+                    await messenger_service.send_message("+1234567890", summary)
                     return True
             return False
 
@@ -162,14 +166,14 @@ class TestDietModificationFlow:
         return {
             "diet_service": diet_service,
             "message_processor": message_processor,
-            "message_service": message_service
+            "messenger_service": messenger_service
         }
 
     async def test_diet_modification_full_flow(self, setup_services):
         """Тестирование полного потока модификации диеты."""
         diet_service = setup_services["diet_service"]
         message_processor = setup_services["message_processor"]
-        message_service = setup_services["message_service"]
+        messenger_service = setup_services["messenger_service"]
 
         # Создаем тестовое сообщение от пользователя
         message_data = {
@@ -188,9 +192,9 @@ class TestDietModificationFlow:
         )
 
         # Проверяем, что пользователю было отправлено сообщение с обновленным планом
-        message_service.send_message.assert_called_once()
+        messenger_service.send_message.assert_called_once()
 
         # Проверяем содержимое отправленного сообщения
-        call_args = message_service.send_message.call_args
+        call_args = messenger_service.send_message.call_args
         assert call_args[0][0] == "+1234567890"  # Номер телефона
         assert "Ваш план питания обновлен" in call_args[0][1]  # Текст сообщения

@@ -57,13 +57,13 @@ def whatsapp_client_mock():
 @pytest.fixture
 def whatsapp_service_mock(whatsapp_client_mock, firebase_repositories):
     """Возвращает мок для сервиса WhatsApp."""
-    from app.services.messaging.message_interface import IMessageService
+    from app.services.messaging.interfaces.message_interface import IMessengerService
 
     # Используем репозиторий сообщений
     message_repository = firebase_repositories["message_repository"]
 
     # Создаем мок сервиса
-    mock = MagicMock(spec=IMessageService)
+    mock = MagicMock(spec=IMessengerService)
 
     # Методы для работы с сообщениями
     async def send_message(to_phone, message, context=None):

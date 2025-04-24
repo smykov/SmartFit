@@ -16,7 +16,7 @@ class TestDietService:
         """Фикстура для создания моков зависимостей DietService."""
         dependencies = {
             "user_repository": AsyncMock(),
-            "message_service": AsyncMock(),
+            "messenger_service": AsyncMock(),
             "localization_service": MagicMock(),
             "diet_plan_repository": AsyncMock(),
             "product_repository": AsyncMock(),

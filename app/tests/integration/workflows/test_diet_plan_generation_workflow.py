@@ -21,6 +21,8 @@ class TestDietPlanGenerationWorkflow:
                        localization_service_mock, test_user_data):
         """Настройка всех необходимых сервисов для тестирования потока."""
         # Создаем моки репозиториев
+        messenger_registry = AsyncMock()
+        user_identity_service = AsyncMock()
         user_repository = AsyncMock()
         diet_plan_repository = AsyncMock()
         message_repository = AsyncMock()
@@ -35,7 +37,7 @@ class TestDietPlanGenerationWorkflow:
         # Создаем экземпляр тестируемого сервиса с моками
         diet_service = DietService(
             user_repository=user_repository,
-            message_service=whatsapp_service_mock,
+            messenger_service=whatsapp_service_mock,
             localization_service=localization_service_mock,
             diet_plan_repository=diet_plan_repository,
             product_repository=product_repository,
@@ -63,9 +65,11 @@ class TestDietPlanGenerationWorkflow:
         command_factory = AsyncMock()
 
         message_processor = MessageProcessorService(
+            messenger_registry=messenger_registry,
+            user_identity_service=user_identity_service,
             user_repository=user_repository,
             message_repository=message_repository,
-            message_service=whatsapp_service_mock,
+            messenger_service=whatsapp_service_mock,
             localization_service=localization_service_mock,
             onboarding_service=onboarding_service,
             diet_service=diet_service,

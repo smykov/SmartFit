@@ -16,6 +16,8 @@ class TestDietPlanUsageScenario:
         from app.services.messaging.message_processor_service import MessageProcessorService
 
         # Создаем репозитории и другие зависимости
+        messenger_registry = AsyncMock()
+        user_identity_service = AsyncMock()
         user_repository = AsyncMock()
         diet_plan_repository = AsyncMock()
         message_repository = AsyncMock()
@@ -32,8 +34,8 @@ class TestDietPlanUsageScenario:
         diet_plan_repository.get_current_diet.return_value = test_diet_plan_data
 
         # Создаем сервисы
-        message_service = AsyncMock()
-        message_service.send_message = message_client_mock.send_message
+        messenger_service = AsyncMock()
+        messenger_service.send_message = message_client_mock.send_message
 
         # Трекинг-сервис
         tracking_service = TrackingService(
@@ -60,7 +62,7 @@ class TestDietPlanUsageScenario:
         # Сервис диет
         diet_service = DietService(
             user_repository=user_repository,
-            message_service=message_service,
+            messenger_service=messenger_service,
             localization_service=localization_service_mock,
             diet_plan_repository=diet_plan_repository,
             product_repository=product_repository,
@@ -99,9 +101,11 @@ class TestDietPlanUsageScenario:
         command_factory = AsyncMock()
 
         message_processor = MessageProcessorService(
+            messenger_registry=messenger_registry,
+            user_identity_service=user_identity_service,
             user_repository=user_repository,
             message_repository=message_repository,
-            message_service=message_service,
+            messenger_service=messenger_service,
             localization_service=localization_service_mock,
             onboarding_service=onboarding_service,
             diet_service=diet_service,
@@ -118,25 +122,25 @@ class TestDietPlanUsageScenario:
             # Имитируем различные команды
             if "замени" in message_text or "измени" in message_text:
                 result = await diet_service.update_short_diet_plan_by_request("test-diet-plan-id", message_text)
-                await message_service.send_message(phone_number, diet_service.get_diet_summary(result["plan"], "ru"))
+                await messenger_service.send_message(phone_number, diet_service.get_diet_summary(result["plan"], "ru"))
                 return {"success": True}
 
             elif "список покупок" in message_text:
                 shopping_list = await diet_service.generate_shopping_list("test-diet-plan-id")
-                await message_service.send_message(phone_number, diet_service.format_shopping_list(shopping_list))
+                await messenger_service.send_message(phone_number, diet_service.format_shopping_list(shopping_list))
                 return {"success": True}
 
             elif message_text.startswith("купил"):
                 product_name = message_text.replace("купил", "").strip()
                 result = await diet_service.mark_product_as_purchased(user_id, product_name)
-                await message_service.send_message(phone_number, result["message"])
+                await messenger_service.send_message(phone_number, result["message"])
                 return {"success": True}
 
             elif message_text.startswith("вес"):
                 weight_str = message_text.replace("вес", "").strip()
                 weight = float(weight_str)
                 await tracking_service.record_weight(user_id, weight)
-                await message_service.send_message(phone_number, f"Вес {weight} кг записан")
+                await messenger_service.send_message(phone_number, f"Вес {weight} кг записан")
                 return {"success": True}
 
             elif message_text.startswith("вода"):
@@ -144,7 +148,7 @@ class TestDietPlanUsageScenario:
                 cups = float(cups_str)
                 ml_amount = cups * 250
                 await tracking_service.record_water_intake(user_id, ml_amount)
-                await message_service.send_message(phone_number,
+                await messenger_service.send_message(phone_number,
                                                    f"Потребление воды {cups} стаканов (~{ml_amount} мл) записано")
                 return {"success": True}
 
@@ -152,7 +156,7 @@ class TestDietPlanUsageScenario:
                 meal_type = "breakfast" if "завтрак" in message_text else "lunch" if "обед" in message_text else "dinner" if "ужин" in message_text else None
                 if meal_type:
                     await tracking_service.record_meal_compliance(user_id, datetime.now().date(), meal_type, "followed")
-                    await message_service.send_message(phone_number, f"Отмечено: {meal_type} выполнен")
+                    await messenger_service.send_message(phone_number, f"Отмечено: {meal_type} выполнен")
                     return {"success": True}
 
             return {"success": False, "message": "Command not recognized"}
@@ -165,7 +169,7 @@ class TestDietPlanUsageScenario:
             "diet_service": diet_service,
             "tracking_service": tracking_service,
             "message_processor": message_processor,
-            "message_service": message_service
+            "messenger_service": messenger_service
         }
 
     async def test_complete_diet_usage_flow(self, setup_data_and_services):
@@ -173,7 +177,7 @@ class TestDietPlanUsageScenario:
         diet_service = setup_data_and_services["diet_service"]
         tracking_service = setup_data_and_services["tracking_service"]
         message_processor = setup_data_and_services["message_processor"]
-        message_service = setup_data_and_services["message_service"]
+        messenger_service = setup_data_and_services["messenger_service"]
 
         # 1. Пользователь запрашивает изменение в план диеты
         await message_processor.process_message({
@@ -184,8 +188,8 @@ class TestDietPlanUsageScenario:
 
         # Проверяем вызов метода обновления плана
         diet_service.update_short_diet_plan_by_request.assert_called_once()
-        message_service.send_message.assert_called_once()
-        message_service.send_message.reset_mock()
+        messenger_service.send_message.assert_called_once()
+        messenger_service.send_message.reset_mock()
 
         # 2. Пользователь запрашивает список покупок
         await message_processor.process_message({
@@ -197,8 +201,8 @@ class TestDietPlanUsageScenario:
         # Проверяем генерацию списка покупок
         diet_service.generate_shopping_list.assert_called_once()
         diet_service.format_shopping_list.assert_called_once()
-        message_service.send_message.assert_called_once()
-        message_service.send_message.reset_mock()
+        messenger_service.send_message.assert_called_once()
+        messenger_service.send_message.reset_mock()
 
         # 3. Пользователь отмечает покупку продукта
         await message_processor.process_message({
@@ -209,8 +213,8 @@ class TestDietPlanUsageScenario:
 
         # Проверяем отметку о покупке продукта
         diet_service.mark_product_as_purchased.assert_called_once_with("test-user-id", "овсянка")
-        message_service.send_message.assert_called_once()
-        message_service.send_message.reset_mock()
+        messenger_service.send_message.assert_called_once()
+        messenger_service.send_message.reset_mock()
 
         # 4. Пользователь записывает свой вес
         await message_processor.process_message({
@@ -221,8 +225,8 @@ class TestDietPlanUsageScenario:
 
         # Проверяем запись веса
         tracking_service.record_weight.assert_called_once_with("test-user-id", 84.0)
-        message_service.send_message.assert_called_once()
-        message_service.send_message.reset_mock()
+        messenger_service.send_message.assert_called_once()
+        messenger_service.send_message.reset_mock()
 
         # 5. Пользователь записывает потребление воды
         await message_processor.process_message({
@@ -233,8 +237,8 @@ class TestDietPlanUsageScenario:
 
         # Проверяем запись потребления воды
         tracking_service.record_water_intake.assert_called_once_with("test-user-id", 750.0)
-        message_service.send_message.assert_called_once()
-        message_service.send_message.reset_mock()
+        messenger_service.send_message.assert_called_once()
+        messenger_service.send_message.reset_mock()
 
         # 6. Пользователь отмечает соблюдение плана питания
         await message_processor.process_message({
@@ -245,4 +249,4 @@ class TestDietPlanUsageScenario:
 
         # Проверяем запись о соблюдении плана питания
         tracking_service.record_meal_compliance.assert_called_once()
-        message_service.send_message.assert_called_once()
+        messenger_service.send_message.assert_called_once()

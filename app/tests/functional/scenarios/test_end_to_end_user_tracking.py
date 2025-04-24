@@ -18,7 +18,6 @@ class TestEndToEndUserTracking:
                                      test_diet_plan_data, test_weight_entries, test_water_entries):
         """Настройка полной среды для end-to-end тестирования с реальной локализацией."""
         # Берем необходимые сервисы из основного набора сервисов
-        diet_service = services["diet_service"]
         tracking_service = services["tracking_service"]
         message_processor_service = services["message_processor_service"]
 

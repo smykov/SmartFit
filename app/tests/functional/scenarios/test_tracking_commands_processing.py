@@ -28,6 +28,8 @@ class TestTrackingCommandsScenario:
     def setup_command_processors(self, firebase_repositories, llm_service_mock, whatsapp_service_mock,
                                  localization_service_mock, test_user_data):
         """Настройка обработчиков команд и связанных сервисов."""
+        messenger_registry = AsyncMock()
+        user_identity_service = AsyncMock()
         # Получаем репозитории
         user_repository = firebase_repositories["user_repository"]
         weight_entry_repository = firebase_repositories["weight_entry_repository"]
@@ -118,9 +120,11 @@ class TestTrackingCommandsScenario:
 
         # Создаем процессор сообщений
         message_processor = MessageProcessorService(
+            messenger_registry=messenger_registry,
+            user_identity_service=user_identity_service,
             user_repository=user_repository,
             message_repository=message_repository,
-            message_service=whatsapp_service_mock,
+            messenger_service=whatsapp_service_mock,
             localization_service=localization_service_mock,
             onboarding_service=AsyncMock(),
             diet_service=AsyncMock(),

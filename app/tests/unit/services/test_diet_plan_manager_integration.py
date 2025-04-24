@@ -41,7 +41,7 @@ class TestDietPlanManagerIntegration:
         # Создаем DietService с моками
         diet_service = DietService(
             user_repository=user_repository,
-            message_service=whatsapp_service_mock,
+            messenger_service=whatsapp_service_mock,
             localization_service=localization_service_mock,
             diet_plan_repository=diet_plan_repository,
             product_repository=product_repository,
