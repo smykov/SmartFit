@@ -12,14 +12,14 @@ from app.constants.localization_keys import LocalizationKeys as LK
 from app.db.interfaces.message_repository_interface import IMessageRepository
 from app.services.messaging.interfaces.message_client_interface import IMessageClient
 from app.services.localization.localization_interface import ILocalizationService
-from app.services.messaging.message_interface import IMessageService
+from app.services.messaging.interfaces.message_interface import IMessengerService
 from app.utils.text_splitter import TextSplitter
 from config import settings
 
 logger = logging.getLogger(__name__)
 
 
-class TelegramService(IMessageService):
+class TelegramService(IMessengerService):
     """Сервис для работы с Telegram Bot API"""
 
     def __init__(

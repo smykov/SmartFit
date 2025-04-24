@@ -16,7 +16,7 @@ from app.services.diet.diet_service_interface import IDietService
 from app.services.diet.shopping_list_manager import ShoppingListManager
 from app.services.llm import BaseLLMService
 from app.services.localization.localization_interface import ILocalizationService
-from app.services.messaging.message_interface import IMessageService
+from app.services.messaging.interfaces.message_interface import IMessengerService
 
 
 class DietService(BaseDietService, IDietService):
@@ -25,7 +25,7 @@ class DietService(BaseDietService, IDietService):
     def __init__(
             self,
             user_repository: IUserRepository,
-            message_service: IMessageService,
+            message_service: IMessengerService,
             localization_service: ILocalizationService,
             diet_plan_repository: IDietPlanRepository,
             product_repository: IProductRepository,
@@ -104,19 +104,23 @@ class DietService(BaseDietService, IDietService):
                 # Отправляем уведомление пользователю
                 await self.message_service.send_message(
                     phone_number,
-                    self.localization_service.get_message(LK.Diet.Full.CREATED, lang)
+                    self.localization_service.get_message(LK.Diet.Full.CREATED, lang),
+                    {"user_id": user_id}
                 )
 
                 # Отправляем сводку плана
                 diet_summary = self.get_diet_summary(full_plan, lang)
-                await self.message_service.send_message(phone_number, diet_summary)
+                await self.message_service.send_message(phone_number, diet_summary,
+                                                        {"user_id": user_id})
                 commands_message = self.get_diet_summary_commands(full_plan, lang)
-                await self.message_service.send_message(phone_number, commands_message)
+                await self.message_service.send_message(phone_number, commands_message,
+                                                        {"user_id": user_id})
             else:
                 # В случае ошибки
                 await self.message_service.send_message(
                     phone_number,
-                    self.localization_service.get_message(LK.Diet.Full.CREATING_ERROR, lang)
+                    self.localization_service.get_message(LK.Diet.Full.CREATING_ERROR, lang),
+                    {"user_id": user_id}
                 )
 
         except Exception as e:
@@ -403,7 +407,8 @@ class DietService(BaseDietService, IDietService):
                 if user and "phone_number" in user:
                     await self.message_service.send_message(
                         user["phone_number"],
-                        self.localization_service.get_message(LK.Shopping.GENERATING, lang)
+                        self.localization_service.get_message(LK.Shopping.GENERATING, lang),
+                        {"user_id": user_id}
                     )
 
             # Делегируем создание списка покупок менеджеру

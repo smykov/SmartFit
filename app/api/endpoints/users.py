@@ -95,7 +95,7 @@ async def update_user(
         
         # Если есть данные для обновления
         if update_data:
-            success = firebase_client.update_document("users", user_id, update_data)
+            success = await firebase_client.update_document("users", user_id, update_data)
             
             if not success:
                 raise HTTPException(status_code=500, detail="Failed to update user")
@@ -123,7 +123,7 @@ async def delete_user(user_id: str = Path(..., description="ID пользова�
             raise HTTPException(status_code=404, detail="User not found")
         
         # Для MVP просто помечаем пользователя как неактивного
-        success = firebase_client.update_document("users", user_id, {"is_active": False})
+        success = await firebase_client.update_document("users", user_id, {"is_active": False})
         
         if not success:
             raise HTTPException(status_code=500, detail="Failed to deactivate user")

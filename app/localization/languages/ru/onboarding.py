@@ -4,7 +4,7 @@ from app.localization.base import LocalizationString, LocalizationModule
 strings = {
     # Приветствие и базовые сообщения онбординга
     'welcome': LocalizationString(
-        '👋 Привет! Добро пожаловать в GuateFit - твой персональный ассистент для похудения. Я помогу тебе создать план питания, адаптированный под тебя, учитывая местные продукты и твой бюджет.'),
+        '👋 Привет! Добро пожаловать в SmartFit - твой персональный ассистент для похудения. Я помогу тебе создать план питания, адаптированный под тебя, учитывая местные продукты и твой бюджет.'),
 
     'name': {
         'request': LocalizationString('Как тебя зовут?'),
@@ -17,8 +17,13 @@ strings = {
     },
 
     'gender': {
-        'request': LocalizationString('Какой у тебя пол? (мужской/женский/другой):'),
-        'example': LocalizationString('Например: мужской'),
+        'request': LocalizationString("""Какой у тебя пол?
+1. Мужской
+2. Женский
+3. Другой
+
+Ответь номером или напиши своими словами:"""),
+        'example': LocalizationString('Например: 1 или мужской'),
         'male': LocalizationString('мужской'),
         'female': LocalizationString('женский'),
         'other': LocalizationString('другой'),
@@ -105,15 +110,15 @@ strings = {
     },
 
     'budget': {
-        'request': LocalizationString('Какой у тебя недельный бюджет на продукты питания (в кетцалях)?'),
-        'example': LocalizationString('Например: 500 или "неограниченный"'),
+        'request': LocalizationString('Какой у тебя недельный бюджет на продукты питания (в рублях)?'),
+        'example': LocalizationString('Например: 5000 или "неограниченный"'),
         'unlimited': LocalizationString('неограничен'),
         'no_limit': LocalizationString('без ограничений'),
         'any': LocalizationString('любой')
     },
-
+    # TODO доделать на род по полу пользователя
     'completed': LocalizationString(
-        '🎉 Поздравляю! Ты завершил(а) настройку. Теперь ты можешь использовать команды, такие как "план", "статистика", "вес XX", "вода X", чтобы взаимодействовать с GuateFit.'),
+        '🎉 Поздравляю! Ты завершил(а) настройку. Теперь ты можешь использовать команды, такие как "план", "статистика", "вес XX", "вода X", чтобы взаимодействовать с SmartFit.'),
 
     'invalid_input': LocalizationString(
         'Извини, я не смог понять твой ввод. Пожалуйста, попробуй еще раз.\n\n{step_message}'),

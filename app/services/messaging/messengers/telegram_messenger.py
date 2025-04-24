@@ -1,75 +1,35 @@
 # app/services/messaging/messengers/telegram_messenger.py
 from typing import Dict, Any, Optional
-import re
 
-from app.services.messaging.messengers.base_messenger import BaseMessenger
-from app.services.messaging.clients.telegram_client import TelegramClient
-from app.db.interfaces.message_repository_interface import IMessageRepository
 from app.services.localization.localization_interface import ILocalizationService
-from app.utils.text_splitter import TextSplitter
+from app.services.messaging.messengers.messenger_base import MessengerBase
 
 
-class TelegramMessenger(BaseMessenger):
+class TelegramMessenger(MessengerBase):
     """
-    Реализация мессенджера для Telegram
+    Мессенджер для Telegram
+    Ответственность: Парсинг и форматирование сообщений для Telegram
     """
 
-    def __init__(self,
-                 client: TelegramClient,
-                 message_repository: IMessageRepository,
-                 localization_service: ILocalizationService,
-                 text_splitter: TextSplitter,
-                 max_message_size: int = 4000):
-        super().__init__(message_repository, localization_service)
-        self.client = client
-        self.text_splitter = text_splitter
-        self.max_message_size = max_message_size
+    def __init__(self, localization_service: ILocalizationService):
+        """
+        Инициализация мессенджера Telegram
 
-    async def initialize(self) -> bool:
-        """Инициализация мессенджера"""
-        # Логика инициализации...
-        return True
+        Args:
+            localization_service: Сервис локализации
+        """
+        super().__init__(localization_service)
 
-    async def send_message(self, recipient_id: str, message: str,
-                           context: Optional[Dict[str, Any]] = None) -> Optional[str]:
-        """Отправка сообщения"""
-        # Проверяем размер сообщения
-        if len(message) > self.max_message_size:
-            return await self._send_chunked_message(recipient_id, message, context)
+    async def parse_incoming_message(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Парсит входящее сообщение Telegram
 
-        # Форматируем сообщение для Telegram
-        formatted_message = self.format_outgoing_message(message)
+        Args:
+            data: Данные входящего сообщения
 
-        # Отправляем сообщение через клиент
-        message_id = await self.client.send_message(recipient_id, formatted_message)
-
-        if message_id:
-            # Сохраняем информацию об отправленном сообщении
-            await self.message_repository.save_sent_message(
-                recipient_id, message_id, message, context
-            )
-            return message_id
-        return None
-
-    async def _send_chunked_message(self, recipient_id: str, message: str,
-                                    context: Optional[Dict[str, Any]] = None) -> Optional[str]:
-        """Отправка разбитого на части сообщения"""
-        # Логика разбиения и отправки длинного сообщения...
-        pass
-
-    async def send_template_message(self, recipient_id: str, template_name: str,
-                                    lang: Optional[str] = None,
-                                    params: Optional[Dict[str, Any]] = None) -> Optional[str]:
-        """Отправка шаблонного сообщения"""
-        return await self.client.send_template_message(recipient_id, template_name, lang, params)
-
-    def get_messenger_type(self) -> str:
-        """Получение типа мессенджера"""
-        return "telegram"
-
-    def parse_incoming_message(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Парсинг входящего сообщения"""
-        # Логика извлечения данных из входящего сообщения Telegram...
+        Returns:
+            Dict[str, Any]: Стандартизированное представление сообщения
+        """
         try:
             if 'message' not in data:
                 return {}
@@ -89,9 +49,24 @@ class TelegramMessenger(BaseMessenger):
             return {}
 
     def format_outgoing_message(self, message: str) -> str:
-        """Форматирование исходящего сообщения для Telegram"""
-        # В Telegram нужно экранировать специальные символы для MarkdownV2
-        special_chars = '_*[]()~`>#+-=|{}.!'
-        for char in special_chars:
-            message = message.replace(char, f'\\{char}')
+        """
+        Форматирует исходящее сообщение для Telegram
+
+        Args:
+            message: Исходный текст сообщения
+
+        Returns:
+            str: Отформатированное сообщение для Telegram (без экранирования)
+        """
+        # Для Telegram не используем специальное форматирование, отправляем как обычный текст
+        # Это избавит от необходимости экранировать специальные символы
         return message
+
+    def get_messenger_type(self) -> str:
+        """
+        Возвращает тип мессенджера
+
+        Returns:
+            str: "telegram"
+        """
+        return "telegram"

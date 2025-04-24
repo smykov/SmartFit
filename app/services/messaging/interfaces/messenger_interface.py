@@ -1,42 +1,46 @@
 # app/services/messaging/interfaces/messenger_interface.py
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 
 
 class IMessenger(ABC):
     """
-    Универсальный интерфейс для всех мессенджеров
+    Интерфейс для мессенджера, обрабатывающего сообщения для конкретной платформы
+    Ответственность: Парсинг и форматирование сообщений
     """
 
     @abstractmethod
-    async def initialize(self) -> bool:
-        """Инициализация сервиса мессенджера"""
-        pass
+    async def parse_incoming_message(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Парсит входящее сообщение для конкретной платформы
 
-    @abstractmethod
-    async def send_message(self, recipient_id: str, message: str,
-                           context: Optional[Dict[str, Any]] = None) -> Optional[str]:
-        """Отправка сообщения"""
-        pass
+        Args:
+            data: Данные входящего сообщения
 
-    @abstractmethod
-    async def send_template_message(self, recipient_id: str, template_name: str,
-                                    user_id: Optional[str] = None,
-                                    params: Optional[Dict[str, Any]] = None) -> Optional[str]:
-        """Отправка шаблонного сообщения"""
-        pass
-
-    @abstractmethod
-    def get_messenger_type(self) -> str:
-        """Получение типа мессенджера"""
-        pass
-
-    @abstractmethod
-    def parse_incoming_message(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Парсинг входящего сообщения"""
+        Returns:
+            Dict[str, Any]: Стандартизированное представление сообщения
+        """
         pass
 
     @abstractmethod
     def format_outgoing_message(self, message: str) -> str:
-        """Форматирование исходящего сообщения"""
+        """
+        Форматирует исходящее сообщение для конкретной платформы
+
+        Args:
+            message: Исходный текст сообщения
+
+        Returns:
+            str: Отформатированное сообщение
+        """
+        pass
+
+    @abstractmethod
+    def get_messenger_type(self) -> str:
+        """
+        Возвращает тип мессенджера
+
+        Returns:
+            str: Тип мессенджера (например, "whatsapp", "telegram")
+        """
         pass

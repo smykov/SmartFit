@@ -6,7 +6,7 @@ from app.services.commands.interfaces.command_interface import ICommand
 from app.services.diet.diet_service_interface import IDietService
 from app.services.formatter.tracking_formatter_service import TrackingFormatterService
 from app.services.tracking.tracking_service_interface import ITrackingService
-from app.services.messaging.message_interface import IMessageService
+from app.services.messaging.interfaces.message_interface import IMessengerService
 from app.services.localization.localization_interface import ILocalizationService
 
 
@@ -29,7 +29,7 @@ class BaseCommand(ICommand):
         if 'user_repository' in dependencies:
             self.user_repository: IUserRepository = dependencies['user_repository']
         if 'message_service' in dependencies:
-            self.message_service: IMessageService = dependencies['message_service']
+            self.message_service: IMessengerService = dependencies['message_service']
         if 'tracking_service' in dependencies:
             self.tracking_service: ITrackingService = dependencies['tracking_service']
         if 'tracking_formatter_service' in dependencies:

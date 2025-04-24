@@ -6,7 +6,7 @@ from app.constants.localization_keys import LocalizationKeys as LK
 from app.db.interfaces.user_repository_interface import IUserRepository
 from app.services.commands.interfaces.command_handler_interface import ICommandHandler
 from app.services.diet.diet_service_interface import IDietService
-from app.services.messaging.message_interface import IMessageService
+from app.services.messaging.interfaces.message_interface import IMessengerService
 from app.services.onboarding.onboarding_service_interface import IOnboardingService
 from app.services.localization.localization_interface import ILocalizationService
 
@@ -53,7 +53,7 @@ class OnboardingService(IOnboardingService):
     def __init__(
             self,
             user_repository: IUserRepository,
-            message_service: IMessageService,
+            message_service: IMessengerService,
             diet_service: IDietService,
             command_handler_service: ICommandHandler,
             localization_service: ILocalizationService
@@ -340,27 +340,32 @@ class OnboardingService(IOnboardingService):
 
     def _process_gender(self, message_text: str, lang: str = None) -> Optional[Dict[str, Any]]:
         """Обработка пола"""
-        gender_text = message_text.lower()
+        gender_text = message_text.lower().strip()
 
-        # Локализованные ключевые слова для определения пола
         male_keywords = [
             self.localization_service.get_message(LK.Onboarding.Gender.MALE, lang),
             self.localization_service.get_message(LK.Onboarding.Gender.MALE_SHORT, lang),
             "1"  # Универсальный номер
         ]
-
         female_keywords = [
             self.localization_service.get_message(LK.Onboarding.Gender.FEMALE, lang),
             self.localization_service.get_message(LK.Onboarding.Gender.FEMALE_SHORT, lang),
             "2"  # Универсальный номер
         ]
 
-        if any(keyword.lower() in gender_text for keyword in male_keywords if keyword):
+        # Проверка на точное совпадение (для коротких ответов)
+        if gender_text in [k.lower() for k in male_keywords if k]:
             return {"gender": "male"}
-        elif any(keyword.lower() in gender_text for keyword in female_keywords if keyword):
+        elif gender_text in [k.lower() for k in female_keywords if k]:
             return {"gender": "female"}
-        else:
-            return {"gender": "other"}
+
+        # Проверка на вхождение (для длинных ответов)
+        if any(k.lower() in gender_text for k in male_keywords if k and len(k) > 1):
+            return {"gender": "male"}
+        elif any(k.lower() in gender_text for k in female_keywords if k and len(k) > 1):
+            return {"gender": "female"}
+
+        return {"gender": "other"}
 
     def _process_height(self, message_text: str) -> Optional[Dict[str, Any]]:
         """Обработка роста"""
@@ -394,9 +399,8 @@ class OnboardingService(IOnboardingService):
 
     def _process_activity_level(self, message_text: str, lang: str = None) -> Optional[Dict[str, Any]]:
         """Обработка уровня активности"""
-        activity_text = message_text.lower()
+        activity_text = message_text.lower().strip()
 
-        # Словарь для маппинга ключевых слов на уровни активности
         activity_keywords = {
             "sedentary": [
                 self.localization_service.get_message(LK.Onboarding.ActivityLevel.SEDENTARY, lang),
@@ -420,19 +424,17 @@ class OnboardingService(IOnboardingService):
             ]
         }
 
-        # Проверяем каждый уровень активности
         for level, keywords in activity_keywords.items():
-            if any(keyword.lower() in activity_text for keyword in keywords if keyword):
+            if activity_text in [k.lower() for k in keywords if k] or any(
+                    k.lower() in activity_text for k in keywords if k and len(k) > 1):
                 return {"activity_level": level}
 
-        # По умолчанию умеренная активность
         return {"activity_level": "moderate"}
 
     def _process_weight_goal(self, message_text: str, lang: str = None) -> Optional[Dict[str, Any]]:
         """Обработка цели по весу"""
-        goal_text = message_text.lower()
+        goal_text = message_text.lower().strip()
 
-        # Словарь для маппинга ключевых слов на цели по весу
         weight_goal_keywords = {
             "lose": [
                 self.localization_service.get_message(LK.Onboarding.WeightGoal.LOSE, lang),
@@ -448,17 +450,16 @@ class OnboardingService(IOnboardingService):
             ]
         }
 
-        # Проверяем каждую цель по весу
         for goal, keywords in weight_goal_keywords.items():
-            if any(keyword.lower() in goal_text for keyword in keywords if keyword):
+            if goal_text in [k.lower() for k in keywords if k] or any(
+                    k.lower() in goal_text for k in keywords if k and len(k) > 1):
                 return {"weight_goal": goal}
 
-        # По умолчанию цель - похудение
         return {"weight_goal": "lose"}
 
     def _process_diet_preference(self, message_text: str, lang: str = None) -> Optional[Dict[str, Any]]:
         """Обработка предпочтений в диете"""
-        pref_text = message_text.lower()
+        pref_text = message_text.lower().strip()
 
         # Словарь для маппинга ключевых слов на предпочтения в диете
         diet_pref_keywords = {
@@ -490,7 +491,9 @@ class OnboardingService(IOnboardingService):
 
         # Проверяем каждое предпочтение в диете
         for pref, keywords in diet_pref_keywords.items():
-            if any(keyword.lower() in pref_text for keyword in keywords if keyword):
+            # проверяем полное совпадение или наличие ключевого слова
+            if pref_text in [k.lower() for k in keywords if k] or any(
+                    k.lower() in pref_text for k in keywords if k and len(k) > 1):
                 return {"diet_preference": pref}
 
         # По умолчанию обычная диета
@@ -578,10 +581,25 @@ class OnboardingService(IOnboardingService):
             self.STEP_DIET_PREFERENCE: LK.Onboarding.DIET_PREFERENCE_REQUEST,
             self.STEP_ALLERGIES: LK.Onboarding.ALLERGIES_REQUEST,
             self.STEP_DISLIKED_PRODUCTS: LK.Onboarding.DISLIKED_PRODUCTS_REQUEST,
+            # TODO добавить валюту пользователя
             self.STEP_BUDGET: LK.Onboarding.BUDGET_REQUEST,
             self.STEP_COMPLETE: LK.Onboarding.COMPLETED
         }
-
+        step_example_keys = {
+            self.STEP_NAME: LK.Onboarding.NAME_REQUEST_EXAMPLE,
+            self.STEP_AGE: LK.Onboarding.AGE_REQUEST_EXAMPLE,
+            self.STEP_GENDER: LK.Onboarding.GENDER_REQUEST_EXAMPLE,
+            self.STEP_HEIGHT: LK.Onboarding.HEIGHT_REQUEST_EXAMPLE,
+            self.STEP_CURRENT_WEIGHT: LK.Onboarding.CURRENT_WEIGHT_REQUEST_EXAMPLE,
+            self.STEP_TARGET_WEIGHT: LK.Onboarding.TARGET_WEIGHT_REQUEST_EXAMPLE,
+            self.STEP_WEIGHT_GOAL: LK.Onboarding.WEIGHT_GOAL_REQUEST_EXAMPLE,
+            self.STEP_ACTIVITY_LEVEL: LK.Onboarding.ACTIVITY_LEVEL_REQUEST_EXAMPLE,
+            self.STEP_DIET_PREFERENCE: LK.Onboarding.DIET_PREFERENCE_REQUEST_EXAMPLE,
+            self.STEP_ALLERGIES: LK.Onboarding.ALLERGIES_REQUEST_EXAMPLE,
+            self.STEP_DISLIKED_PRODUCTS: LK.Onboarding.DISLIKED_PRODUCTS_REQUEST_EXAMPLE,
+            # TODO добавить сумму примера в валюте пользователя
+            self.STEP_BUDGET: LK.Onboarding.BUDGET_REQUEST_EXAMPLE,
+        }
         # Получаем ключ для шага
         key = step_keys.get(step)
         if not key:
@@ -591,21 +609,22 @@ class OnboardingService(IOnboardingService):
         self.logger.debug(f"Getting localized message for key '{key}' with lang '{lang}'")
 
         # Получаем сообщение для шага
+        # TODO добавить параметры для бюджета и примера
         message = self.localization_service.get_message(key, lang)
 
         # Проверяем, не вернулся ли ключ вместо текста (признак ошибки)
         if message == key:
             self.logger.error(f"Localization failed for key '{key}', returned key itself")
 
-        # Получаем пример для шага, если есть
-        example_key = f"{key}Example"
         try:
+            # Получаем пример для шага, если есть
+            example_key = step_example_keys.get(step, '')
             example = self.localization_service.get_message(example_key, lang)
             if example:
                 message += f"\n\n{example}"
         except:
             # Если примера нет, игнорируем
-            self.logger.debug(f"No example found for key '{example_key}': {str(e)}")
+            self.logger.debug(f"No example found for step '{step}'")
             pass
 
         return message

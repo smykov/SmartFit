@@ -63,6 +63,9 @@ class LocalizationRegistry:
         # Получаем строку
         result = self.languages[language_code].get(key, **params)
 
+        if not result:
+            result = key
+
         # Если строка не найдена и язык не по умолчанию,
         # пробуем получить строку из языка по умолчанию
         if result == key and language_code != self.default_language:

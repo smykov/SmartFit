@@ -3,7 +3,7 @@ import logging
 import re
 from datetime import datetime
 from enum import Enum
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional
 
 import pytz
 from app.constants.localization_keys import LocalizationKeys as LK
@@ -14,7 +14,7 @@ from app.db.interfaces.user_repository_interface import IUserRepository
 from app.services.onboarding.onboarding_service_interface import IOnboardingService
 from app.services.localization.localization_interface import ILocalizationService
 from app.services.commands.command_factory import CommandFactory
-from app.services.messaging.message_interface import IMessageService
+from app.services.messaging.interfaces.message_interface import IMessengerService
 from app.services.tracking.tracking_service_interface import ITrackingService
 from app.services.diet.diet_service_interface import IDietService
 from config import settings
@@ -44,6 +44,7 @@ class ProcessingStrategy(str, Enum):
 class MessageProcessorService:
     """
     Сервис для обработки входящих сообщений из разных мессенджеров
+    Ответственность: Обработка и маршрутизация входящих сообщений
     """
 
     def __init__(
@@ -52,7 +53,7 @@ class MessageProcessorService:
             user_identity_service: UserIdentityService,
             user_repository: IUserRepository,
             message_repository: IMessageRepository,
-            message_service: IMessageService,
+            messenger_service: IMessengerService,
             onboarding_service: IOnboardingService,
             diet_service: IDietService,
             tracking_service: ITrackingService,
@@ -62,15 +63,17 @@ class MessageProcessorService:
         """
         Инициализация сервиса обработки сообщений
 
-    Args:
-        user_repository: Репозиторий для работы с пользователями
-        message_repository: Репозиторий для работы с сообщениями
-        message_service: Сервис для отправки сообщений
-        onboarding_service: Сервис онбординга
-        diet_service: Сервис для работы с диетами
-        tracking_service: Сервис для трекинга прогресса
-        command_factory: Фабрика команд для обработки команд пользователя
-        localization_service: Сервис локализации для сообщений
+        Args:
+            messenger_registry: Реестр мессенджеров
+            user_identity_service: Сервис идентификации пользователей
+            user_repository: Репозиторий для работы с пользователями
+            message_repository: Репозиторий для работы с сообщениями
+            messenger_service: Сервис отправки сообщений
+            onboarding_service: Сервис онбординга
+            diet_service: Сервис для работы с диетами
+            tracking_service: Сервис для трекинга прогресса
+            command_factory: Фабрика команд для обработки команд пользователя
+            localization_service: Сервис локализации для сообщений
         """
         self.messenger_registry = messenger_registry
         self.user_identity_service = user_identity_service
@@ -78,7 +81,7 @@ class MessageProcessorService:
         self.onboarding_service = onboarding_service
         self.localization_service = localization_service
         self.message_repository = message_repository
-        self.message_service = message_service
+        self.messenger_service = messenger_service
         self.diet_service = diet_service
         self.tracking_service = tracking_service
         self.command_factory = command_factory
@@ -103,8 +106,8 @@ class MessageProcessorService:
 
         # Ответы на согласование плана
         self.approval_patterns = {
-            "approve": re.compile(r'^(согласен|согласна|подтверждаю|ок|да|хорошо|все ок)$', re.IGNORECASE),
-            "disapprove": re.compile(r'^(не согласен|не согласна|не подтверждаю|нет|не ок|не хорошо)$', re.IGNORECASE),
+            "approve": re.compile(r'^(согласен|согласна|подтверждаю|ок|да|хорошо|все ок|yes|ok)$', re.IGNORECASE),
+            "disapprove": re.compile(r'^(не согласен|не согласна|не подтверждаю|нет|не ок|не хорошо|no|отклоняю)$', re.IGNORECASE),
         }
 
     def get_localized_message(self, key: str, lang: Optional[str] = None, **params) -> str:
@@ -143,7 +146,7 @@ class MessageProcessorService:
                 return {"success": False, "error": self.get_localized_message(LK.Messaging.ERROR)}
 
             # Парсим данные сообщения через мессенджер
-            parsed_message = messenger.parse_incoming_message(data)
+            parsed_message = await messenger.parse_incoming_message(data)
             if not parsed_message:
                 self.logger.error("Failed to parse message")
                 return {"success": False, "error": self.get_localized_message(LK.Messaging.ERROR)}
@@ -155,6 +158,8 @@ class MessageProcessorService:
             message_id = parsed_message.get("message_id")
             lang = parsed_message.get("language_code", "en")
             # TODO проверка на доступные языки и сообщать какие поддерживаемые
+            if not lang or lang not in ["ru", "en", "es"]:
+                lang = "ru"
 
             if not sender_id or not message_text:
                 self.logger.error("Missing required message data")
@@ -180,7 +185,7 @@ class MessageProcessorService:
                 "last_interaction_messenger": messenger_type
             })
 
-            # Определяем стратегию обработки сообщения (сохраняем существующую логику)
+            # Определяем стратегию обработки сообщения
             strategy = await self._determine_processing_strategy(user, message_text)
             self.logger.info(f"Выбрана стратегия обработки: {strategy} для пользователя {sender_id}")
 
@@ -218,9 +223,13 @@ class MessageProcessorService:
                 )
 
                 # Отправляем приветственное сообщение
-                messenger = self.messenger_registry.get_messenger(messenger_type)
-                await messenger.send_template_message(
-                    sender_id, LK.Onboarding.WELCOME, user_id
+                # Используем messenger_service вместо прямого вызова messenger
+                context = {
+                    "messenger_type": messenger_type,
+                    "user_id": user_id
+                }
+                await self.messenger_service.send_template_message(
+                    sender_id, LK.Onboarding.WELCOME, user_id, {}
                 )
 
                 # Продолжаем онбординг с полученным сообщением
@@ -247,7 +256,16 @@ class MessageProcessorService:
             return ProcessingStrategy.ONBOARDING
 
         # Проверяем наличие ожидающего согласования плана диеты
-        if await self._has_pending_diet_plan(user["id"]):
+        has_pending_plan = await self._has_pending_diet_plan(user["id"])
+
+        # Проверяем текущий диалоговый контекст пользователя
+        last_context = user.get("last_conversation_context", {})
+        last_action = last_context.get("last_action")
+
+        if last_action == "plan_approved" or last_action == "plan_disapproved":
+            # Даже если есть ожидающий план, не используем DIET_APPROVAL снова
+            pass
+        elif has_pending_plan:
             # Если сообщение похоже на ответ о согласовании
             for pattern_name in ["approve", "disapprove"]:
                 if self.approval_patterns[pattern_name].match(message_text):
@@ -265,6 +283,10 @@ class MessageProcessorService:
         # Проверяем является ли сообщение трекингом данных
         if self._is_tracking_data(message_text):
             return ProcessingStrategy.TRACKING
+
+        # Добавляем проверку на запрос изменения плана питания
+        if self._is_diet_update_request(message_text):
+            return ProcessingStrategy.DIET_UPDATE
 
         # По умолчанию считаем, что это запрос для ИИ
         return ProcessingStrategy.AI_RESPONSE
@@ -317,12 +339,11 @@ class MessageProcessorService:
         Returns:
             Dict[str, Any]: Результат обработки команды
         """
-
         diagnostic_info = self._diagnose_command_type(message_text)
         self.logger.debug(diagnostic_info)
 
         user_id = user["id"]
-        phone_number = user["phone_number"]
+        recipient_id = user["phone_number"]  # Это может быть как номер телефона, так и chat_id
         lang = await self.localization_service.get_user_language(user_id)
 
         # Определяем тип команды
@@ -340,12 +361,14 @@ class MessageProcessorService:
 
         if not command_type:
             self.logger.warning(f"Не удалось определить тип команды: {message_text}")
-            await self.message_service.send_message(
-                phone_number,
-                self.get_localized_message(LK.Commands.General.COMMAND_NOT_FOUND, lang)
+            await self.messenger_service.send_message(
+                recipient_id,
+                self.get_localized_message(LK.Commands.General.COMMAND_NOT_FOUND, lang),
+                {"user_id": user_id}
             )
-            return {"success": False, "error": self.get_localized_message(LK.MessageProcessor.UNKNOWN_COMMAND, lang,
-                                                                          message_text=message_text)}
+            return {"success": False,
+                    "error": self.get_localized_message(LK.MessageProcessor.UNKNOWN_COMMAND, lang,
+                                                        message_text=message_text)}
 
         # Создаем команду через фабрику
         command = self.command_factory.create_command(command_type)
@@ -353,17 +376,19 @@ class MessageProcessorService:
         # Проверяем, удалось ли создать команду
         if command is None:
             self.logger.error(f"Не удалось создать команду типа: {command_type}")
-            await self.message_service.send_message(
-                phone_number,
-                self.get_localized_message(LK.MessageProcessor.COMMAND_NOT_FOUND, lang)
+            await self.messenger_service.send_message(
+                recipient_id,
+                self.get_localized_message(LK.MessageProcessor.COMMAND_NOT_FOUND, lang),
+                {"user_id": user_id}
             )
-            return {"success": False, "error": self.get_localized_message(LK.MessageProcessor.COMMAND_NOT_FOUND, lang)}
+            return {"success": False,
+                    "error": self.get_localized_message(LK.MessageProcessor.COMMAND_NOT_FOUND, lang)}
 
         # Проверяем предварительные условия
         if not await command.can_execute(user_id):
             # Сообщение о невозможности выполнить команду
             error_message = command.get_error_message()
-            await self.message_service.send_message(phone_number, error_message)
+            await self.messenger_service.send_message(recipient_id, error_message, {"user_id": user_id})
             return {"success": False,
                     "error": self.get_localized_message(LK.MessageProcessor.PREREQUISITES_NOT_MET, lang)}
 
@@ -372,12 +397,11 @@ class MessageProcessorService:
 
         # Отправляем ответное сообщение, если команда это предусматривает
         if "message" in result and result["message"]:
-            await self.message_service.send_message(phone_number, result["message"])
+            await self.messenger_service.send_message(recipient_id, result["message"], {"user_id": user_id})
 
         # Отправляем ответные сообщения, если команда это предусматривает
         if "messages" in result and result["messages"]:
-            for message in result["messages"]:
-                await self.message_service.send_message(phone_number, message)
+            await self.messenger_service.send_messages(recipient_id, result["messages"], {"user_id": user_id})
 
         return result
 
@@ -416,7 +440,7 @@ class MessageProcessorService:
             Dict[str, Any]: Результат обработки
         """
         user_id = user["id"]
-        phone_number = user["phone_number"]
+        recipient_id = user["phone_number"]
         lang = await self.localization_service.get_user_language(user_id)
 
         # Находим последний несогласованный план
@@ -424,9 +448,10 @@ class MessageProcessorService:
 
         if not pending_plan:
             # Используем локализованное сообщение
-            await self.message_service.send_message(
-                phone_number,
-                self.get_localized_message(LK.MessageProcessor.NO_PENDING_PLAN, lang)
+            await self.messenger_service.send_message(
+                recipient_id,
+                self.get_localized_message(LK.MessageProcessor.NO_PENDING_PLAN, lang),
+                {"user_id": user_id}
             )
             return {"success": False, "action": "no_pending_plan"}
 
@@ -438,9 +463,16 @@ class MessageProcessorService:
             success = await self.diet_service.approve_short_diet_plan(pending_plan["id"])
 
             if success:
-                await self.message_service.send_template_message(
-                    phone_number,
-                    "diet.short.approval_success",
+                await self.user_repository.update(user_id, {
+                    "last_conversation_context": {
+                        "last_action": "plan_approved",
+                        "timestamp": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat(),
+                        "plan_id": pending_plan["id"]
+                    }
+                })
+                await self.messenger_service.send_template_message(
+                    recipient_id,
+                    LK.Diet.Short.APPROVAL_SUCCESS,
                     user_id
                 )
 
@@ -449,17 +481,17 @@ class MessageProcessorService:
 
                 return {"success": True, "action": "plan_approved"}
             else:
-                await self.message_service.send_template_message(
-                    phone_number,
-                    "diet.approval_error",
+                await self.messenger_service.send_template_message(
+                    recipient_id,
+                    LK.Diet.Short.APPROVAL_ERROR,
                     user_id
                 )
                 return {"success": False, "action": "approval_failed"}
         else:
             # Отклонение плана
-            await self.message_service.send_template_message(
-                phone_number,
-                "diet.disapproval",
+            await self.messenger_service.send_template_message(
+                recipient_id,
+                LK.Diet.Short.DISAPPROVAL,
                 user_id
             )
             return {"success": True, "action": "plan_disapproved"}
@@ -477,23 +509,25 @@ class MessageProcessorService:
         """
         today = datetime.now(pytz.timezone(settings.TIMEZONE))
         user_id = user["id"]
-        phone_number = user["phone_number"]
+        recipient_id = user["phone_number"]
         lang = await self.localization_service.get_user_language(user_id)
 
         # Проверяем наличие активного плана
         diet_plan = await self.diet_service.get_current_diet(user_id)
 
         if not diet_plan:
-            await self.message_service.send_message(
-                phone_number,
-                self.get_localized_message(LK.MessageProcessor.NO_DIET_PLAN, lang)
+            await self.messenger_service.send_message(
+                recipient_id,
+                self.get_localized_message(LK.MessageProcessor.NO_DIET_PLAN, lang),
+                {"user_id": user_id}
             )
             return {"success": False, "action": "no_diet_plan_for_update"}
 
         # Сообщаем пользователю, что корректируем план
-        await self.message_service.send_message(
-            phone_number,
-            self.get_localized_message(LK.MessageProcessor.UPDATING_PLAN, lang)
+        await self.messenger_service.send_message(
+            recipient_id,
+            self.get_localized_message(LK.MessageProcessor.UPDATING_PLAN, lang),
+            {"user_id": user_id}
         )
 
         # Проверяем, нужно ли обновлять краткий или полный план
@@ -509,9 +543,10 @@ class MessageProcessorService:
             )
 
         if "error" in result:
-            await self.message_service.send_message(
-                phone_number,
-                self.get_localized_message(LK.MessageProcessor.UPDATE_FAILED, lang)
+            await self.messenger_service.send_message(
+                recipient_id,
+                self.get_localized_message(LK.MessageProcessor.UPDATE_FAILED, lang),
+                {"user_id": user_id}
             )
             return {"success": False, "action": "diet_update_error", "error": result.get("error")}
 
@@ -522,19 +557,20 @@ class MessageProcessorService:
                 lang,
                 comment=result.get("comment", "")
             )
-            await self.message_service.send_message(phone_number, update_message)
+            await self.messenger_service.send_message(recipient_id, update_message, {"user_id": user_id})
 
             # Если был обновлен план на сегодня, отправляем его
             if self._is_today_updated(result.get("updated_days", {})):
                 today_plan = self.diet_service.get_day_diet_plan(result["plan"], today, lang)
                 if today_plan:
-                    await self.message_service.send_messages(phone_number, today_plan)
+                    await self.messenger_service.send_messages(recipient_id, today_plan, {"user_id": user_id})
 
             return {"success": True, "action": "diet_plan_updated"}
         else:
-            await self.message_service.send_message(
-                phone_number,
-                self.get_localized_message(LK.MessageProcessor.UPDATE_FAILED, lang)
+            await self.messenger_service.send_message(
+                recipient_id,
+                self.get_localized_message(LK.MessageProcessor.UPDATE_FAILED, lang),
+                {"user_id": user_id}
             )
             return {"success": False, "action": "update_failed"}
 
@@ -566,7 +602,7 @@ class MessageProcessorService:
             Dict[str, Any]: Результат обработки
         """
         user_id = user["id"]
-        phone_number = user["phone_number"]
+        recipient_id = user["phone_number"]
 
         # Получаем ответ от ИИ через сервис диет
         response = await self.diet_service.answer_nutrition_question(user_id, message_text, user["language"])
@@ -577,69 +613,9 @@ class MessageProcessorService:
         }
 
         # Отправляем ответ пользователю
-        await self.message_service.send_message(phone_number, response, context)
+        await self.messenger_service.send_message(recipient_id, response, context)
 
         return {"success": True, "action": "ai_response_sent"}
-
-    def _extract_telegram_message_data(self, body: Dict[str, Any]) -> Tuple[
-        Optional[str], Optional[str], Optional[str], Optional[str]]:
-        """
-        Извлекает данные из входящего сообщения Telegram
-
-        Args:
-            body: Данные сообщения
-
-        Returns:
-            Tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
-            (ID чата, текст сообщения, тип сообщения, ID сообщения)
-        """
-        try:
-            if 'message' not in body:
-                return None, None, None, None
-
-            message = body['message']
-            chat_id = str(message.get('chat', {}).get('id', ''))
-            message_text = message.get('text', '')
-            message_type = MessageType.TEXT  # По умолчанию текстовое сообщение
-            message_id = str(message.get('message_id', ''))
-
-            # Проверяем, есть ли фото или другие типы сообщений
-            if 'photo' in message:
-                message_type = MessageType.MEDIA
-
-            return chat_id, message_text, message_type, message_id
-
-        except Exception as e:
-            self.logger.error(f"Error when extracting Telegram message data: {str(e)}")
-            return None, None, None, None
-
-    def _extract_whatsapp_message_data(self, body: Dict[str, Any]) -> Tuple[
-        Optional[str], Optional[str], Optional[str], Optional[str]]:
-        """
-        Извлекает данные из входящего сообщения WhatsApp
-
-        Args:
-            body: Данные сообщения
-
-        Returns:
-            Tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
-            (номер телефона, текст сообщения, тип сообщения, ID сообщения)
-        """
-        try:
-            phone_number = body.get("From", "").replace("whatsapp:", "")
-            message_text = body.get("Body", "")
-            message_type = MessageType.TEXT  # По умолчанию текстовое сообщение
-            message_id = body.get("MessageSid", "") or body.get("SmsMessageSid", "")
-
-            # Проверяем, есть ли медиа в сообщении
-            if "MediaUrl0" in body:
-                message_type = MessageType.MEDIA
-
-            return phone_number, message_text, message_type, message_id
-
-        except Exception as e:
-            self.logger.error(f"Error when extracting message data: {str(e)}")
-            return None, None, None, None
 
     async def _is_message_processed(self, message_id: str) -> bool:
         """
@@ -651,7 +627,17 @@ class MessageProcessorService:
         Returns:
             bool: True, если сообщение уже обработано
         """
-        return await self.message_repository.is_processed(message_id)
+        if not message_id:
+            return False
+
+        try:
+            # Добавляем обработку исключений
+            return await self.message_repository.is_processed(message_id)
+        except Exception as e:
+            self.logger.error(f"Error checking if message was processed: {str(e)}")
+            # По умолчанию считаем, что сообщение не обработано,
+            # чтобы пользователь получил ответ
+            return False
 
     async def _mark_message_as_processed(self, message_id: str, sender_id: str, message_text: str) -> None:
         """
@@ -662,12 +648,24 @@ class MessageProcessorService:
             sender_id: Номер отправителя
             message_text: Текст сообщения
         """
-        await self.message_repository.mark_as_processed(
-            message_id,
-            sender_id,
-            message_text,
-            datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
-        )
+        # Проверяем валидность message_id
+        if not message_id:
+            self.logger.warning("Cannot mark message as processed: empty message_id")
+            return
+
+        try:
+            # Используем await для асинхронного метода
+            result = await self.message_repository.mark_as_processed(
+                message_id,
+                sender_id,
+                message_text,
+                datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+            )
+
+            if not result:
+                self.logger.warning(f"Failed to mark message {message_id} as processed")
+        except Exception as e:
+            self.logger.error(f"Error marking message as processed: {str(e)}", exc_info=True)
 
     def _is_tracking_data(self, message_text: str) -> bool:
         """
@@ -682,6 +680,17 @@ class MessageProcessorService:
         # Реализация логики определения данных трекинга
         # Пока заглушка
         return False
+
+    def _is_diet_update_request(self, message_text: str) -> bool:
+        """Проверяет, является ли сообщение запросом на изменение плана питания"""
+        update_keywords = ["убери", "измени", "поменяй", "обнови", "замени", "добавь"]
+        diet_keywords = ["план", "меню", "рацион", "диета", "питание", "мясо", "веганский", "вегетарианский"]
+
+        # Проверяем наличие ключевых слов из обеих категорий
+        has_update_keyword = any(keyword in message_text.lower() for keyword in update_keywords)
+        has_diet_keyword = any(keyword in message_text.lower() for keyword in diet_keywords)
+
+        return has_update_keyword and has_diet_keyword
 
     async def _has_pending_diet_plan(self, user_id: str) -> bool:
         """

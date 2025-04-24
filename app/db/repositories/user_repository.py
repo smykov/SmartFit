@@ -38,7 +38,7 @@ class FirebaseUserRepository(IUserRepository):
                 user_data['created_at'] = now
             user_data['updated_at'] = now
 
-            user_id = self.firebase_client.add_document("users", user_data)
+            user_id = await self.firebase_client.add_document("users", user_data)
 
             return user_id
         except Exception as e:
@@ -56,7 +56,7 @@ class FirebaseUserRepository(IUserRepository):
             Optional[Dict[str, Any]]: Данные пользователя или None, если пользователь не найден
         """
         try:
-            user = self.firebase_client.get_document("users", user_id)
+            user = await self.firebase_client.get_document("users", user_id)
             return user
         except Exception as e:
             logger.error(f"Error retrieving user by ID: {str(e)}")
@@ -73,7 +73,7 @@ class FirebaseUserRepository(IUserRepository):
             Optional[Dict[str, Any]]: Данные пользователя или None, если пользователь не найден
         """
         try:
-            users = self.firebase_client.query_documents("users", "phone_number", "==", phone_number)
+            users = await self.firebase_client.query_documents("users", "phone_number", "==", phone_number)
             if not users:
                 return None
             return users[0]
@@ -92,7 +92,7 @@ class FirebaseUserRepository(IUserRepository):
             Optional[Dict[str, Any]]: Данные пользователя или None, если пользователь не найден
         """
         try:
-            users = self.firebase_client.query_documents("users", "chat_id", "==", chat_id)
+            users = await self.firebase_client.query_documents("users", "chat_id", "==", chat_id)
             if not users:
                 return None
             return users[0]
@@ -112,7 +112,7 @@ class FirebaseUserRepository(IUserRepository):
             bool: Результат обновления
         """
         try:
-            return self.firebase_client.update_document("users", user_id, update_data)
+            return await self.firebase_client.update_document("users", user_id, update_data)
         except Exception as e:
             logger.error(f"Error updating user: {str(e)}")
             return False
@@ -129,7 +129,7 @@ class FirebaseUserRepository(IUserRepository):
         """
         try:
             # В реальном приложении часто делают "soft delete" вместо физического удаления
-            return self.firebase_client.update_document("users", user_id, {"is_active": False})
+            return await self.firebase_client.update_document("users", user_id, {"is_active": False})
         except Exception as e:
             logger.error(f"Error deleting user: {str(e)}")
             return False
@@ -142,7 +142,7 @@ class FirebaseUserRepository(IUserRepository):
             List[Dict[str, Any]]: Список пользователей с незавершенным онбордингом
         """
         try:
-            return self.firebase_client.query_documents("users", "is_onboarding_completed", "==", False)
+            return await self.firebase_client.query_documents("users", "is_onboarding_completed", "==", False)
         except Exception as e:
             logger.error(f"Error finding users with incomplete onboarding: {str(e)}")
             return []
@@ -155,7 +155,7 @@ class FirebaseUserRepository(IUserRepository):
             List[Dict[str, Any]]: Список пользователей с завершенным онбордингом
         """
         try:
-            return self.firebase_client.query_documents("users", "is_onboarding_completed", "==", True)
+            return await self.firebase_client.query_documents("users", "is_onboarding_completed", "==", True)
         except Exception as e:
             logger.error(f"Error finding users with completed onboarding: {str(e)}")
             return []
@@ -178,12 +178,12 @@ class FirebaseUserRepository(IUserRepository):
             field_path = f"messenger_accounts.{messenger_type}"
 
             # Выполняем запрос к Firebase
-            users = self.firebase_client.query_documents("users", field_path, "==", messenger_id)
+            users = await self.firebase_client.query_documents("users", field_path, "==", messenger_id)
 
             if not users:
                 return None
 
             return users[0]
         except Exception as e:
-            self.logger.error(f"Error finding user by messenger account: {str(e)}")
+            logger.error(f"Error finding user by messenger account: {str(e)}")
             return None

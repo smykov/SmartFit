@@ -5,16 +5,17 @@ from typing import Optional, Dict, Any, List
 
 class IMessageClient(ABC):
     """
-    Интерфейс для клиентов отправки сообщений (Twilio, MockClient и т.д.)
+    Интерфейс для клиентов отправки сообщений (Twilio, Telegram API и т.д.)
+    Ответственность: Только низкоуровневое взаимодействие с API внешних сервисов
     """
 
     @abstractmethod
     async def send_message(self, to: str, message: str) -> Optional[str]:
         """
-        Отправляет сообщение получателю
+        Отправляет сообщение получателю через внешний API
 
         Args:
-            to: Идентификатор получателя (телефон, email и т.д.)
+            to: Идентификатор получателя (телефон, chat_id и т.д.)
             message: Текст сообщения
 
         Returns:
@@ -26,7 +27,7 @@ class IMessageClient(ABC):
     async def send_template_message(self, to: str, template_name: str, lang: Optional[str] = None,
                                     params: Dict[str, Any] = None) -> Optional[str]:
         """
-        Отправляет шаблонное сообщение
+        Отправляет шаблонное сообщение через внешний API
 
         Args:
             to: Идентификатор получателя

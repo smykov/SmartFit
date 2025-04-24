@@ -67,7 +67,7 @@ def create_diet_system_prompt(product_list=None):
                             "fiber": граммы_клетчатки,
                             "vitamins": "основные витамины в блюде",
                             "minerals": "основные минералы в блюде",
-                            "estimated_price": примерная_стоимость_в_кетцалях
+                            "estimated_price": примерная_стоимость_в_валюте_пользователя
                         }
                     ],
                     "total_calories": общее_количество_калорий_за_день,
@@ -142,7 +142,7 @@ def create_diet_user_prompt(user_data, days=7):
     - Уровень активности: {activity_level}
     - Цель по весу: {weight_goal}
     - Пищевые предпочтения: {diet_preference}
-    - Бюджет на продукты: {budget_limit} кетцалей в неделю
+    - Бюджет на продукты: {budget_limit} в валюте пользователя в неделю
     - Аллергии: {', '.join(allergies) if allergies else 'нет'}
     - Нелюбимые продукты: {', '.join(disliked_products) if disliked_products else 'нет'}
 
@@ -246,7 +246,7 @@ def create_short_diet_user_prompt(user_data):
     - Уровень активности: {activity_level}
     - Цель по весу: {weight_goal}
     - Пищевые предпочтения: {diet_preference}
-    - Бюджет на продукты: {budget_limit} кетцалей в неделю
+    - Бюджет на продукты: {budget_limit} в валюте пользователя в неделю
     - Аллергии: {', '.join(allergies) if allergies else 'нет'}
     - Нелюбимые продукты: {', '.join(disliked_products) if disliked_products else 'нет'}
 
@@ -307,7 +307,7 @@ def create_full_diet_system_prompt():
                         "fiber": граммы_клетчатки,
                         "vitamins": "основные витамины в блюде",
                         "minerals": "основные минералы в блюде",
-                        "estimated_price": примерная_стоимость_в_кетцалях
+                        "estimated_price": примерная_стоимость_в_валюте_пользователя
                     }
                 ],
                 "total_calories": общее_количество_калорий_за_день,
@@ -366,7 +366,7 @@ def create_full_diet_user_prompt(user_data, short_plan):
     - Уровень активности: {activity_level}
     - Цель по весу: {weight_goal}
     - Пищевые предпочтения: {diet_preference}
-    - Бюджет на продукты: {budget_limit} кетцалей в неделю
+    - Бюджет на продукты: {budget_limit} в валюте пользователя в неделю
     - Аллергии: {', '.join(allergies) if allergies else 'нет'}
     - Нелюбимые продукты: {', '.join(disliked_products) if disliked_products else 'нет'}
 
@@ -439,7 +439,7 @@ def create_single_day_user_prompt(day_of_week: str) -> str:
           "fiber": граммы_клетчатки,
           "vitamins": "основные витамины в блюде",
           "minerals": "основные минералы в блюде",
-          "estimated_price": примерная_стоимость_в_кетцалях
+          "estimated_price": примерная_стоимость_в_валюте_пользователя
         }
       ],
       "total_calories": общее_количество_калорий_за_день,
@@ -650,7 +650,7 @@ def update_diet_user_prompt(update_request: str) -> str:
                                 "fiber": граммы_клетчатки,
                                 "vitamins": "основные витамины в блюде",
                                 "minerals": "основные минералы в блюде",
-                                "estimated_price": примерная_стоимость_в_кетцалях
+                                "estimated_price": примерная_стоимость_в_рублях
                             }
                         ],
                         "total_calories": общее_количество_калорий_за_день,

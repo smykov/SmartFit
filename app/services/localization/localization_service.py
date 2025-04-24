@@ -41,7 +41,7 @@ class LocalizationService(ILocalizationService):
         # Если язык не указан, используем язык по умолчанию
         if not lang:
             lang = self.DEFAULT_LANGUAGE
-            logger.debug(f"No lang specified, using default: '{lang}'")
+            logger.warning(f"No lang specified, using default: '{lang}'")
 
         try:
             # Копируем параметры, чтобы избежать модификации исходного словаря
@@ -62,6 +62,8 @@ class LocalizationService(ILocalizationService):
             # Проверка на возврат самого ключа (признак ошибки)
             if result == key:
                 logger.warning(f"Possible localization error: key='{key}' returned as value")
+
+            return result
 
         except Exception as e:
             logger.error(f"Error getting localized message: {e}")

@@ -12,7 +12,7 @@ from app.services.tracking.tracking_service_interface import ITrackingService
 
 from app.db.interfaces.reminder_repository_interface import IReminderRepository
 from app.db.interfaces.user_repository_interface import IUserRepository
-from app.services.messaging.message_interface import IMessageService
+from app.services.messaging.interfaces.message_interface import IMessengerService
 from app.services.localization.localization_interface import ILocalizationService
 from app.services.reminders.reminder_service_interface import IReminderService
 from app.services.reminders.reminder_factory import ReminderFactory
@@ -33,7 +33,7 @@ class ReminderService(IReminderService):
 
     def __init__(
             self,
-            message_service: IMessageService,
+            message_service: IMessengerService,
             user_repository: IUserRepository,
             reminder_repository: IReminderRepository,
             tracking_service: ITrackingService = None,
@@ -160,7 +160,10 @@ class ReminderService(IReminderService):
                         reminder_type = self.get_localized_message(LK.Reminders.REMINDER_TYPE_ONBOARDING, lang)
 
                         # Создаем контекст для напоминания
-                        context = {"onboarding_step": current_step}
+                        context = {
+                            "onboarding_step": current_step,
+                            "user_id": user_id
+                        }
 
                         # Отправляем напоминание
                         if await self.can_send_reminder(phone_number, reminder_type, 86400):  # 24 часа
@@ -428,6 +431,7 @@ class ReminderService(IReminderService):
             if message:
                 reminder_context = {
                     "reminder_type": reminder_type,
+                    "user_id": user_id
                     **(context or {})
                 }
 

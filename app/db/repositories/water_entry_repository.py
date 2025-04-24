@@ -52,7 +52,7 @@ class FirebaseWaterEntryRepository(IWaterEntryRepository):
             date_str = date_value.isoformat()
 
             # Получаем пользователя для обновления истории потребления воды
-            user = self.firebase_client.get_document("users", user_id)
+            user = await self.firebase_client.get_document("users", user_id)
             if not user:
                 logger.error(f"User {user_id} not found")
                 return None
@@ -66,7 +66,7 @@ class FirebaseWaterEntryRepository(IWaterEntryRepository):
             else:
                 water_history[date_str] = amount
 
-            self.firebase_client.update_document("users", user_id, {"water_intake_history": water_history})
+            await self.firebase_client.update_document("users", user_id, {"water_intake_history": water_history})
 
             # Создаем запись в коллекции water_entries для аналитики
             entry_data = {
@@ -77,7 +77,7 @@ class FirebaseWaterEntryRepository(IWaterEntryRepository):
                 "created_at": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
             }
 
-            entry_id = self.firebase_client.add_document("water_entries", entry_data)
+            entry_id = await self.firebase_client.add_document("water_entries", entry_data)
             return entry_id
 
         except Exception as e:
@@ -99,7 +99,7 @@ class FirebaseWaterEntryRepository(IWaterEntryRepository):
         """
         try:
             # Получаем все записи потребления воды пользователя
-            entries = self.firebase_client.query_documents(
+            entries = await self.firebase_client.query_documents(
                 "water_entries",
                 "user_id",
                 "==",
@@ -148,7 +148,7 @@ class FirebaseWaterEntryRepository(IWaterEntryRepository):
             date_str = date_value.isoformat()
 
             # Получаем пользователя
-            user = self.firebase_client.get_document("users", user_id)
+            user = await self.firebase_client.get_document("users", user_id)
             if not user:
                 logger.error(f"User {user_id} not found")
                 return 0.0
@@ -175,7 +175,7 @@ class FirebaseWaterEntryRepository(IWaterEntryRepository):
             bool: Результат обновления
         """
         try:
-            return self.firebase_client.update_document(
+            return await self.firebase_client.update_document(
                 "water_entries",
                 entry_id,
                 update_data
@@ -195,7 +195,7 @@ class FirebaseWaterEntryRepository(IWaterEntryRepository):
             bool: Результат удаления
         """
         try:
-            return self.firebase_client.delete_document(
+            return await self.firebase_client.delete_document(
                 "water_entries",
                 entry_id
             )
