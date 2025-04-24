@@ -275,7 +275,7 @@ class Container(containers.DeclarativeContainer):
     diet_service = providers.Singleton(
         DietService,
         user_repository=user_repository,
-        message_service=messenger_service,
+        messenger_service=messenger_service,
         localization_service=localization_service,
         diet_plan_repository=diet_plan_repository,
         product_repository=product_repository,
@@ -288,7 +288,7 @@ class Container(containers.DeclarativeContainer):
         CommandHandlerService,
         dependencies=providers.Dict({
             "user_repository": user_repository,
-            "message_service": messenger_service,
+            "messenger_service": messenger_service,
             "diet_service": diet_service,
             "tracking_service": tracking_service,
             "localization_service": localization_service,
@@ -299,7 +299,7 @@ class Container(containers.DeclarativeContainer):
     onboarding_service = providers.Singleton(
         OnboardingService,
         user_repository=user_repository,
-        message_service=messenger_service,
+        messenger_service=messenger_service,
         diet_service=diet_service,
         command_handler_service=command_handler_service,
         localization_service=localization_service
@@ -309,7 +309,7 @@ class Container(containers.DeclarativeContainer):
         CommandFactory,
         dependencies=providers.Dict({
             "user_repository": user_repository,
-            "message_service": messenger_service,
+            "messenger_service": messenger_service,
             "diet_service": diet_service,
             "tracking_service": tracking_service,
             "tracking_formatter_service": tracking_formatter_service,
@@ -335,7 +335,7 @@ class Container(containers.DeclarativeContainer):
     # Сервис напоминаний
     reminder_service = providers.Singleton(
         ReminderService,
-        message_service=messenger_service,
+        messenger_service=messenger_service,
         user_repository=user_repository,
         reminder_repository=reminder_repository,
         tracking_service=tracking_service,

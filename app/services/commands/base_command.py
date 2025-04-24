@@ -28,8 +28,8 @@ class BaseCommand(ICommand):
         # Для удобства доступа, извлекаем общие зависимости с явной типизацией
         if 'user_repository' in dependencies:
             self.user_repository: IUserRepository = dependencies['user_repository']
-        if 'message_service' in dependencies:
-            self.message_service: IMessengerService = dependencies['message_service']
+        if 'messenger_service' in dependencies:
+            self.messenger_service: IMessengerService = dependencies['messenger_service']
         if 'tracking_service' in dependencies:
             self.tracking_service: ITrackingService = dependencies['tracking_service']
         if 'tracking_formatter_service' in dependencies:

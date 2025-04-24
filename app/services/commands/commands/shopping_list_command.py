@@ -70,7 +70,7 @@ class ShoppingListCommand(BaseCommand):
                     }
 
             # Уведомляем о начале генерации списка покупок
-            await self.dependencies['message_service'].send_message(
+            await self.dependencies['messenger_service'].send_message(
                 self.dependencies['user'].get('phone_number', ''),
                 self.get_localized_message(LK.Commands.ShoppingList.GENERATING, lang),
                 {"user_id": user_id}

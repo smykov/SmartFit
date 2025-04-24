@@ -25,7 +25,7 @@ class DietService(BaseDietService, IDietService):
     def __init__(
             self,
             user_repository: IUserRepository,
-            message_service: IMessengerService,
+            messenger_service: IMessengerService,
             localization_service: ILocalizationService,
             diet_plan_repository: IDietPlanRepository,
             product_repository: IProductRepository,
@@ -50,7 +50,7 @@ class DietService(BaseDietService, IDietService):
         )
         self.formatter = DietFormatterService(localization_service)
         self.localization_service = localization_service
-        self.message_service = message_service
+        self.messenger_service = messenger_service
         self.llm_service = llm_service
         self.user_repository = user_repository
         self.diet_plan_repository = diet_plan_repository
@@ -102,7 +102,7 @@ class DietService(BaseDietService, IDietService):
 
             if full_plan and "error" not in full_plan:
                 # Отправляем уведомление пользователю
-                await self.message_service.send_message(
+                await self.messenger_service.send_message(
                     phone_number,
                     self.localization_service.get_message(LK.Diet.Full.CREATED, lang),
                     {"user_id": user_id}
@@ -110,14 +110,14 @@ class DietService(BaseDietService, IDietService):
 
                 # Отправляем сводку плана
                 diet_summary = self.get_diet_summary(full_plan, lang)
-                await self.message_service.send_message(phone_number, diet_summary,
+                await self.messenger_service.send_message(phone_number, diet_summary,
                                                         {"user_id": user_id})
                 commands_message = self.get_diet_summary_commands(full_plan, lang)
-                await self.message_service.send_message(phone_number, commands_message,
+                await self.messenger_service.send_message(phone_number, commands_message,
                                                         {"user_id": user_id})
             else:
                 # В случае ошибки
-                await self.message_service.send_message(
+                await self.messenger_service.send_message(
                     phone_number,
                     self.localization_service.get_message(LK.Diet.Full.CREATING_ERROR, lang),
                     {"user_id": user_id}
@@ -405,7 +405,7 @@ class DietService(BaseDietService, IDietService):
             if user_id:
                 user = await self.user_repository.get_by_id(user_id)
                 if user and "phone_number" in user:
-                    await self.message_service.send_message(
+                    await self.messenger_service.send_message(
                         user["phone_number"],
                         self.localization_service.get_message(LK.Shopping.GENERATING, lang),
                         {"user_id": user_id}

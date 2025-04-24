@@ -53,7 +53,7 @@ class OnboardingService(IOnboardingService):
     def __init__(
             self,
             user_repository: IUserRepository,
-            message_service: IMessengerService,
+            messenger_service: IMessengerService,
             diet_service: IDietService,
             command_handler_service: ICommandHandler,
             localization_service: ILocalizationService
@@ -63,13 +63,13 @@ class OnboardingService(IOnboardingService):
 
         Args:
             user_repository: Репозиторий для работы с пользователями
-            message_service: Сервис для отправки сообщений
+            messenger_service: Сервис для отправки сообщений
             diet_service: Сервис для генерации диет (опционально)
             command_handler_service: Сервис обработки команд
             localization_service: Сервис локализации
         """
         self.user_repository = user_repository
-        self.message_service = message_service
+        self.messenger_service = messenger_service
         self.diet_service = diet_service
         self.command_handler_service = command_handler_service
         self.localization_service = localization_service
@@ -151,7 +151,7 @@ class OnboardingService(IOnboardingService):
             if not update_data:
                 # Если произошла ошибка, отправляем сообщение с просьбой повторить
                 step_message = self._get_step_message(current_step, lang)
-                await self.message_service.send_message(
+                await self.messenger_service.send_message(
                     phone_number,
                     self.localization_service.get_message(
                         LK.Onboarding.INVALID_INPUT,
@@ -176,7 +176,7 @@ class OnboardingService(IOnboardingService):
 
                 # Отправляем уведомление пользователю о цели
                 if weight_goal_message:
-                    await self.message_service.send_message(phone_number, weight_goal_message)
+                    await self.messenger_service.send_message(phone_number, weight_goal_message)
 
                 # Пропускаем шаг запроса цели по весу
                 if next_step == self.STEP_WEIGHT_GOAL:
@@ -197,7 +197,7 @@ class OnboardingService(IOnboardingService):
 
             # Отправляем сообщение для следующего шага
             next_step_message = self._get_step_message(next_step, lang)
-            await self.message_service.send_message(phone_number, next_step_message, {
+            await self.messenger_service.send_message(phone_number, next_step_message, {
                 'onboarding_step': next_step,
                 'user_id': user_id
             })
@@ -238,7 +238,7 @@ class OnboardingService(IOnboardingService):
             "onboarding_step": "complete",
             "user_id": user_id
         }
-        await self.message_service.send_message(
+        await self.messenger_service.send_message(
             phone_number,
             self.localization_service.get_message(LK.Onboarding.COMPLETED, lang),
             context
