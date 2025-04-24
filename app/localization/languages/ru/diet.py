@@ -1,11 +1,9 @@
 from app.localization.base import LocalizationString, LocalizationModule
+from app.localization.base import LocalizationString, LocalizationModule
 
 # Общие строки
 strings = {
     'plan_not_found': LocalizationString('План диеты не найден'),
-    'plan_approved': LocalizationString('Подтверждено, генерируем полную версию плана...'),
-    'plan_approval_error': LocalizationString('Произошла ошибка при обработке подтверждения'),
-
     'full': {
         'created': LocalizationString(
             '🎉 Твой план питания готов! Я подобрал блюда с учетом твоих параметров и предпочтений. Просмотри план и дай мне знать, если хочешь что-то изменить.'),
@@ -53,6 +51,8 @@ strings = {
     },
 
     'short': {
+        'created': LocalizationString(
+            '🎉 Твой план питания готов! Я подобрал блюда с учетом твоих параметров и предпочтений. Просмотри план и дай мне знать, если хочешь что-то изменить.'),
         'creating_error': LocalizationString(
             'Ошибка при создании краткого плана питания. Пожалуйста, попробуйте позже.'),
         'next_step': {
@@ -68,7 +68,20 @@ strings = {
                 '• Список покупок с учетом того, что у вас уже есть\n\n'),
             'invalid_version': LocalizationString(
                 'План не является краткой версией'),
-        }
+        },
+        'summary': {
+            'header': LocalizationString('План питания'),
+            'info': LocalizationString('Ваш план питания на неделю:'),
+            'weekday': LocalizationString('\n\n*{weekday_name}*\n'),
+            'total_calories': LocalizationString('Общая калорийность: *{calories} ккал*\n'),
+            'meal_format': LocalizationString('{emoji} *{meal_type}*: {title}'),
+            'meal_calories': LocalizationString(' (*{calories} ккал*)')
+        },
+        'approved': LocalizationString('Подтверждено, генерируем полную версию плана...'),
+        'approval_error': LocalizationString('Произошла ошибка при обработке подтверждения'),
+        'conformation': LocalizationString(
+            'Вам подходит этот план питания? Напишите "да", если устраивает, или опишите, что нужно изменить.')
+
     },
 
     'day': {

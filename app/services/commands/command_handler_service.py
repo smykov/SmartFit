@@ -3,7 +3,7 @@ from typing import Dict, Any, Optional
 
 from app.services.diet.diet_service_interface import IDietService
 from app.services.tracking.tracking_service_interface import ITrackingService
-from app.services.messaging.message_interface import IMessageService
+from app.services.messaging.interfaces.message_interface import IMessengerService
 from app.db.interfaces.user_repository_interface import IUserRepository
 from app.services.localization.localization_interface import ILocalizationService
 from app.constants.localization_keys import LocalizationKeys as LK
@@ -33,7 +33,7 @@ class CommandHandlerService(ICommandHandler):
         if 'user_repository' in dependencies:
             self.user_repository: IUserRepository = dependencies['user_repository']
         if 'message_service' in dependencies:
-            self.message_service: IMessageService = dependencies['message_service']
+            self.message_service: IMessengerService = dependencies['message_service']
         if 'tracking_service' in dependencies:
             self.tracking_service: ITrackingService = dependencies['tracking_service']
         if 'diet_service' in dependencies:

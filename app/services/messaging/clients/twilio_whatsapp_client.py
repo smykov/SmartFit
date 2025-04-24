@@ -1,6 +1,6 @@
 # app/services/messaging/clients/twilio_whatsapp_client.py
 import logging
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 
 from twilio.base.exceptions import TwilioRestException
 from twilio.rest import Client
@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 class TwilioWhatsAppClient(IMessageClient):
     """
     Клиент для отправки сообщений через Twilio WhatsApp API
+    Ответственность: Низкоуровневое взаимодействие с API Twilio
     """
 
     def __init__(self, account_sid: str, auth_token: str, from_phone: str, localization_service: ILocalizationService):
@@ -29,6 +30,7 @@ class TwilioWhatsAppClient(IMessageClient):
         self.client = Client(account_sid, auth_token)
         self.from_phone = from_phone
         self.localization_service = localization_service
+        self.logger = logging.getLogger(self.__class__.__name__)
 
     async def send_message(self, to: str, message: str) -> Optional[str]:
         """
@@ -60,12 +62,12 @@ class TwilioWhatsAppClient(IMessageClient):
         except TwilioRestException as e:
             # Логируем ошибку Twilio
             error_code = e.status if hasattr(e, 'status') else 'unknown'
-            logger.error(f"Twilio error ({error_code}): {str(e)}")
+            self.logger.error(f"Twilio error ({error_code}): {str(e)}")
             return None
 
         except Exception as e:
             # Общая обработка ошибок
-            logger.error(f"Error sending message via Twilio: {str(e)}")
+            self.logger.error(f"Error sending message via Twilio: {str(e)}")
             return None
 
     async def send_template_message(self, to: str, template_name: str, lang: Optional[str] = None,
@@ -93,7 +95,7 @@ class TwilioWhatsAppClient(IMessageClient):
             return await self.send_message(to_number, message_text)
 
         except Exception as e:
-            logger.error(f"Error sending template ('{lang}.{template_name}') message: {str(e)}")
+            self.logger.error(f"Error sending template ('{lang}.{template_name}') message: {str(e)}")
             return None
 
     def _normalize_phone_number(self, phone_number: str) -> str:

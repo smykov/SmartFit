@@ -44,7 +44,7 @@ class FirebaseClient:
 
     # --- Методы для работы с Firestore (база данных) ---
 
-    def get_document(self, collection: str, document_id: str) -> Optional[Dict[str, Any]]:
+    async def get_document(self, collection: str, document_id: str) -> Optional[Dict[str, Any]]:
         """Получение документа из коллекции по ID"""
         try:
             doc_ref = self.db.collection(collection).document(document_id)
@@ -60,7 +60,7 @@ class FirebaseClient:
             logger.error(f"Ошибка при получении документа {document_id} из {collection}: {str(e)}")
             return None
 
-    def add_document(self, collection: str, data: Dict[str, Any]) -> Optional[str]:
+    async def add_document(self, collection: str, data: Dict[str, Any]) -> Optional[str]:
         """Добавление нового документа в коллекцию с автогенерируемым ID"""
         try:
             # ИСПРАВЛЕНИЕ: Обработка случая, если в данных уже есть 'id'
@@ -75,15 +75,14 @@ class FirebaseClient:
             doc_ref = self.db.collection(collection).add(data)
             document_id = doc_ref[1].id
 
-            # ИСПРАВЛЕНИЕ: После добавления, обновляем документ, добавляя id в данные
-            self.update_document(collection, document_id, {"id": document_id})
+            await self.update_document(collection, document_id, {"id": document_id})
 
             return document_id
         except Exception as e:
             logger.error(f"Ошибка при добавлении документа в {collection}: {str(e)}")
             return None
 
-    def set_document(self, collection: str, document_id: str, data: Dict[str, Any], merge: bool = True) -> bool:
+    async def set_document(self, collection: str, document_id: str, data: Dict[str, Any], merge: bool = True) -> bool:
         """Создание или обновление документа с указанным ID"""
         try:
             # ИСПРАВЛЕНИЕ: Обеспечиваем, что у документа есть поле id соответствующее его ID
@@ -98,7 +97,7 @@ class FirebaseClient:
             logger.error(f"Ошибка при установке документа {document_id} в {collection}: {str(e)}")
             return False
 
-    def update_document(self, collection: str, document_id: str, data: Dict[str, Any]) -> bool:
+    async def update_document(self, collection: str, document_id: str, data: Dict[str, Any]) -> bool:
         """Обновление существующего документа"""
         try:
             # ИСПРАВЛЕНИЕ: Проверяем существование документа перед обновлением
@@ -115,7 +114,7 @@ class FirebaseClient:
             logger.error(f"Ошибка при обновлении документа {document_id} в {collection}: {str(e)}")
             return False
 
-    def delete_document(self, collection: str, document_id: str) -> bool:
+    async def delete_document(self, collection: str, document_id: str) -> bool:
         """Удаление документа"""
         try:
             self.db.collection(collection).document(document_id).delete()
@@ -124,7 +123,7 @@ class FirebaseClient:
             logger.error(f"Ошибка при удалении документа {document_id} из {collection}: {str(e)}")
             return False
 
-    def query_documents(self, collection: str, field: str, operator: str, value: Any) -> List[Dict[str, Any]]:
+    async def query_documents(self, collection: str, field: str, operator: str, value: Any) -> List[Dict[str, Any]]:
         """Запрос документов по условию"""
         try:
             # ИСПРАВЛЕНИЕ: Использование современного синтаксиса для фильтрации
@@ -143,7 +142,7 @@ class FirebaseClient:
             logger.error(f"Ошибка при запросе документов из {collection}: {str(e)}")
             return []
 
-    def get_all_documents(self, collection: str) -> List[Dict[str, Any]]:
+    async def get_all_documents(self, collection: str) -> List[Dict[str, Any]]:
         """Получение всех документов из коллекции"""
         try:
             docs = self.db.collection(collection).get()
@@ -162,7 +161,7 @@ class FirebaseClient:
 
     # --- Методы для работы с Authentication ---
 
-    def create_user(self, email: str, password: str, display_name: str = None) -> Optional[str]:
+    async def create_user(self, email: str, password: str, display_name: str = None) -> Optional[str]:
         """Создание нового пользователя в Firebase Authentication"""
         try:
             user_data = {
@@ -180,7 +179,7 @@ class FirebaseClient:
             logger.error(f"Ошибка при создании пользователя: {str(e)}")
             return None
 
-    def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
+    async def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
         """Получение пользователя по email"""
         try:
             user = auth.get_user_by_email(email)
@@ -194,7 +193,7 @@ class FirebaseClient:
             logger.error(f"Ошибка при получении пользователя по email {email}: {str(e)}")
             return None
 
-    def get_user_by_phone(self, phone: str) -> Optional[Dict[str, Any]]:
+    async def get_user_by_phone(self, phone: str) -> Optional[Dict[str, Any]]:
         """Получение пользователя по номеру телефона"""
         try:
             user = auth.get_user_by_phone_number(phone)

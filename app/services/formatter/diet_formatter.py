@@ -361,7 +361,7 @@ class DietFormatter(BaseFormatter):
 
         # Информация о стоимости
         if "estimated_weekly_price" in diet_plan and diet_plan["estimated_weekly_price"]:
-            currency = diet_plan.get("currency", "кетцалей")
+            currency = diet_plan.get("currency", "рублей")
             message += self.get_localized_message(
                 LK.Diet.Full.Summary.PRICE,
                 lang,

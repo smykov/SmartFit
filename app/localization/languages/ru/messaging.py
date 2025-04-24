@@ -10,7 +10,7 @@ strings = {
     'prerequisitesNotMet': LocalizationString('Невозможно выполнить эту команду в данный момент'),
     'processingCommand': LocalizationString('Обрабатываю вашу команду...'),
     'delayedMassage': LocalizationString('Отложенное сообщение: '),
-
+    'error': LocalizationString('Извините, произошла при обработки входящего сообщения. Пожалуйста, попробуйте позже.'),
     # Keys for message processor
     'userNotFound': LocalizationString('Пользователь не найден'),
     'noPendingPlan': LocalizationString('Ожидающий план диеты не найден'),

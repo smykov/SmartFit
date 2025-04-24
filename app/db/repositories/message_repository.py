@@ -8,7 +8,6 @@ from app.db.interfaces.message_repository_interface import IMessageRepository
 from app.models.messaging import MessageStatus
 from config import settings
 
-logger = logging.getLogger(__name__)
 
 
 class FirebaseMessageRepository(IMessageRepository):
@@ -24,6 +23,7 @@ class FirebaseMessageRepository(IMessageRepository):
             firebase_client: Клиент Firebase для работы с базой данных
         """
         self.firebase_client = firebase_client
+        self.logger = logging.getLogger(self.__class__.__name__)
 
     async def save_message(self, message_data: Dict[str, Any]) -> str:
         """
@@ -41,12 +41,12 @@ class FirebaseMessageRepository(IMessageRepository):
                 message_data["timestamp"] = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
 
             # Сохраняем в Firebase
-            message_id = self.firebase_client.add_document("messages", message_data)
+            message_id = await self.firebase_client.add_document("messages", message_data)
 
             return message_id or ""
 
         except Exception as e:
-            logger.error(f"Error saving message: {str(e)}")
+            self.logger.error(f"Error saving message: {str(e)}")
             return ""
 
     async def get_message_by_id(self, message_id: str) -> Optional[Dict[str, Any]]:
@@ -60,11 +60,11 @@ class FirebaseMessageRepository(IMessageRepository):
             Optional[Dict[str, Any]]: Данные сообщения или None
         """
         try:
-            message = self.firebase_client.get_document("messages", message_id)
+            message = await self.firebase_client.get_document("messages", message_id)
             return message
 
         except Exception as e:
-            logger.error(f"Error getting message by id: {str(e)}")
+            self.logger.error(f"Error getting message by id: {str(e)}")
             return None
 
     async def save_sent_message(self, phone_number: str, message_id: str, message_text: str,
@@ -92,15 +92,15 @@ class FirebaseMessageRepository(IMessageRepository):
 
             # Добавляем контекст, если он предоставлен
             if context:
-                logger.info(f"save_sent_message - context: {context}")
+                self.logger.info(f"save_sent_message - context: {context}")
                 message_data.update(context)
 
             # Сохраняем в коллекции sent_messages
-            result = self.firebase_client.add_document("sent_messages", message_data)
+            result = await self.firebase_client.add_document("sent_messages", message_data)
             return bool(result)
 
         except Exception as e:
-            logger.error(f"Error saving sent message: {str(e)}")
+            self.logger.error(f"Error saving sent message: {str(e)}")
             return False
 
     async def save_pending_message(self, phone_number: str, message_text: str, error_type: str = "unknown",
@@ -135,7 +135,7 @@ class FirebaseMessageRepository(IMessageRepository):
                 message_data.update(context)
 
             # Проверяем наличие дубликата
-            existing_messages = self.firebase_client.query_documents(
+            existing_messages = await self.firebase_client.query_documents(
                 "pending_messages",
                 "phone_number", "==", phone_number
             )
@@ -149,7 +149,7 @@ class FirebaseMessageRepository(IMessageRepository):
             if duplicate_messages:
                 # Если нашли дубликат, просто обновляем его, увеличивая счетчик попыток
                 duplicate = duplicate_messages[0]
-                self.firebase_client.update_document(
+                await self.firebase_client.update_document(
                     "pending_messages",
                     duplicate.get("id"),
                     {
@@ -158,16 +158,16 @@ class FirebaseMessageRepository(IMessageRepository):
                         "error_type": error_type
                     }
                 )
-                logger.info(f"Updated existing pending message (id: {duplicate.get('id')})")
+                self.logger.info(f"Updated existing pending message (id: {duplicate.get('id')})")
             else:
                 # Если дубликата нет, создаем новую запись
-                self.firebase_client.add_document("pending_messages", message_data)
-                logger.info(f"Created new pending message for {phone_number}")
+                await self.firebase_client.add_document("pending_messages", message_data)
+                self.logger.info(f"Created new pending message for {phone_number}")
 
             return True
 
         except Exception as e:
-            logger.error(f"Error saving pending message: {str(e)}")
+            self.logger.error(f"Error saving pending message: {str(e)}")
             return False
 
     async def find_pending_messages(self, max_age_hours: Optional[int] = None) -> List[Dict[str, Any]]:
@@ -181,7 +181,7 @@ class FirebaseMessageRepository(IMessageRepository):
             List[Dict[str, Any]]: Список неотправленных сообщений
         """
         try:
-            pending_messages = self.firebase_client.query_documents(
+            pending_messages = await self.firebase_client.query_documents(
                 "pending_messages",
                 "status", "==", MessageStatus.PENDING
             )
@@ -200,7 +200,7 @@ class FirebaseMessageRepository(IMessageRepository):
             return pending_messages
 
         except Exception as e:
-            logger.error(f"Error finding pending messages: {str(e)}")
+            self.logger.error(f"Error finding pending messages: {str(e)}")
             return []
 
     async def mark_pending_message_as_sent(self, message_id: str, provider_message_id: str) -> bool:
@@ -216,10 +216,10 @@ class FirebaseMessageRepository(IMessageRepository):
         """
         try:
             # Получаем сообщение из базы данных
-            message = self.firebase_client.get_document("pending_messages", message_id)
+            message = await self.firebase_client.get_document("pending_messages", message_id)
 
             if not message:
-                logger.warning(f"Pending message {message_id} not found")
+                self.logger.warning(f"Pending message {message_id} not found")
                 return False
 
             # Создаем запись в sent_messages
@@ -238,15 +238,15 @@ class FirebaseMessageRepository(IMessageRepository):
                 sent_data["onboarding_step"] = message["onboarding_step"]
 
             # Записываем в sent_messages
-            self.firebase_client.add_document("sent_messages", sent_data)
+            await self.firebase_client.add_document("sent_messages", sent_data)
 
             # Удаляем из pending_messages
-            self.firebase_client.delete_document("pending_messages", message_id)
+            await self.firebase_client.delete_document("pending_messages", message_id)
 
             return True
 
         except Exception as e:
-            logger.error(f"Error marking pending message as sent: {str(e)}")
+            self.logger.error(f"Error marking pending message as sent: {str(e)}")
             return False
 
     async def mark_pending_message_as_expired(self, message_id: str) -> bool:
@@ -260,7 +260,7 @@ class FirebaseMessageRepository(IMessageRepository):
             bool: Успешность операции
         """
         try:
-            return self.firebase_client.update_document(
+            return await self.firebase_client.update_document(
                 "pending_messages",
                 message_id,
                 {
@@ -270,7 +270,7 @@ class FirebaseMessageRepository(IMessageRepository):
             )
 
         except Exception as e:
-            logger.error(f"Error marking pending message as expired: {str(e)}")
+            self.logger.error(f"Error marking pending message as expired: {str(e)}")
             return False
 
     async def update_pending_message_attempts(self, message_id: str) -> bool:
@@ -285,14 +285,14 @@ class FirebaseMessageRepository(IMessageRepository):
         """
         try:
             # Получаем сообщение из базы данных
-            message = self.firebase_client.get_document("pending_messages", message_id)
+            message = await self.firebase_client.get_document("pending_messages", message_id)
 
             if not message:
-                logger.warning(f"Pending message {message_id} not found")
+                self.logger.warning(f"Pending message {message_id} not found")
                 return False
 
             # Увеличиваем счетчик попыток
-            return self.firebase_client.update_document(
+            return await self.firebase_client.update_document(
                 "pending_messages",
                 message_id,
                 {
@@ -302,7 +302,7 @@ class FirebaseMessageRepository(IMessageRepository):
             )
 
         except Exception as e:
-            logger.error(f"Error updating pending message attempts: {str(e)}")
+            self.logger.error(f"Error updating pending message attempts: {str(e)}")
             return False
 
     async def is_processed(self, message_id: str) -> bool:
@@ -316,7 +316,7 @@ class FirebaseMessageRepository(IMessageRepository):
             bool: Статус обработки сообщения
         """
         try:
-            processed_messages = self.firebase_client.query_documents(
+            processed_messages = await self.firebase_client.query_documents(
                 "processed_messages",
                 "message_id", "==", message_id
             )
@@ -324,10 +324,10 @@ class FirebaseMessageRepository(IMessageRepository):
             return len(processed_messages) > 0
 
         except Exception as e:
-            logger.error(f"Error checking if message is processed: {str(e)}")
+            self.logger.error(f"Error checking if message is processed: {str(e)}")
             return False
 
-    async def mark_as_processed(self, message_id: str, phone_number: str, message_text: str, timestamp: str) -> None:
+    async def mark_as_processed(self, message_id: str, phone_number: str, message_text: str, timestamp: str) -> bool:
         """
         Помечает сообщение как обработанное
 
@@ -338,15 +338,19 @@ class FirebaseMessageRepository(IMessageRepository):
             timestamp: Временная метка обработки
         """
         try:
-            self.firebase_client.add_document("processed_messages", {
+            result = await self.firebase_client.add_document("processed_messages", {
                 "message_id": message_id,
                 "phone_number": phone_number,
                 "message_text": message_text,
                 "processed_at": timestamp
             })
+            if not result:
+                return False
 
+            return True
         except Exception as e:
-            logger.error(f"Error marking message as processed: {str(e)}")
+            self.logger.error(f"Error marking message as processed: {str(e)}")
+            return False
 
     async def find_messages_by_criteria(
             self,
@@ -369,7 +373,7 @@ class FirebaseMessageRepository(IMessageRepository):
         """
         try:
             # Сначала получаем все сообщения
-            all_messages = self.firebase_client.get_all_documents("messages")
+            all_messages = await self.firebase_client.get_all_documents("messages")
 
             # Постепенно фильтруем по критериям
             filtered_messages = all_messages
@@ -399,7 +403,7 @@ class FirebaseMessageRepository(IMessageRepository):
             return filtered_messages
 
         except Exception as e:
-            logger.error(f"Error finding messages by criteria: {str(e)}")
+            self.logger.error(f"Error finding messages by criteria: {str(e)}")
             return []
 
     async def count_messages_by_user(self, phone_number: str) -> int:
@@ -414,7 +418,7 @@ class FirebaseMessageRepository(IMessageRepository):
         """
         try:
             # Получаем сообщения для указанного номера телефона
-            messages = self.firebase_client.query_documents(
+            messages = await self.firebase_client.query_documents(
                 "messages",
                 "phone_number", "==", phone_number
             )
@@ -422,5 +426,5 @@ class FirebaseMessageRepository(IMessageRepository):
             return len(messages)
 
         except Exception as e:
-            logger.error(f"Error counting messages for user {phone_number}: {str(e)}")
+            self.logger.error(f"Error counting messages for user {phone_number}: {str(e)}")
             return 0

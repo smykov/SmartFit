@@ -41,7 +41,7 @@ class FirebaseProductRepository(IProductRepository):
                 product_data['created_at'] = now
             product_data['updated_at'] = now
 
-            product_id = self.firebase_client.add_document("products", product_data)
+            product_id = await self.firebase_client.add_document("products", product_data)
 
             if not product_id:
                 logger.error("Failed to create product")
@@ -63,7 +63,7 @@ class FirebaseProductRepository(IProductRepository):
             Optional[Dict[str, Any]]: Данные продукта или None, если продукт не найден
         """
         try:
-            product = self.firebase_client.get_document("products", product_id)
+            product = await self.firebase_client.get_document("products", product_id)
             return product
         except Exception as e:
             logger.error(f"Error getting product by ID: {str(e)}")
@@ -83,7 +83,7 @@ class FirebaseProductRepository(IProductRepository):
         try:
             update_data['updated_at'] = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
 
-            result = self.firebase_client.update_document("products", product_id, update_data)
+            result = await self.firebase_client.update_document("products", product_id, update_data)
             return result
         except Exception as e:
             logger.error(f"Error updating product: {str(e)}")
@@ -100,7 +100,7 @@ class FirebaseProductRepository(IProductRepository):
             bool: Результат удаления
         """
         try:
-            result = self.firebase_client.delete_document("products", product_id)
+            result = await self.firebase_client.delete_document("products", product_id)
             return result
         except Exception as e:
             logger.error(f"Error deleting product: {str(e)}")
@@ -114,7 +114,7 @@ class FirebaseProductRepository(IProductRepository):
             List[Dict[str, Any]]: Список продуктов
         """
         try:
-            products = self.firebase_client.get_all_documents("products")
+            products = await self.firebase_client.get_all_documents("products")
             return products
         except Exception as e:
             logger.error(f"Error getting all products: {str(e)}")
@@ -162,7 +162,7 @@ class FirebaseProductRepository(IProductRepository):
             List[Dict[str, Any]]: Список продуктов указанной категории
         """
         try:
-            products = self.firebase_client.query_documents("products", "category", "==", category)
+            products = await self.firebase_client.query_documents("products", "category", "==", category)
             return products
         except Exception as e:
             logger.error(f"Error getting products by category: {str(e)}")

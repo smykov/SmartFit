@@ -81,26 +81,28 @@ class NumberFormatter:
             'es': 'es_ES.UTF-8'
         }
 
+        # Проверяем, является ли число целым
+        is_integer = False
+        if isinstance(number, int):
+            is_integer = True
+        elif isinstance(number, float) and number.is_integer():
+            is_integer = True
+        elif isinstance(number, Decimal) and number == int(number):
+            is_integer = True
+
         try:
             # Пытаемся установить локаль
             current_locale = locale.getlocale(locale.LC_NUMERIC)
             locale.setlocale(locale.LC_NUMERIC, locale_map.get(lang, 'en_US.UTF-8'))
 
             # Форматируем число
-            if isinstance(number, (int, float)):
-                if number == int(number):
-                    # Целое число
-                    formatted = locale.format_string("%d", int(number), grouping=True)
-                else:
-                    # Число с плавающей точкой
-                    format_string = f"%.{decimal_places}f"
-                    formatted = locale.format_string(format_string, number, grouping=True)
-            elif isinstance(number, Decimal):
-                # Десятичное число
-                format_string = f"%.{decimal_places}f"
-                formatted = locale.format_string(format_string, float(number), grouping=True)
+            if is_integer:
+                # Целое число
+                formatted = locale.format_string("%d", int(number), grouping=True)
             else:
-                formatted = str(number)
+                # Число с плавающей точкой
+                format_string = f"%.{decimal_places}f"
+                formatted = locale.format_string(format_string, number, grouping=True)
 
             # Восстанавливаем предыдущую локаль
             locale.setlocale(locale.LC_NUMERIC, current_locale)
@@ -109,12 +111,10 @@ class NumberFormatter:
 
         except (locale.Error, ValueError):
             # В случае ошибки локали используем базовое форматирование
-            if isinstance(number, int):
-                return f"{number:,d}"
-            elif isinstance(number, (float, Decimal)):
-                return f"{number:,.{decimal_places}f}"
+            if is_integer:
+                return f"{int(number):,d}"
             else:
-                return str(number)
+                return f"{number:,.{decimal_places}f}"
 
 
 class DateFormatter:

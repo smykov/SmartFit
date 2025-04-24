@@ -1,7 +1,9 @@
 from typing import Dict, Any, Optional, List, Callable, Union
 import re
 import logging
+
 logger = logging.getLogger(__name__)
+
 
 class LocalizationString:
     """Класс для работы с локализованными строками, поддерживающий плюральные формы"""
@@ -20,7 +22,7 @@ class LocalizationString:
         self.plural_forms = plural_forms or {}
         self.context_variants = context_variants or {}
 
-    def format(self, **params) -> str:
+    def format(self, **params) -> str | Dict[str, Any]:
         """
         Форматирует строку с подстановкой параметров
 
@@ -38,33 +40,34 @@ class LocalizationString:
         else:
             lang = 'en'
 
-        # Дальше используем очищенные params_copy
-        # и явно передаем lang, где это нужно
+        # Форматируем числовые параметры
+        formatted_params = self._format_params(params_copy)
 
         # Проверяем наличие параметра count для плюральных форм
-        if 'count' in params_copy and self.plural_forms:
-            count = params_copy['count']
+        if 'count' in formatted_params and self.plural_forms:
+            count = formatted_params['count']
             form = self._get_plural_form(count, lang)
             if form in self.plural_forms:
-                return self.plural_forms[form].format(**params_copy)
+                # Рекурсивно вызываем format для плюральной формы
+                return self.plural_forms[form].format(**formatted_params)
 
         # Проверяем наличие параметра context для контекстных вариантов
-        if 'context' in params and self.context_variants:
-            context = params['context']
+        if 'context' in formatted_params and self.context_variants:
+            context = formatted_params['context']
             if context in self.context_variants:
-                return self.context_variants[context].format(**params)
+                return self.context_variants[context].format(**formatted_params)
 
         # Если value - словарь, возвращаем его как есть (будет обработан в LanguageBase.get)
         if isinstance(self.value, dict):
             return self.value
 
         # Если это стиль, применяем его
-        if 'style' in params:
+        if 'style' in formatted_params:
             from app.localization.formats import StringUtils
-            return StringUtils.apply_style(self.value.format(**params), params['style'])
+            return StringUtils.apply_style(self.value.format(**formatted_params), formatted_params['style'])
 
         # Базовое форматирование
-        return self.value.format(**params)
+        return self.value.format(**formatted_params)
 
     def _get_plural_form(self, count: int, lang: str = 'en') -> str:
         """
@@ -79,6 +82,35 @@ class LocalizationString:
         """
         from app.localization.formats import PluralRule
         return PluralRule.get_plural_form(count, lang)
+
+    def _format_number(self, value):
+        """
+        Форматирует числовое значение: убирает десятичную часть, если она равна нулю.
+
+        Args:
+            value: Числовое значение
+
+        Returns:
+            Отформатированное значение
+        """
+        if isinstance(value, float) and value.is_integer():
+            return int(value)
+        return value
+
+    def _format_params(self, params):
+        """
+        Форматирует числовые параметры перед подстановкой.
+
+        Args:
+            params: Словарь параметров
+
+        Returns:
+            Словарь с отформатированными параметрами
+        """
+        formatted_params = {}
+        for key, value in params.items():
+            formatted_params[key] = self._format_number(value)
+        return formatted_params
 
 
 class LocalizationModule:

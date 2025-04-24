@@ -16,7 +16,7 @@ from app.services.diet.diet_service_interface import IDietService
 from app.services.diet.shopping_list_manager import ShoppingListManager
 from app.services.llm import BaseLLMService
 from app.services.localization.localization_interface import ILocalizationService
-from app.services.messaging.message_interface import IMessageService
+from app.services.messaging.interfaces.message_interface import IMessengerService
 
 
 class DietService(BaseDietService, IDietService):
@@ -25,7 +25,7 @@ class DietService(BaseDietService, IDietService):
     def __init__(
             self,
             user_repository: IUserRepository,
-            message_service: IMessageService,
+            message_service: IMessengerService,
             localization_service: ILocalizationService,
             diet_plan_repository: IDietPlanRepository,
             product_repository: IProductRepository,
@@ -76,7 +76,7 @@ class DietService(BaseDietService, IDietService):
                 return False
 
             # Запускаем задачу генерации полного плана в фоновом режиме
-            asyncio.create_task(self._generate_full_diet_plan_task(user_id, short_plan_id))
+            asyncio.create_task(await self._generate_full_diet_plan_task(user_id, short_plan_id))
 
             return True
         except Exception as e:
@@ -104,19 +104,23 @@ class DietService(BaseDietService, IDietService):
                 # Отправляем уведомление пользователю
                 await self.message_service.send_message(
                     phone_number,
-                    self.localization_service.get_message(LK.Diet.Full.CREATED, lang)
+                    self.localization_service.get_message(LK.Diet.Full.CREATED, lang),
+                    {"user_id": user_id}
                 )
 
                 # Отправляем сводку плана
                 diet_summary = self.get_diet_summary(full_plan, lang)
-                await self.message_service.send_message(phone_number, diet_summary)
+                await self.message_service.send_message(phone_number, diet_summary,
+                                                        {"user_id": user_id})
                 commands_message = self.get_diet_summary_commands(full_plan, lang)
-                await self.message_service.send_message(phone_number, commands_message)
+                await self.message_service.send_message(phone_number, commands_message,
+                                                        {"user_id": user_id})
             else:
                 # В случае ошибки
                 await self.message_service.send_message(
                     phone_number,
-                    self.localization_service.get_message(LK.Diet.Full.CREATING_ERROR, lang)
+                    self.localization_service.get_message(LK.Diet.Full.CREATING_ERROR, lang),
+                    {"user_id": user_id}
                 )
 
         except Exception as e:
@@ -205,7 +209,7 @@ class DietService(BaseDietService, IDietService):
             # Используем прогрессивный генератор диет для создания полного плана
             from app.services.progressive_diet_generator import ProgressiveDietGenerator
 
-            generator = ProgressiveDietGenerator(self.llm_service, short_plan_id, user)
+            generator = ProgressiveDietGenerator(self.llm_service, self.diet_plan_repository, short_plan_id, user)
             full_plan = await generator.generate_full_plan()
 
             if not full_plan:
@@ -218,26 +222,28 @@ class DietService(BaseDietService, IDietService):
             self.logger.error(f"Error generating full diet plan: {str(e)}")
             return None
 
-    async def answer_nutrition_question(self, user_id: str, question: str) -> str:
+    async def answer_nutrition_question(self, user_id: str, question: str, lang: Optional[str]) -> str:
         """
         Отвечает на вопрос пользователя о питании
 
         Args:
             user_id: ID пользователя
             question: Вопрос о питании
+            lang: язык пользователя
 
         Returns:
             str: Ответ на вопрос
         """
         # Получаем язык пользователя
-        lang = await self.localization_service.get_user_language(user_id)
+        if lang is None:
+            lang = await self.localization_service.get_user_language(user_id)
         try:
-
             # Получаем данные пользователя для контекста
             user = await self.user_repository.get_by_id(user_id)
 
             if not user:
-                return self.localization_service.get_message(LK.User.NOT_FOUND, lang)
+                self.logger.error(f"User with ID {user_id} not found")
+                return self.localization_service.get_message(LK.Errors.NUTRITION_QUESTION_ERROR, lang)
 
             # Отправляем запрос к LLM сервису
             response = await self.llm_service.answer_nutrition_question(user_id, question)
@@ -379,21 +385,21 @@ class DietService(BaseDietService, IDietService):
         """
         return await self.diet_plan_manager.update_short_diet_plan_by_request(plan_id, update_request)
 
-    async def generate_shopping_list(self, diet_plan_id: str) -> Dict[str, Any]:
+    async def generate_shopping_list(self, diet_plan_id: str, lang: Optional[str]) -> Dict[str, Any]:
         """
         Создает список покупок на основе плана диеты
 
         Args:
             diet_plan_id: ID плана диеты
-
+            lang: язык пользовтеля
         Returns:
             Dict[str, Any]: Список покупок
         """
         try:
             # Получаем язык пользователя на основе плана
-            plan = await self.diet_plan_repository.get_by_id(diet_plan_id)
-            user_id = plan.get("user_id") if plan else None
-            lang = await self.localization_service.get_user_language(user_id) if user_id else None
+            diet_plan = await self.diet_plan_repository.get_by_id(diet_plan_id)
+
+            user_id = diet_plan.get("user_id") if diet_plan else None
 
             # Сообщаем пользователю о начале генерации списка покупок
             if user_id:
@@ -401,11 +407,12 @@ class DietService(BaseDietService, IDietService):
                 if user and "phone_number" in user:
                     await self.message_service.send_message(
                         user["phone_number"],
-                        self.localization_service.get_message(LK.Shopping.GENERATING, lang)
+                        self.localization_service.get_message(LK.Shopping.GENERATING, lang),
+                        {"user_id": user_id}
                     )
 
             # Делегируем создание списка покупок менеджеру
-            result = await self.shopping_list_manager.generate_shopping_list(diet_plan_id)
+            result = await self.shopping_list_manager.generate_shopping_list(diet_plan_id, lang)
 
             if "error" in result:
                 return {
@@ -434,7 +441,6 @@ class DietService(BaseDietService, IDietService):
         """
         return await self.shopping_list_manager.mark_product_as_purchased(user_id, product_name)
 
-    # Методы делегирования для DietFormatter
     def get_diet_summary(self, diet_plan: Dict[str, Any], lang: str) -> str:
         """
         Создает сводку плана диеты и сообщение с командами
@@ -447,6 +453,31 @@ class DietService(BaseDietService, IDietService):
             Tuple[str, str]: (сводка плана, команды для взаимодействия)
         """
         return self.formatter.get_diet_summary(diet_plan, lang)
+
+    def get_short_diet_next_steps(self, lang: Optional[str] = None) -> str:
+        """
+        Создает сообщение о следующих шагах после создания краткого плана диеты
+
+        Args:
+            lang: Код языка
+
+        Returns:
+            str: Информация о следующих шагах
+        """
+        return self.formatter.get_short_diet_next_steps(lang)
+
+    def get_short_diet_summary(self, diet_plan: Dict[str, Any], lang: str) -> str:
+        """
+        Создает сводку плана диеты и сообщение с командами
+
+        Args:
+            diet_plan: План диеты
+            lang: Код языка (по умолчанию используется системный язык)
+
+        Returns:
+            Tuple[str, str]: (сводка плана, команды для взаимодействия)
+        """
+        return self.formatter.get_short_diet_summary(diet_plan, lang)
 
     def get_diet_summary_commands(self, diet_plan: Dict[str, Any], lang: str) -> str:
         """
@@ -461,17 +492,18 @@ class DietService(BaseDietService, IDietService):
         """
         return self.formatter.get_diet_summary_commands(diet_plan, lang)
 
-    def get_full_diet_plan(self, diet_plan: Dict[str, Any]) -> List[str]:
+    def get_full_diet_plan(self, diet_plan: Dict[str, Any], lang: Optional[str] = None) -> List[str]:
         """
         Создает полный план диеты на все дни
 
         Args:
             diet_plan: План диеты
+            lang: Код языка
 
         Returns:
             List[str]: Список сообщений с планом диеты
         """
-        return self.formatter.get_full_diet_plan(diet_plan)
+        return self.formatter.get_full_diet_plan(diet_plan, lang)
 
     def get_day_diet_plan(self, diet_plan: Dict[str, Any], day_date: date = None,
                           lang: Optional[str] = None) -> List[str]:
@@ -500,17 +532,18 @@ class DietService(BaseDietService, IDietService):
         """
         return self.formatter.get_diet_tracking_info_message(lang)
 
-    def format_shopping_list(self, shopping_list_data: Dict[str, Any]) -> str:
+    def format_shopping_list(self, shopping_list_data: Dict[str, Any], lang: Optional[str] = None) -> str:
         """
         Форматирует список покупок для отправки пользователю
 
         Args:
             shopping_list_data: Данные списка покупок
+            lang: Код языка (опционально)
 
         Returns:
             str: Отформатированный список покупок
         """
-        return self.formatter.format_shopping_list(shopping_list_data)
+        return self.formatter.format_shopping_list(shopping_list_data, lang)
 
     async def get_pending_diet_plan(self, user_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -528,7 +561,6 @@ class DietService(BaseDietService, IDietService):
         except Exception as e:
             self.logger.error(f"Ошибка при получении ожидающего плана диеты: {str(e)}")
             return None
-
 
     async def get_pending_plans(self) -> List[Dict[str, Any]]:
         """

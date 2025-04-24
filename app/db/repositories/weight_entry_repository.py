@@ -47,18 +47,18 @@ class FirebaseWeightEntryRepository(IWeightEntryRepository):
             date_str = date_value.isoformat()
 
             # Получаем пользователя для обновления текущего веса
-            user = self.firebase_client.get_document("users", user_id)
+            user = await self.firebase_client.get_document("users", user_id)
             if not user:
                 logger.error(f"User {user_id} not found")
                 return None
 
             # Обновляем текущий вес пользователя
-            self.firebase_client.update_document("users", user_id, {"current_weight": weight})
+            await self.firebase_client.update_document("users", user_id, {"current_weight": weight})
 
             # Обновляем историю веса пользователя
             weight_history = user.get("weight_history", {})
             weight_history[date_str] = weight
-            self.firebase_client.update_document("users", user_id, {"weight_history": weight_history})
+            await self.firebase_client.update_document("users", user_id, {"weight_history": weight_history})
 
             # Создаем запись в коллекции weight_entries для аналитики
             entry_data = {
@@ -69,7 +69,7 @@ class FirebaseWeightEntryRepository(IWeightEntryRepository):
                 "created_at": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
             }
 
-            entry_id = self.firebase_client.add_document("weight_entries", entry_data)
+            entry_id = await self.firebase_client.add_document("weight_entries", entry_data)
             return entry_id
 
         except Exception as e:
@@ -91,7 +91,7 @@ class FirebaseWeightEntryRepository(IWeightEntryRepository):
         """
         try:
             # Получаем все записи веса пользователя
-            entries = self.firebase_client.query_documents(
+            entries = await self.firebase_client.query_documents(
                 "weight_entries",
                 "user_id",
                 "==",
@@ -133,7 +133,7 @@ class FirebaseWeightEntryRepository(IWeightEntryRepository):
         """
         try:
             # Получаем все записи веса пользователя
-            entries = self.firebase_client.query_documents(
+            entries = await self.firebase_client.query_documents(
                 "weight_entries",
                 "user_id",
                 "==",
@@ -168,7 +168,7 @@ class FirebaseWeightEntryRepository(IWeightEntryRepository):
             bool: Результат обновления
         """
         try:
-            return self.firebase_client.update_document(
+            return await self.firebase_client.update_document(
                 "weight_entries",
                 entry_id,
                 update_data
@@ -188,7 +188,7 @@ class FirebaseWeightEntryRepository(IWeightEntryRepository):
             bool: Результат удаления
         """
         try:
-            return self.firebase_client.delete_document(
+            return await self.firebase_client.delete_document(
                 "weight_entries",
                 entry_id
             )

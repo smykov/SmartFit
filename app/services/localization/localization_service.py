@@ -36,10 +36,12 @@ class LocalizationService(ILocalizationService):
         Returns:
             str: Локализованное сообщение с подставленными параметрами
         """
+        logger.debug(f"Localization request: key='{key}', lang='{lang}', params={params}")
 
         # Если язык не указан, используем язык по умолчанию
         if not lang:
             lang = self.DEFAULT_LANGUAGE
+            logger.warning(f"No lang specified, using default: '{lang}'")
 
         try:
             # Копируем параметры, чтобы избежать модификации исходного словаря
@@ -53,8 +55,16 @@ class LocalizationService(ILocalizationService):
                 # Удаляем из параметров, чтобы избежать дублирования
                 del params_copy['lang']
 
-            # Теперь безопасно передаем lang отдельно
-            return get_message(key, lang, **params_copy)
+            # Получаем результат
+            result = get_message(key, lang, **params_copy)
+            logger.debug(f"Localization result for '{key}': '{result}'")
+
+            # Проверка на возврат самого ключа (признак ошибки)
+            if result == key:
+                logger.warning(f"Possible localization error: key='{key}' returned as value")
+
+            return result
+
         except Exception as e:
             logger.error(f"Error getting localized message: {e}")
             # В случае ошибки возвращаем ключ

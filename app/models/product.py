@@ -43,7 +43,7 @@ class NutritionInfo(BaseModel):
 class ProductStore(BaseModel):
     """Информация о продукте в конкретном магазине"""
     store_name: str  # название магазина
-    price: float  # цена в местной валюте (кетцаль)
+    price: float  # цена в местной валюте
     unit: str  # единица измерения (кг, шт и т.д.)
     available: bool = True
 

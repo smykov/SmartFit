@@ -45,7 +45,7 @@ class FirebaseReminderRepository(IReminderRepository):
             }
 
             # Сохраняем напоминание в коллекцию
-            reminder_id = self.firebase_client.add_document(self.collection_name, reminder_data)
+            reminder_id = await self.firebase_client.add_document(self.collection_name, reminder_data)
 
             if not reminder_id:
                 self.logger.error(f"Failed to save reminder for phone {phone_number}")
@@ -71,7 +71,7 @@ class FirebaseReminderRepository(IReminderRepository):
         """
         try:
             # Получаем напоминания для данного номера телефона и типа
-            reminders = self.firebase_client.query_documents(
+            reminders = await self.firebase_client.query_documents(
                 self.collection_name,
                 field_path="phone_number",
                 op_string="==",
@@ -116,7 +116,7 @@ class FirebaseReminderRepository(IReminderRepository):
             start_time_str = start_time.isoformat()
 
             # Получаем все напоминания для данного номера телефона и типа
-            reminders = self.firebase_client.query_documents(
+            reminders = await self.firebase_client.query_documents(
                 self.collection_name,
                 field_path="phone_number",
                 op_string="==",
@@ -160,7 +160,7 @@ class FirebaseReminderRepository(IReminderRepository):
             cut_off_date_str = cut_off_date.isoformat()
 
             # Получаем все старые напоминания
-            old_reminders = self.firebase_client.query_documents(
+            old_reminders = await self.firebase_client.query_documents(
                 self.collection_name,
                 field_path="timestamp",
                 op_string="<",
@@ -174,7 +174,7 @@ class FirebaseReminderRepository(IReminderRepository):
             deleted_count = 0
             for reminder in old_reminders:
                 if "id" in reminder:
-                    success = self.firebase_client.delete_document(self.collection_name, reminder["id"])
+                    success = await self.firebase_client.delete_document(self.collection_name, reminder["id"])
                     if success:
                         deleted_count += 1
 
@@ -202,7 +202,7 @@ class FirebaseReminderRepository(IReminderRepository):
             start_time_str = start_time.isoformat()
 
             # Получаем все напоминания данного типа
-            reminders = self.firebase_client.query_documents(
+            reminders = await self.firebase_client.query_documents(
                 self.collection_name,
                 field_path="reminder_type",
                 op_string="==",

@@ -166,7 +166,7 @@ class IMessageRepository(ABC):
             phone_number: str,
             message_text: str,
             timestamp: str
-    ) -> None:
+    ) -> bool:
         """
         Помечает сообщение как обработанное
 

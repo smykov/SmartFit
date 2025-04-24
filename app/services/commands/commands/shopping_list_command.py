@@ -72,15 +72,16 @@ class ShoppingListCommand(BaseCommand):
             # Уведомляем о начале генерации списка покупок
             await self.dependencies['message_service'].send_message(
                 self.dependencies['user'].get('phone_number', ''),
-                self.get_localized_message(LK.Commands.ShoppingList.GENERATING, lang)
+                self.get_localized_message(LK.Commands.ShoppingList.GENERATING, lang),
+                {"user_id": user_id}
             )
 
             # Генерируем список покупок
-            shopping_list = await self.dependencies['diet_service'].generate_shopping_list(diet_plan["id"])
+            shopping_list = await self.dependencies['diet_service'].generate_shopping_list(diet_plan["id"], lang)
 
             if shopping_list and "error" not in shopping_list:
                 # Форматируем список покупок
-                formatted_list = self.dependencies['diet_service'].format_shopping_list(shopping_list)
+                formatted_list = self.dependencies['diet_service'].format_shopping_list(shopping_list, lang)
 
                 return {
                     "success": True,

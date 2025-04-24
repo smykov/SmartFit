@@ -428,7 +428,7 @@ async def setup_reminders(
             "updated_at": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
         }
 
-        firebase_client.update_document("users", user_id, {"reminders": reminders})
+        await firebase_client.update_document("users", user_id, {"reminders": reminders})
 
         # В реальном проекте здесь бы настраивались планировщики задач
         # Для MVP просто возвращаем успешный результат

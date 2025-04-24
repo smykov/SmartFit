@@ -48,11 +48,13 @@ class DietCommand(BaseCommand):
                 # Запускаем генерацию нового плана диеты
                 await self.message_service.send_message(
                     phone_number,
-                    self.get_localized_message(LK.Commands.Diet.DIET_GENERATION_STARTED, lang)
+                    self.get_localized_message(LK.Commands.Diet.DIET_GENERATION_STARTED, lang),
+                    {"user_id": user_id}
                 )
                 await self.message_service.send_message(
                     phone_number,
-                    self.get_localized_message(LK.Commands.Diet.DIET_GENERATION_DETAILS, lang)
+                    self.get_localized_message(LK.Commands.Diet.DIET_GENERATION_DETAILS, lang),
+                    {"user_id": user_id}
                 )
 
                 # Запускаем генерацию короткого плана диеты
@@ -70,16 +72,18 @@ class DietCommand(BaseCommand):
 
             if diet_plan.get('version') == "short" and diet_plan.get('status') == "pending":
                 # Отправляем сводку плана для согласования
-                summary = await self.diet_service.get_short_diet_summary(diet_plan, lang)
+                summary = self.diet_service.get_short_diet_summary(diet_plan, lang)
                 await self.message_service.send_message(
                     phone_number,
-                    summary
+                    summary,
+                    {"user_id": user_id}
                 )
                 # Отправляем информация о следующих шагах
                 next_steps = self.diet_service.get_short_diet_next_steps(lang)
                 await self.message_service.send_message(
                     phone_number,
-                    next_steps
+                    next_steps,
+                    {"user_id": user_id}
                 )
                 # Отправляем информация о согласовании
                 await self.message_service.send_template_message(

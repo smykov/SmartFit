@@ -17,7 +17,14 @@ strings = {
 
     # Сообщения для воды
     'water': {
-        'recorded': LocalizationString('💧 Отлично! Я записал потребление воды: {amount} стаканов (~{ml_amount} мл)'),
+        'recorded': LocalizationString(
+            '💧 Отлично! Я записал потребление воды: {amount} стаканов (~{ml_amount} мл)',
+            plural_forms={
+                'one': '💧 Отлично! Я записал потребление воды: {amount} стакан (~{ml_amount} мл)',
+                'few': '💧 Отлично! Я записал потребление воды: {amount} стакана (~{ml_amount} мл)',
+                'many': '💧 Отлично! Я записал потребление воды: {amount} стаканов (~{ml_amount} мл)'
+            }
+        ),
         'daily_total': LocalizationString('\nСегодня ты выпил(а) всего: {current_intake} мл\n'),
         'goal_percentage': LocalizationString('Это {percentage:.1f}% от дневной цели в {goal} мл\n\n'),
         'motivation': LocalizationString(

@@ -37,7 +37,7 @@ async def whatsapp_webhook(
         message_data = {key: value for key, value in form_data.items()}
 
         # Обрабатываем сообщение
-        result = await message_processor.process_incoming_message(message_data)
+        result = await message_processor.process_incoming_message(message_data, "whatsapp")
 
         # Возвращаем ответ для Twilio (пустой TwiML ответ)
         return JSONResponse(

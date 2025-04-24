@@ -113,7 +113,6 @@ strings = {
     },
 
     # Команда языка
-    # Команда языка
     'language': {
         'languagesList': LocalizationString(
             'Доступные языки:\n\n🇪🇸 Испанский: Напишите "язык es"\n🇷🇺 Русский: Напишите "язык ru"\n🇬🇧 Английский: Напишите "язык en"'),
@@ -121,7 +120,13 @@ strings = {
         'unavailableService': LocalizationString('Сервис локализации недоступен.'),
         'languageChanged': LocalizationString('Язык изменен на Русский!')
     },
-
+    # Команда выбора мессенджера
+    'messenger': {
+        'messengerList': LocalizationString(
+            'Доступные мессенджеры:\n\n WhatsApp: Напишите "мессенджер whatsapp"\n, Telegram: Напишите "мессенджер telegram"'),
+        'messengerChanged': LocalizationString('Мессенджер изменен на {messenger_name}!'),
+        'error': LocalizationString('Произошла ошибка при изменении мессенджера. Пожалуйста, попробуйте позже.')
+    },
     # Команда помощи
     'help': {
         'helpText': LocalizationString('Вот список доступных команд:...')

@@ -58,7 +58,7 @@ class FirebaseComplianceRepository(IComplianceRepository):
             }
 
             # Сохраняем в базу данных
-            compliance_id = self.firebase_client.add_document("meal_compliance", compliance_data)
+            compliance_id = await self.firebase_client.add_document("meal_compliance", compliance_data)
 
             if not compliance_id:
                 logger.error(f"Failed to save meal compliance for user {user_id}")
@@ -89,7 +89,7 @@ class FirebaseComplianceRepository(IComplianceRepository):
             date_str = date_value.isoformat() if isinstance(date_value, date) else date_value
 
             # Получаем записи о соблюдении
-            compliance_entries = self.firebase_client.query_documents(
+            compliance_entries = await self.firebase_client.query_documents(
                 "daily_compliance",
                 "user_id",
                 "==",
@@ -132,7 +132,7 @@ class FirebaseComplianceRepository(IComplianceRepository):
             date_str = date_value.isoformat() if isinstance(date_value, date) else date_value
 
             # Получаем все записи о соблюдении за день
-            compliances = self.firebase_client.query_documents(
+            compliances = await self.firebase_client.query_documents(
                 "meal_compliance",
                 "user_id",
                 "==",
@@ -175,7 +175,7 @@ class FirebaseComplianceRepository(IComplianceRepository):
             }
 
             # Проверяем, существует ли уже запись
-            existing = self.firebase_client.query_documents(
+            existing = await self.firebase_client.query_documents(
                 "daily_compliance",
                 "user_id",
                 "==",
@@ -187,14 +187,14 @@ class FirebaseComplianceRepository(IComplianceRepository):
 
             if existing:
                 # Обновляем существующую запись
-                return self.firebase_client.update_document(
+                return await self.firebase_client.update_document(
                     "daily_compliance",
                     existing[0]["id"],
                     compliance_data
                 )
             else:
                 # Создаем новую запись
-                compliance_id = self.firebase_client.add_document("daily_compliance", compliance_data)
+                compliance_id = await self.firebase_client.add_document("daily_compliance", compliance_data)
                 return bool(compliance_id)
 
         except Exception as e:
@@ -220,7 +220,7 @@ class FirebaseComplianceRepository(IComplianceRepository):
             end_str = end_date.isoformat() if isinstance(end_date, date) else end_date
 
             # Получаем все записи о соблюдении
-            compliance_entries = self.firebase_client.query_documents(
+            compliance_entries = await self.firebase_client.query_documents(
                 "daily_compliance",
                 "user_id",
                 "==",
@@ -251,7 +251,7 @@ class FirebaseComplianceRepository(IComplianceRepository):
             bool: Результат удаления
         """
         try:
-            return self.firebase_client.delete_document(
+            return await self.firebase_client.delete_document(
                 "meal_compliance",
                 compliance_id
             )

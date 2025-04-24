@@ -12,15 +12,16 @@ class IOnboardingService(ABC):
     """
 
     @abstractmethod
-    async def start_registration(self, phone_number: str) -> Dict[str, Any]:
+    async def start_registration(self, phone_number: str, messenger_type: str = "whatsapp") -> Dict[str, Any]:
         """
         Начинает процесс регистрации нового пользователя
 
         Args:
             phone_number: Номер телефона пользователя
+            messenger_type: Мессенджер
 
         Returns:
-            Dict[str, Any]: Результат начала регистрации
+            Dict[str, Any]: Результат обработки
         """
         pass
 

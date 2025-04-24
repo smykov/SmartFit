@@ -96,9 +96,11 @@ async def startup_event():
         # Пробуем получить все основные зависимости
         container.user_repository()
         container.message_repository()
-        container.message_client()
+        container.whatsapp_client()
+        container.telegram_client()
+        container.whatsapp_messenger()
+        container.telegram_messenger()
         container.localization_service()
-        container.whatsapp_service()
         container.diet_service()
         container.tracking_service()
         container.message_processor_service()
@@ -112,11 +114,25 @@ async def startup_event():
         logger.error(f"Error resolving dependencies: {str(e)}")
         raise
 
-    # Получаем WhatsApp сервис из контейнера
-    whatsapp_service = container.whatsapp_service()
-    # Инициализируем сервис
-    await whatsapp_service.initialize()
-    logger.info("WhatsApp service initialized")
+    try:
+        # Получаем необходимые зависимости
+        messenger_registry = container.messenger_registry()
+        whatsapp_messenger = container.whatsapp_messenger()
+        telegram_messenger = container.telegram_messenger()
+
+        # Регистрируем мессенджеры в реестре (если это не сделано в DI-контейнере)
+        messenger_registry.register_messenger(whatsapp_messenger)
+        messenger_registry.register_messenger(telegram_messenger)
+        logger.info("Messengers registered successfully")
+
+        # Инициализируем единый сервис мессенджеров вместо отдельных сервисов
+        messenger_service = container.messenger_service()
+        await messenger_service.initialize()
+        logger.info("Messenger service initialized successfully")
+
+    except Exception as e:
+        logger.error(f"Error initializing messaging services: {str(e)}", exc_info=True)
+        raise
 
 
 @app.on_event("shutdown")

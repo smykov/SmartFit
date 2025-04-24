@@ -1,21 +1,16 @@
 import logging
 from typing import Dict, Any, Optional, Type
 
-from app.db.interfaces.user_repository_interface import IUserRepository
 from app.services.commands.commands.compliance_command import ComplianceCommand
 from app.services.commands.commands.diet_command import DietCommand
 from app.services.commands.commands.help_command import HelpCommand
 from app.services.commands.commands.language_command import LanguageCommand
+from app.services.commands.commands.messenger_command import SetMessengerCommand
 from app.services.commands.commands.shopping_list_command import ShoppingListCommand
 from app.services.commands.commands.stats_command import StatsCommand
 from app.services.commands.commands.water_command import WaterCommand
 from app.services.commands.commands.weight_command import WeightCommand
 from app.services.commands.interfaces.command_interface import ICommand
-from app.services.diet.diet_service_interface import IDietService
-from app.services.localization.localization_interface import ILocalizationService
-from app.services.messaging.message_interface import IMessageService
-from app.services.tracking.tracking_service_interface import ITrackingService
-
 
 class CommandFactory:
     """
@@ -50,6 +45,7 @@ class CommandFactory:
             "stats": StatsCommand,
             "meal_compliance": ComplianceCommand,
             "language": LanguageCommand,
+            "messenger": SetMessengerCommand
         }
 
     def create_command(self, command_type: str) -> Optional[ICommand]:
