@@ -16,6 +16,7 @@ class MessageType(str, Enum):
 
 class MessageStatus(str, Enum):
     """Статусы сообщений"""
+    PROCESSING = "processing"
     PENDING = "pending"
     SENT = "sent"
     DELIVERED = "delivered"

@@ -46,12 +46,12 @@ class DietCommand(BaseCommand):
 
             if not diet_plan:
                 # Запускаем генерацию нового плана диеты
-                await self.message_service.send_message(
+                await self.messenger_service.send_message(
                     phone_number,
                     self.get_localized_message(LK.Commands.Diet.DIET_GENERATION_STARTED, lang),
                     {"user_id": user_id}
                 )
-                await self.message_service.send_message(
+                await self.messenger_service.send_message(
                     phone_number,
                     self.get_localized_message(LK.Commands.Diet.DIET_GENERATION_DETAILS, lang),
                     {"user_id": user_id}
@@ -61,7 +61,7 @@ class DietCommand(BaseCommand):
                 diet_plan = await self.diet_service.generate_short_diet_plan(user_id)
 
                 if not diet_plan or "error" in diet_plan:
-                    await self.message_service.send_template_message(
+                    await self.messenger_service.send_template_message(
                         phone_number,
                         LK.Diet.Short.CREATED,
                         user_id)
@@ -73,20 +73,20 @@ class DietCommand(BaseCommand):
             if diet_plan.get('version') == "short" and diet_plan.get('status') == "pending":
                 # Отправляем сводку плана для согласования
                 summary = self.diet_service.get_short_diet_summary(diet_plan, lang)
-                await self.message_service.send_message(
+                await self.messenger_service.send_message(
                     phone_number,
                     summary,
                     {"user_id": user_id}
                 )
                 # Отправляем информация о следующих шагах
                 next_steps = self.diet_service.get_short_diet_next_steps(lang)
-                await self.message_service.send_message(
+                await self.messenger_service.send_message(
                     phone_number,
                     next_steps,
                     {"user_id": user_id}
                 )
                 # Отправляем информация о согласовании
-                await self.message_service.send_template_message(
+                await self.messenger_service.send_template_message(
                     phone_number,
                     LK.Diet.Short.CONFORMATION,
                     user_id)

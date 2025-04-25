@@ -68,7 +68,7 @@ class FirebaseClient:
                 temp_id = data['id']
                 data_copy = data.copy()
                 del data_copy['id']
-                result = self.set_document(collection, temp_id, data_copy)
+                result = await self.set_document(collection, temp_id, data_copy)
                 return temp_id if result else None
 
             # Добавляем документ с автогенерируемым ID

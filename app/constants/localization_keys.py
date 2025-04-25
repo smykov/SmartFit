@@ -132,6 +132,7 @@ class LocalizationKeys:
                 PARTIALLY = "diet.day.tracking.partially"
                 SUBSTITUTED = "diet.day.tracking.substituted"
                 SKIPPED = "diet.day.tracking.skipped"
+                NUMBER_HINT = "diet.day.tracking.number_hint"
 
             # Сообщения статуса
             NO_PLAN = "diet.day.no_plan"

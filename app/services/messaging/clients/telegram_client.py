@@ -51,13 +51,17 @@ class TelegramClient(IMessageClient):
 
             # Форматируем сообщение для Telegram
             formatted_message = self.telegram_messenger.format_outgoing_message(message)
+            try:
+                result = await self.bot.send_message(
+                    chat_id=to,
+                    text=formatted_message,
+                    parse_mode='Markdown'
+                )
+            except Exception as telegram_error:
+                # При ошибке пробуем отправить без форматирования
+                self.logger.warning(f"Error with Markdown formatting: {telegram_error} for message '{formatted_message}' Trying plain text '{message}'.")
+                result = await self.bot.send_message(chat_id=to, text=message, parse_mode=None)
 
-            # Отправляем без параметра parse_mode, чтобы избежать проблем с форматированием
-            result = await self.bot.send_message(
-                chat_id=to,
-                text=formatted_message,
-                parse_mode='Markdown'
-            )
             return str(result.message_id)
         except Exception as e:
             self.logger.error(f"Error sending message via Telegram: {str(e)}")

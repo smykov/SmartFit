@@ -156,12 +156,13 @@ class Container(containers.DeclarativeContainer):
     )
 
     compliance_repository = providers.Factory(
-        lambda engine, firebase, postgres:
-        FirebaseComplianceRepository(firebase) if engine == "firebase" else
-        PostgresComplianceRepository(postgres),
+        lambda engine, firebase, postgres, diet_plan_repo:
+        FirebaseComplianceRepository(firebase, diet_plan_repo) if engine == "firebase" else
+        PostgresComplianceRepository(postgres, diet_plan_repo),
         engine=db_engine,
         firebase=firebase_client,
-        postgres=postgres_client
+        postgres=postgres_client,
+        diet_plan_repo=diet_plan_repository
     )
 
     reminder_repository = providers.Factory(
@@ -275,7 +276,7 @@ class Container(containers.DeclarativeContainer):
     diet_service = providers.Singleton(
         DietService,
         user_repository=user_repository,
-        message_service=messenger_service,
+        messenger_service=messenger_service,
         localization_service=localization_service,
         diet_plan_repository=diet_plan_repository,
         product_repository=product_repository,
@@ -288,7 +289,7 @@ class Container(containers.DeclarativeContainer):
         CommandHandlerService,
         dependencies=providers.Dict({
             "user_repository": user_repository,
-            "message_service": messenger_service,
+            "messenger_service": messenger_service,
             "diet_service": diet_service,
             "tracking_service": tracking_service,
             "localization_service": localization_service,
@@ -299,7 +300,7 @@ class Container(containers.DeclarativeContainer):
     onboarding_service = providers.Singleton(
         OnboardingService,
         user_repository=user_repository,
-        message_service=messenger_service,
+        messenger_service=messenger_service,
         diet_service=diet_service,
         command_handler_service=command_handler_service,
         localization_service=localization_service
@@ -309,7 +310,7 @@ class Container(containers.DeclarativeContainer):
         CommandFactory,
         dependencies=providers.Dict({
             "user_repository": user_repository,
-            "message_service": messenger_service,
+            "messenger_service": messenger_service,
             "diet_service": diet_service,
             "tracking_service": tracking_service,
             "tracking_formatter_service": tracking_formatter_service,
@@ -335,7 +336,7 @@ class Container(containers.DeclarativeContainer):
     # Сервис напоминаний
     reminder_service = providers.Singleton(
         ReminderService,
-        message_service=messenger_service,
+        messenger_service=messenger_service,
         user_repository=user_repository,
         reminder_repository=reminder_repository,
         tracking_service=tracking_service,

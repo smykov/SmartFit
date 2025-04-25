@@ -9,7 +9,6 @@ from app.models.messaging import MessageStatus
 from config import settings
 
 
-
 class FirebaseMessageRepository(IMessageRepository):
     """
     Репозиторий для работы с сообщениями в Firebase
@@ -327,6 +326,35 @@ class FirebaseMessageRepository(IMessageRepository):
             self.logger.error(f"Error checking if message is processed: {str(e)}")
             return False
 
+    async def mark_as_processing(self, message_id: str, phone_number: str, message_text: str, timestamp: str) -> bool:
+        """
+        Отмечает сообщение как находящееся в обработке
+
+        Args:
+            message_id: ID сообщения
+            phone_number: ID отправителя
+            message_text: Текст сообщения
+            timestamp: Временная метка
+
+        Returns:
+            bool: Результат операции
+        """
+        try:
+            message_data = {
+                "message_id": message_id,
+                "phone_number": phone_number,
+                "message_text": message_text,
+                "status": "processing",
+                "timestamp": timestamp
+            }
+
+            # Запись в базу данных
+            await self.firebase_client.set_document("processed_messages", message_id, message_data)
+            return True
+        except Exception as e:
+            self.logger.error(f"Error marking message as processing: {str(e)}")
+            return False
+
     async def mark_as_processed(self, message_id: str, phone_number: str, message_text: str, timestamp: str) -> bool:
         """
         Помечает сообщение как обработанное
@@ -342,6 +370,7 @@ class FirebaseMessageRepository(IMessageRepository):
                 "message_id": message_id,
                 "phone_number": phone_number,
                 "message_text": message_text,
+                "status": "processed",
                 "processed_at": timestamp
             })
             if not result:
@@ -428,3 +457,30 @@ class FirebaseMessageRepository(IMessageRepository):
         except Exception as e:
             self.logger.error(f"Error counting messages for user {phone_number}: {str(e)}")
             return 0
+
+
+    async def get_message_status(self, message_id: str) -> Optional[str]:
+        """
+        Получает статус сообщения
+
+        Args:
+            message_id: ID сообщения
+
+        Returns:
+            Optional[str]: Статус сообщения или None
+        """
+        pass
+
+
+    async def mark_as_failed(self, message_id: str, error: str) -> bool:
+        """
+        Отмечает сообщение как обработанное с ошибкой
+
+        Args:
+            message_id: ID сообщения
+            error: Текст ошибки
+
+        Returns:
+            bool: Результат операции
+        """
+        pass

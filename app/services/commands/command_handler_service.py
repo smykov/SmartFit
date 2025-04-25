@@ -32,8 +32,8 @@ class CommandHandlerService(ICommandHandler):
         # Для удобства доступа, извлекаем общие зависимости с явной типизацией
         if 'user_repository' in dependencies:
             self.user_repository: IUserRepository = dependencies['user_repository']
-        if 'message_service' in dependencies:
-            self.message_service: IMessengerService = dependencies['message_service']
+        if 'messenger_service' in dependencies:
+            self.messenger_service: IMessengerService = dependencies['messenger_service']
         if 'tracking_service' in dependencies:
             self.tracking_service: ITrackingService = dependencies['tracking_service']
         if 'diet_service' in dependencies:
@@ -77,7 +77,7 @@ class CommandHandlerService(ICommandHandler):
             if not user or 'id' not in user:
                 return {
                     "success": False,
-                    "error": self.get_localized_message(LK.MessageProcessor.USER_NOT_FOUND)
+                    "error": self.get_localized_message(LK.Messaging.USER_NOT_FOUND)
                 }
 
             # Получаем язык пользователя

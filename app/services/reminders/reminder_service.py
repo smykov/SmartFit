@@ -33,7 +33,7 @@ class ReminderService(IReminderService):
 
     def __init__(
             self,
-            message_service: IMessengerService,
+            messenger_service: IMessengerService,
             user_repository: IUserRepository,
             reminder_repository: IReminderRepository,
             tracking_service: ITrackingService = None,
@@ -44,14 +44,14 @@ class ReminderService(IReminderService):
         Инициализация сервиса напоминаний
 
         Args:
-            message_service: Сервис для отправки сообщений
+            messenger_service: Сервис для отправки сообщений
             user_repository: Репозиторий для работы с пользователями
             reminder_repository: Репозиторий для работы с напоминаниями
             tracking_service: Сервис трекинга (опционально)
             diet_service: Сервис диет (опционально)
             localization_service: Сервис локализации (опционально)
         """
-        self.message_service = message_service
+        self.messenger_service = messenger_service
         self.user_repository = user_repository
         self.reminder_repository = reminder_repository
         self.tracking_service = tracking_service
@@ -168,7 +168,7 @@ class ReminderService(IReminderService):
                         # Отправляем напоминание
                         if await self.can_send_reminder(phone_number, reminder_type, 86400):  # 24 часа
                             # Специальный случай для онбординга - сообщение уже сформировано
-                            await self.message_service.send_message(
+                            await self.messenger_service.send_message(
                                 phone_number,
                                 reminder_message,
                                 context
@@ -435,7 +435,7 @@ class ReminderService(IReminderService):
                     **(context or {})
                 }
 
-                await self.message_service.send_message(
+                await self.messenger_service.send_message(
                     phone_number,
                     message,
                     reminder_context

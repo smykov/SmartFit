@@ -97,9 +97,10 @@ class MessageProcessorService:
             # "diet_tomorrow": re.compile(r'^(план|меню)\s+на\s+завтра$', re.IGNORECASE),
             # "diet_full": re.compile(r'^(полный план|полное меню)$', re.IGNORECASE),
             "shopping_list": re.compile(r'^список покупок$', re.IGNORECASE),
-            # "product_bought": re.compile(r'^купил[а]?\s+(.+)$', re.IGNORECASE),
+            "product_bought": re.compile(r'^купил[а]?\s+(.+)$', re.IGNORECASE),
             "stats": re.compile(r'^(статистика|прогресс)$', re.IGNORECASE),
-            "meal_compliance": re.compile(r'^(выполнено|частично|заменил[а]?|пропустил[а]?)\s+(\w+)$', re.IGNORECASE),
+            "meal_compliance": re.compile(r'^(выполнено|частично|заменил[а]?|пропустил[а]?|1|2|3|4)\s+(\w+)$',
+                                          re.IGNORECASE),
             "diet_update": re.compile(r'^(измени|поменяй|обнови|замени|скорректируй)\s+(план|меню|рацион|питание)(.*)$',
                                       re.IGNORECASE),
         }
@@ -107,7 +108,8 @@ class MessageProcessorService:
         # Ответы на согласование плана
         self.approval_patterns = {
             "approve": re.compile(r'^(согласен|согласна|подтверждаю|ок|да|хорошо|все ок|yes|ok)$', re.IGNORECASE),
-            "disapprove": re.compile(r'^(не согласен|не согласна|не подтверждаю|нет|не ок|не хорошо|no|отклоняю)$', re.IGNORECASE),
+            "disapprove": re.compile(r'^(не согласен|не согласна|не подтверждаю|нет|не ок|не хорошо|no|отклоняю)$',
+                                     re.IGNORECASE),
         }
 
     def get_localized_message(self, key: str, lang: Optional[str] = None, **params) -> str:
@@ -161,12 +163,17 @@ class MessageProcessorService:
             if not lang or lang not in ["ru", "en", "es"]:
                 lang = "ru"
 
+            # Сразу отмечаем сообщение как "в обработке"
+            if message_id:
+                timestamp = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+                await self.message_repository.mark_as_processing(message_id, sender_id, message_text, timestamp)
+
             if not sender_id or not message_text:
                 self.logger.error("Missing required message data")
                 return {"success": False, "error": self.get_localized_message(LK.Messaging.INVALID_MESSAGE_FORMAT)}
 
             # Проверяем, обрабатывалось ли это сообщение ранее
-            if await self._is_message_processed(message_id):
+            if await self.is_message_being_processed(message_id):
                 self.logger.info(f"Сообщение {message_id} уже обработано")
                 return {"success": True, "action": "already_processed"}
 
@@ -193,7 +200,8 @@ class MessageProcessorService:
             result = await self._process_with_strategy(strategy, user, message_text, message_type)
 
             # Отмечаем сообщение как обработанное
-            await self._mark_message_as_processed(message_id, sender_id, message_text)
+            if message_id:
+                await self._mark_message_as_processed(message_id, sender_id, message_text)
 
             return result
 
@@ -367,7 +375,7 @@ class MessageProcessorService:
                 {"user_id": user_id}
             )
             return {"success": False,
-                    "error": self.get_localized_message(LK.MessageProcessor.UNKNOWN_COMMAND, lang,
+                    "error": self.get_localized_message(LK.Messaging.UNKNOWN_COMMAND, lang,
                                                         message_text=message_text)}
 
         # Создаем команду через фабрику
@@ -378,19 +386,19 @@ class MessageProcessorService:
             self.logger.error(f"Не удалось создать команду типа: {command_type}")
             await self.messenger_service.send_message(
                 recipient_id,
-                self.get_localized_message(LK.MessageProcessor.COMMAND_NOT_FOUND, lang),
+                self.get_localized_message(LK.Messaging.COMMAND_NOT_FOUND, lang),
                 {"user_id": user_id}
             )
             return {"success": False,
-                    "error": self.get_localized_message(LK.MessageProcessor.COMMAND_NOT_FOUND, lang)}
+                    "error": self.get_localized_message(LK.Messaging.COMMAND_NOT_FOUND, lang)}
 
         # Проверяем предварительные условия
         if not await command.can_execute(user_id):
             # Сообщение о невозможности выполнить команду
-            error_message = command.get_error_message()
+            error_message = command.get_error_message(lang=lang)
             await self.messenger_service.send_message(recipient_id, error_message, {"user_id": user_id})
             return {"success": False,
-                    "error": self.get_localized_message(LK.MessageProcessor.PREREQUISITES_NOT_MET, lang)}
+                    "error": self.get_localized_message(LK.Messaging.PREREQUISITES_NOT_MET, lang)}
 
         # Выполняем команду
         result = await command.execute(user_id, command_params)
@@ -404,6 +412,24 @@ class MessageProcessorService:
             await self.messenger_service.send_messages(recipient_id, result["messages"], {"user_id": user_id})
 
         return result
+
+    async def is_message_being_processed(self, message_id: str) -> bool:
+        """
+        Проверяет, находится ли сообщение в процессе обработки
+
+        Args:
+            message_id: ID сообщения
+
+        Returns:
+            bool: True, если сообщение уже обрабатывается
+        """
+        try:
+            # Проверяем статус сообщения
+            message_status = await self.message_repository.get_message_status(message_id)
+            return message_status == "processing"
+        except Exception as e:
+            self.logger.error(f"Error checking message processing status: {str(e)}")
+            return False
 
     def _diagnose_command_type(self, message_text: str) -> str:
         """
@@ -450,7 +476,7 @@ class MessageProcessorService:
             # Используем локализованное сообщение
             await self.messenger_service.send_message(
                 recipient_id,
-                self.get_localized_message(LK.MessageProcessor.NO_PENDING_PLAN, lang),
+                self.get_localized_message(LK.Messaging.NO_PENDING_PLAN, lang),
                 {"user_id": user_id}
             )
             return {"success": False, "action": "no_pending_plan"}
@@ -518,7 +544,7 @@ class MessageProcessorService:
         if not diet_plan:
             await self.messenger_service.send_message(
                 recipient_id,
-                self.get_localized_message(LK.MessageProcessor.NO_DIET_PLAN, lang),
+                self.get_localized_message(LK.Messaging.NO_DIET_PLAN, lang),
                 {"user_id": user_id}
             )
             return {"success": False, "action": "no_diet_plan_for_update"}
@@ -526,7 +552,7 @@ class MessageProcessorService:
         # Сообщаем пользователю, что корректируем план
         await self.messenger_service.send_message(
             recipient_id,
-            self.get_localized_message(LK.MessageProcessor.UPDATING_PLAN, lang),
+            self.get_localized_message(LK.Messaging.UPDATING_PLAN, lang),
             {"user_id": user_id}
         )
 
@@ -545,7 +571,7 @@ class MessageProcessorService:
         if "error" in result:
             await self.messenger_service.send_message(
                 recipient_id,
-                self.get_localized_message(LK.MessageProcessor.UPDATE_FAILED, lang),
+                self.get_localized_message(LK.Messaging.UPDATE_FAILED, lang),
                 {"user_id": user_id}
             )
             return {"success": False, "action": "diet_update_error", "error": result.get("error")}
@@ -569,7 +595,7 @@ class MessageProcessorService:
         else:
             await self.messenger_service.send_message(
                 recipient_id,
-                self.get_localized_message(LK.MessageProcessor.UPDATE_FAILED, lang),
+                self.get_localized_message(LK.Messaging.UPDATE_FAILED, lang),
                 {"user_id": user_id}
             )
             return {"success": False, "action": "update_failed"}
@@ -616,28 +642,6 @@ class MessageProcessorService:
         await self.messenger_service.send_message(recipient_id, response, context)
 
         return {"success": True, "action": "ai_response_sent"}
-
-    async def _is_message_processed(self, message_id: str) -> bool:
-        """
-        Проверяет, было ли сообщение уже обработано
-
-        Args:
-            message_id: ID сообщения
-
-        Returns:
-            bool: True, если сообщение уже обработано
-        """
-        if not message_id:
-            return False
-
-        try:
-            # Добавляем обработку исключений
-            return await self.message_repository.is_processed(message_id)
-        except Exception as e:
-            self.logger.error(f"Error checking if message was processed: {str(e)}")
-            # По умолчанию считаем, что сообщение не обработано,
-            # чтобы пользователь получил ответ
-            return False
 
     async def _mark_message_as_processed(self, message_id: str, sender_id: str, message_text: str) -> None:
         """

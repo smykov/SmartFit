@@ -109,7 +109,7 @@ class DietFormatter(BaseFormatter):
             # Добавляем персонализированное обращение
             personalized_note = diet_plan.get("personalized_note", "")
             if personalized_note:
-                summary += f"{personalized_note}\n\n"
+                summary += f"\n{personalized_note}\n\n"
 
             # Информация о плане
             summary += self.get_localized_message(LK.Diet.Short.Summary.INFO, lang)
@@ -309,6 +309,7 @@ class DietFormatter(BaseFormatter):
             message += self.get_localized_message(LK.Diet.Day.Tracking.PARTIALLY, lang)
             message += self.get_localized_message(LK.Diet.Day.Tracking.SUBSTITUTED, lang)
             message += self.get_localized_message(LK.Diet.Day.Tracking.SKIPPED, lang)
+            message += self.get_localized_message(LK.Diet.Day.Tracking.NUMBER_HINT, lang)
 
             return self.format_for_whatsapp(message)
 
