@@ -129,81 +129,58 @@ class TrackingFormatter(BaseFormatter):
                 lang
             )
 
-    def format_compliance_message(self, meal_type: str, status: str,
-                                  compliance_data: Optional[Dict[str, Any]] = None,
-                                  lang: Optional[str] = None) -> str:
+    def format_compliance_message(self, meal_type_display: str, status: MealComplianceStatus,
+                                  compliance_data: Dict[str, Any], lang: Optional[str] = None) -> str:
         """
-        Форматирует сообщение о соблюдении режима питания
+        Форматирует сообщение о соблюдении плана питания
 
         Args:
-            meal_type: Тип приема пищи
+            meal_type_display: Локализованное название типа приема пищи
             status: Статус соблюдения
-            compliance_data: Общие данные о соблюдении
+            compliance_data: Данные о соблюдении плана
             lang: Код языка
 
         Returns:
             str: Отформатированное сообщение
         """
-        try:
-            meal_type_display = self.get_localized_meal_type(meal_type, lang)
+        # Определяем ключ статуса на основе enum
+        status_key = None
+        if status == MealComplianceStatus.FOLLOWED:
+            status_key = LK.Tracking.Compliance.FOLLOWED
+        elif status == MealComplianceStatus.PARTIALLY:
+            status_key = LK.Tracking.Compliance.PARTIALLY
+        elif status == MealComplianceStatus.SUBSTITUTED:
+            status_key = LK.Tracking.Compliance.SUBSTITUTED
+        elif status == MealComplianceStatus.SKIPPED:
+            status_key = LK.Tracking.Compliance.SKIPPED
+        else:
+            status_key = LK.Tracking.Compliance.GENERIC_STATUS
 
-            # Формируем сообщение в зависимости от статуса
-            if status == MealComplianceStatus.FOLLOWED:
-                message = self.get_localized_message(
-                    LK.Tracking.Compliance.FOLLOWED,
-                    lang,
-                    meal_type=meal_type_display
-                )
-            elif status == MealComplianceStatus.PARTIALLY:
-                message = self.get_localized_message(
-                    LK.Tracking.Compliance.PARTIALLY,
-                    lang,
-                    meal_type=meal_type_display
-                )
-            elif status == MealComplianceStatus.SUBSTITUTED:
-                message = self.get_localized_message(
-                    LK.Tracking.Compliance.SUBSTITUTED,
-                    lang,
-                    meal_type=meal_type_display
-                )
-            elif status == MealComplianceStatus.SKIPPED:
-                message = self.get_localized_message(
-                    LK.Tracking.Compliance.SKIPPED,
-                    lang,
-                    meal_type=meal_type_display
-                )
-            else:
-                message = self.get_localized_message(
-                    LK.Tracking.Compliance.GENERIC_STATUS,
-                    lang,
-                    meal_type=meal_type_display
-                )
+        # Получаем сообщение статуса для типа приема пищи
+        status_message = self.get_localized_message(
+            status_key,
+            lang,
+            meal_type=meal_type_display
+        )
 
-            # Добавляем информацию о общем соблюдении
-            if compliance_data and "overall_score" in compliance_data:
-                message += self.get_localized_message(
-                    LK.Tracking.Compliance.OVERALL_SCORE,
-                    lang,
-                    score=compliance_data['overall_score']
-                )
+        # Добавляем информацию об общем соблюдении плана
+        overall_score = compliance_data.get('overall_score', 0)
+        overall_message = self.get_localized_message(
+            LK.Tracking.Compliance.OVERALL_SCORE,
+            lang,
+            score=overall_score
+        )
 
-                # Добавляем мотивацию в зависимости от процента соблюдения
-                if compliance_data["overall_score"] >= 80:
-                    message += self.get_localized_message(LK.Tracking.Compliance.EXCELLENT, lang)
-                elif compliance_data["overall_score"] >= 50:
-                    message += self.get_localized_message(LK.Tracking.Compliance.GOOD, lang)
-                else:
-                    message += self.get_localized_message(LK.Tracking.Compliance.KEEP_TRYING, lang)
+        # Добавляем мотивационное сообщение в зависимости от процента соблюдения
+        motivation_message = ""
+        if overall_score >= 80:
+            motivation_message = self.get_localized_message(LK.Tracking.Compliance.EXCELLENT, lang)
+        elif overall_score >= 50:
+            motivation_message = self.get_localized_message(LK.Tracking.Compliance.GOOD, lang)
+        else:
+            motivation_message = self.get_localized_message(LK.Tracking.Compliance.KEEP_TRYING, lang)
 
-            return self.format_for_whatsapp(message)
-
-        except Exception as e:
-            return self.handle_exception(
-                e,
-                "Error formatting compliance message",
-                "tracking.compliance_recorded",
-                lang
-            )
+        return f"{status_message}{overall_message}{motivation_message}"
 
     def format_stats_message(self, weight_progress: Optional[Dict[str, Any]],
                              today_status: Optional[Dict[str, Any]],

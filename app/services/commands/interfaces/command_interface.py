@@ -33,11 +33,12 @@ class ICommand(ABC):
         pass
 
     @abstractmethod
-    def get_error_message(self) -> str:
+    def get_error_message(self, lang: str) -> str:
         """
         Получение сообщения об ошибке
         
         Returns:
             str: Сообщение об ошибке
+            lang: Язык пользователя
         """
         pass

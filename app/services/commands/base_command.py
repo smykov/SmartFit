@@ -81,11 +81,12 @@ class BaseCommand(ICommand):
         """
         raise NotImplementedError("Метод execute должен быть реализован в дочернем классе")
 
-    def get_error_message(self) -> str:
+    def get_error_message(self, lang: str) -> str:
         """
         Базовое сообщение об ошибке
 
         Returns:
             str: Сообщение об ошибке
+            lang: Язык пользователя
         """
         return self.get_localized_message("commands.errors.command_not_found")

@@ -1,4 +1,6 @@
 # app/api/endpoints/messaging.py
+import asyncio
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 import logging
@@ -31,23 +33,38 @@ async def messaging_webhook(
     try:
         # Получаем данные из запроса
         if messenger_type.lower() == "whatsapp":
-            # Для WhatsApp данные приходят как form-data
             data = await request.form()
             data = {key: value for key, value in data.items()}
         else:
-            # Для других мессенджеров обычно используется JSON
             data = await request.json()
 
         logger.info(f"Получен вебхук от {messenger_type}: {data}")
 
-        # Обрабатываем сообщение
-        result = await message_processor.process_incoming_message(data, messenger_type.lower())
+        # Извлекаем message_id для предварительной проверки
+        message_id = None
+        if messenger_type.lower() == "whatsapp":
+            message_id = data.get("MessageSid", "") or data.get("SmsMessageSid", "")
+        else:  # telegram
+            if "message" in data:
+                message_id = str(data.get("message", {}).get("message_id", ""))
+
+        # Проверяем, обрабатывается ли уже это сообщение
+        if message_id and await message_processor.is_message_being_processed(message_id):
+            return JSONResponse(
+                content={
+                    "success": True,
+                    "message": "Message is already being processed",
+                }
+            )
+
+        # ВАЖНО: Сразу отправляем положительный ответ вебхуку
+        # Запускаем обработку сообщения в фоновом режиме
+        asyncio.create_task(message_processor.process_incoming_message(data, messenger_type.lower()))
 
         return JSONResponse(
             content={
                 "success": True,
-                "message": "Message received",
-                "result": result
+                "message": "Message received and processing started",
             }
         )
     except Exception as e:

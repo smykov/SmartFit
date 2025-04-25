@@ -5,25 +5,27 @@ from datetime import datetime, date
 
 import pytz
 
+import data
 from app.db.interfaces.compliance_repository_interface import IComplianceRepository
+from app.models.tracking import MealComplianceStatus
 from config import settings
-
-logger = logging.getLogger(__name__)
-
 
 class FirebaseComplianceRepository(IComplianceRepository):
     """
     Репозиторий для работы с записями соблюдения плана питания через Firebase
     """
 
-    def __init__(self, firebase_client):
+    def __init__(self, firebase_client, diet_plan_repository=None):
         """
         Инициализация репозитория записей соблюдения плана питания
 
         Args:
             firebase_client: Клиент Firebase для работы с базой данных
+            diet_plan_repository: Репозиторий плана диеты (опционально)
         """
         self.firebase_client = firebase_client
+        self.diet_plan_repository = diet_plan_repository
+        self.logger = logging.getLogger(self.__class__.__name__)
 
     async def add_meal_compliance(self, user_id: str, date_value: date, meal_type: str,
                                   status: str, notes: str = None,
@@ -61,16 +63,13 @@ class FirebaseComplianceRepository(IComplianceRepository):
             compliance_id = await self.firebase_client.add_document("meal_compliance", compliance_data)
 
             if not compliance_id:
-                logger.error(f"Failed to save meal compliance for user {user_id}")
+                self.logger.error(f"Failed to save meal compliance for user {user_id}")
                 return None
-
-            # Обновляем общую статистику соблюдения
-            await self.update_daily_compliance(user_id, date_str)
 
             return compliance_id
 
         except Exception as e:
-            logger.error(f"Error adding meal compliance: {str(e)}")
+            self.logger.error(f"Error adding meal compliance: {str(e)}")
             return None
 
     async def get_daily_compliance(self, user_id: str, date_value: date) -> Optional[Dict[str, Any]]:
@@ -85,7 +84,8 @@ class FirebaseComplianceRepository(IComplianceRepository):
             Optional[Dict[str, Any]]: Статистика соблюдения или None
         """
         try:
-            # Преобразуем в строку
+
+            # Формируем дату в формате строки
             date_str = date_value.isoformat() if isinstance(date_value, date) else date_value
 
             # Получаем записи о соблюдении
@@ -106,101 +106,124 @@ class FirebaseComplianceRepository(IComplianceRepository):
                     "date": date_str,
                     "meals": {},
                     "overall_score": 0,
-                    "message": "Нет данных о соблюдении плана на этот день"
+                    "created_at": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat(),
+                    "updated_at": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat(),
                 }
                 return empty_compliance
 
             return daily_compliance[0]
 
         except Exception as e:
-            logger.error(f"Error getting daily compliance: {str(e)}")
+            self.logger.error(f"Error getting daily compliance: {str(e)}")
             return None
 
-    async def update_daily_compliance(self, user_id: str, date_value: date) -> bool:
+    async def update_daily_compliance(self, user_id: str, date_value: data) -> bool:
         """
-        Обновляет общую статистику соблюдения плана питания за день
+        Обновляет данные о соблюдении плана питания на день
 
         Args:
             user_id: ID пользователя
             date_value: Дата
 
         Returns:
-            bool: Результат обновления
+            bool: Результат операции
         """
         try:
-            # Преобразуем в строку
+            # Формируем дату в формате строки
             date_str = date_value.isoformat() if isinstance(date_value, date) else date_value
 
-            # Получаем все записи о соблюдении за день
-            compliances = await self.firebase_client.query_documents(
-                "meal_compliance",
-                "user_id",
-                "==",
-                user_id
-            )
+            # Получаем текущие данные о соблюдении или создаем новую запись
+            compliance_data = await self.get_daily_compliance(user_id, date_value)
 
-            # Фильтруем по дате
-            daily_compliances = [c for c in compliances if c.get("date") == date_str]
+            meal_data = compliance_data.get("meals", {})
 
-            if not daily_compliances:
+            # Рассчитываем процент соблюдения
+            total_value = 0
+
+            # Получаем все запланированные приемы пищи на этот день
+            planned_meals = await self.get_planned_meals_for_day(user_id, date_value)
+
+            # Если нет запланированных приемов пищи, используем отмеченные
+            total_meals = len(planned_meals) if planned_meals else len(meal_data)
+
+            compliance_data["overall_score"] = 0.0
+
+            if total_meals > 0:
+                # Учитываем все запланированные приемы пищи
+                for planned_meal in planned_meals:
+                    meal_status = meal_data.get(planned_meal, MealComplianceStatus.SKIPPED.value)
+
+                    # Определяем вес статуса
+                    status_weight = 0
+                    if meal_status == MealComplianceStatus.FOLLOWED.value:
+                        status_weight = 1.0
+                    elif meal_status == MealComplianceStatus.PARTIALLY.value:
+                        status_weight = 0.5
+                    elif meal_status == MealComplianceStatus.SUBSTITUTED.value:
+                        status_weight = 0.25
+
+                    total_value += status_weight
+
+                # Рассчитываем процент
+                percentage = (total_value / total_meals) * 100
+                compliance_data["overall_score"] = round(percentage, 1)
+
+            # Обновляем временную метку
+            compliance_data["updated_at"] = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+
+            # Сохраняем обновленные данные
+            collection_name = "diet_compliance"
+            if compliance_data['id']:
+                compliance_id = await self.firebase_client.add_document("daily_compliance", compliance_data)
+            else:
+                compliance_id = compliance_data["id"]
+
+            # Логируем для отладки
+            self.logger.info(f"Updating compliance for {user_id} on {date_str}: {compliance_data}")
+
+            result = await self.firebase_client.update_document(collection_name, compliance_id, compliance_data)
+            if not result:
                 return False
 
-            # Формируем словарь по типам приемов пищи
-            meals_status = {}
-            for compliance in daily_compliances:
-                meal_type = compliance.get("meal_type")
-                status = compliance.get("status")
-                meals_status[meal_type] = status
-
-            # Рассчитываем общий процент соблюдения
-            score_map = {
-                "followed": 1.0,
-                "partially": 0.5,
-                "substituted": 0.3,
-                "skipped": 0.0,
-                "not_recorded": 0.0
-            }
-
-            total_score = sum(score_map.get(status, 0) for status in meals_status.values())
-            max_possible = len(meals_status) if meals_status else 1
-            overall_score = (total_score / max_possible) * 100
-
-            # Сохраняем общую статистику
-            compliance_data = {
-                "user_id": user_id,
-                "date": date_str,
-                "meals": meals_status,
-                "overall_score": overall_score,
-                "updated_at": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
-            }
-
-            # Проверяем, существует ли уже запись
-            existing = await self.firebase_client.query_documents(
-                "daily_compliance",
-                "user_id",
-                "==",
-                user_id
-            )
-
-            # Фильтруем по дате
-            existing = [e for e in existing if e.get("date") == date_str]
-
-            if existing:
-                # Обновляем существующую запись
-                return await self.firebase_client.update_document(
-                    "daily_compliance",
-                    existing[0]["id"],
-                    compliance_data
-                )
-            else:
-                # Создаем новую запись
-                compliance_id = await self.firebase_client.add_document("daily_compliance", compliance_data)
-                return bool(compliance_id)
+            return True
 
         except Exception as e:
-            logger.error(f"Error updating daily compliance: {str(e)}")
+            self.logger.error(f"Error updating daily compliance: {str(e)}", exc_info=True)
             return False
 
+    # Метод для получения всех запланированных приемов пищи на день
+    async def get_planned_meals_for_day(self, user_id: str, date_value: date) -> List[str]:
+        """
+        Получает список всех запланированных приемов пищи на день
+
+        Args:
+            user_id: ID пользователя
+            date_value: Дата
+
+        Returns:
+            List[str]: Список типов приемов пищи
+        """
+        try:
+            # Получаем план диеты
+            diet_plan = await self.diet_plan_repository.get_current_diet(user_id)
+            if not diet_plan:
+                return []
+
+            # Определяем день недели
+            day_of_week = date_value.strftime("%A").lower()
+
+            # Получаем план на день
+            daily_plan = diet_plan.get("daily_plans", {}).get(day_of_week, {})
+
+            # Получаем все типы приемов пищи из плана
+            meals = daily_plan.get("meals", [])
+            meal_types = [meal.get("type") for meal in meals if meal.get("type")]
+
+            return meal_types
+
+        except Exception as e:
+            self.logger.error(f"Error getting planned meals for day: {str(e)}")
+            return []
     async def get_compliance_by_period(self, user_id: str, start_date: date,
                                        end_date: date) -> List[Dict[str, Any]]:
         """
@@ -231,13 +254,13 @@ class FirebaseComplianceRepository(IComplianceRepository):
             filtered_entries = []
             for entry in compliance_entries:
                 entry_date = entry.get("date", "")
-                if entry_date >= start_str and entry_date <= end_str:
+                if start_str <= entry_date <= end_str:
                     filtered_entries.append(entry)
 
             return filtered_entries
 
         except Exception as e:
-            logger.error(f"Error getting compliance by period: {str(e)}")
+            self.logger.error(f"Error getting compliance by period: {str(e)}")
             return []
 
     async def delete_compliance(self, compliance_id: str) -> bool:
@@ -256,5 +279,5 @@ class FirebaseComplianceRepository(IComplianceRepository):
                 compliance_id
             )
         except Exception as e:
-            logger.error(f"Error deleting compliance: {str(e)}")
+            self.logger.error(f"Error deleting compliance: {str(e)}")
             return False

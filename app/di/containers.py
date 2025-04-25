@@ -156,12 +156,13 @@ class Container(containers.DeclarativeContainer):
     )
 
     compliance_repository = providers.Factory(
-        lambda engine, firebase, postgres:
-        FirebaseComplianceRepository(firebase) if engine == "firebase" else
-        PostgresComplianceRepository(postgres),
+        lambda engine, firebase, postgres, diet_plan_repo:
+        FirebaseComplianceRepository(firebase, diet_plan_repo) if engine == "firebase" else
+        PostgresComplianceRepository(postgres, diet_plan_repo),
         engine=db_engine,
         firebase=firebase_client,
-        postgres=postgres_client
+        postgres=postgres_client,
+        diet_plan_repo=diet_plan_repository
     )
 
     reminder_repository = providers.Factory(

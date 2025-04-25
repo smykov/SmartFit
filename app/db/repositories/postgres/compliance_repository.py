@@ -13,7 +13,7 @@ class PostgresComplianceRepository(PostgresBaseRepository, IComplianceRepository
     Реализация репозитория записей соблюдения плана питания с использованием PostgreSQL
     """
 
-    def __init__(self, postgres_client: PostgresClient):
+    def __init__(self, postgres_client: PostgresClient, diet_plan_repository=None):
         """
         Инициализация репозитория
 
@@ -23,6 +23,7 @@ class PostgresComplianceRepository(PostgresBaseRepository, IComplianceRepository
         super().__init__(postgres_client, "compliance")
         self.json_fields = ["meals"]
         self.daily_collection = "daily_compliance"
+        self.diet_plan_repository = diet_plan_repository
 
     async def add_meal_compliance(self, user_id: str, date_value: date, meal_type: str,
                                   status: str, notes: str = None,

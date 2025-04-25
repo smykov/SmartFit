@@ -107,7 +107,7 @@ class TrackingService(ITrackingService):
     async def record_meal_compliance(
             self,
             user_id: str,
-            date_val: date,
+            date_value: date,
             meal_type: str,
             status: MealComplianceStatus,
             notes: str = None,
@@ -118,7 +118,7 @@ class TrackingService(ITrackingService):
 
         Args:
             user_id: ID пользователя
-            date_val: Дата
+            date_value: Дата
             meal_type: Тип приема пищи (breakfast, lunch, dinner, snack)
             status: Статус (followed, partially, substituted, skipped)
             notes: Дополнительные заметки
@@ -130,11 +130,11 @@ class TrackingService(ITrackingService):
         try:
             # Записываем соблюдение режима питания
             compliance_id = await self.compliance_repository.add_meal_compliance(
-                user_id, date_val, meal_type, status, notes, alternative_meal
+                user_id, date_value, meal_type, status, notes, alternative_meal
             )
 
             # Обновляем общую статистику соблюдения плана питания за день
-            await self.compliance_repository.update_daily_compliance(user_id, date_val)
+            await self.compliance_repository.update_daily_compliance(user_id, date_value)
 
             return compliance_id is not None
         except Exception as e:
@@ -213,7 +213,7 @@ class TrackingService(ITrackingService):
             # Если дата не указана, используем сегодняшнюю
             if not target_date:
                 target_date = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
-
+            # Преобразуем в строку
             # Проверяем, записан ли вес на указанную дату
             latest_weight = await self.weight_entry_repository.get_latest_entry(user_id)
             weight_recorded = False
@@ -256,24 +256,24 @@ class TrackingService(ITrackingService):
             logger.error(f"Error getting daily status: {str(e)}")
             return None
 
-    async def get_diet_compliance(self, user_id: str, date_val: date = None) -> Optional[Dict[str, Any]]:
+    async def get_diet_compliance(self, user_id: str, date_value: date = None) -> Optional[Dict[str, Any]]:
         """
         Получает статистику соблюдения плана питания
 
         Args:
             user_id: ID пользователя
-            date_val: Дата (если None, используется текущая дата)
+            date_value: Дата (если None, используется текущая дата)
 
         Returns:
             Optional[Dict[str, Any]]: Статистика соблюдения или None
         """
         try:
             # Если дата не указана, используем текущую
-            if date_val is None:
-                date_val = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
+            if date_value is None:
+                date_value = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
 
             # Получаем запись о соблюдении через репозиторий
-            return await self.compliance_repository.get_daily_compliance(user_id, date_val)
+            return await self.compliance_repository.get_daily_compliance(user_id, date_value)
 
         except Exception as e:
             logger.error(f"Error getting diet compliance: {str(e)}")

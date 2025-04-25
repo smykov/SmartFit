@@ -77,7 +77,7 @@ class CommandHandlerService(ICommandHandler):
             if not user or 'id' not in user:
                 return {
                     "success": False,
-                    "error": self.get_localized_message(LK.MessageProcessor.USER_NOT_FOUND)
+                    "error": self.get_localized_message(LK.Messaging.USER_NOT_FOUND)
                 }
 
             # Получаем язык пользователя
