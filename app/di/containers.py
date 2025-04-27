@@ -37,6 +37,10 @@ from app.services.diet.diet_service import DietService
 from app.services.localization.localization_service import LocalizationService
 from app.services.messaging.clients.telegram_client import TelegramClient
 from app.services.messaging.clients.twilio_whatsapp_client import TwilioWhatsAppClient
+from app.services.messaging.command_extraction.cached_command_extractor import CachedCommandExtractor
+from app.services.messaging.command_extraction.command_executor import CommandExecutor
+from app.services.messaging.command_extraction.llm_command_extractor import LLMCommandExtractor
+from app.services.messaging.command_extraction.logging_command_extractor import LoggingCommandExtractor
 from app.services.messaging.messenger_registry import MessengerRegistry
 from app.services.messaging.messenger_service import MessengerService
 from app.services.messaging.messengers.telegram_messenger import TelegramMessenger
@@ -318,6 +322,37 @@ class Container(containers.DeclarativeContainer):
             "llm_service": llm_service
         })
     )
+
+    # Экстрактор и исполнитель команд
+    llm_command_extractor = providers.Singleton(
+        LLMCommandExtractor,
+        llm_service=llm_service,
+        user_repository=user_repository,
+        diet_plan_repository=diet_plan_repository,
+        min_confidence=0.7
+    )
+
+    cached_command_extractor = providers.Singleton(
+        CachedCommandExtractor,
+        command_extractor=llm_command_extractor,
+        cache_ttl_minutes=30,
+        min_confidence_for_cache=0.7
+    )
+
+    logging_command_extractor = providers.Singleton(
+        LoggingCommandExtractor,
+        command_extractor=cached_command_extractor
+    )
+
+    command_executor = providers.Singleton(
+        CommandExecutor,
+        command_factory=command_factory,
+        messenger_service=messenger_service,
+        diet_service=diet_service,
+        user_repository=user_repository,
+        localization_service=localization_service
+    )
+
     # Сервис обработки сообщений
     message_processor_service = providers.Singleton(
         MessageProcessorService,
@@ -330,7 +365,9 @@ class Container(containers.DeclarativeContainer):
         diet_service=diet_service,
         tracking_service=tracking_service,
         command_factory=command_factory,
-        localization_service=localization_service
+        localization_service=localization_service,
+        command_extractor=logging_command_extractor,
+        command_executor=command_executor
     )
 
     # Сервис напоминаний

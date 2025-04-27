@@ -1,4 +1,5 @@
 # app/services/messaging/clients/telegram_client.py
+import asyncio
 from typing import Optional, Dict, Any
 import logging
 from telegram import Bot
@@ -27,7 +28,14 @@ class TelegramClient(IMessageClient):
             telegram_messenger: Мессенджер для форматирования сообщений
         """
         self.bot = Bot(token=token)
-        self.application = Application.builder().token(token).build()
+        # Увеличиваем пул соединений
+        application_builder = Application.builder().token(token)
+
+        # Установка конфигурации пула соединений
+        application_builder.connection_pool_size(16)  # Увеличиваем с дефолтных 4
+        application_builder.pool_timeout(30.0)  # Увеличиваем таймаут
+
+        self.application = application_builder.build()
         self.localization_service = localization_service
         self.telegram_messenger = telegram_messenger
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -61,6 +69,8 @@ class TelegramClient(IMessageClient):
                 # При ошибке пробуем отправить без форматирования
                 self.logger.warning(f"Error with Markdown formatting: {telegram_error} for message '{formatted_message}' Trying plain text '{message}'.")
                 result = await self.bot.send_message(chat_id=to, text=message, parse_mode=None)
+
+            await asyncio.sleep(1)
 
             return str(result.message_id)
         except Exception as e:

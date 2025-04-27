@@ -2,7 +2,9 @@ import logging
 from typing import Dict, Any, Optional, Type
 
 from app.services.commands.commands.compliance_command import ComplianceCommand
+from app.services.commands.commands.diet_approval_command import DietApprovalCommand
 from app.services.commands.commands.diet_command import DietCommand
+from app.services.commands.commands.diet_update_command import DietUpdateCommand
 from app.services.commands.commands.help_command import HelpCommand
 from app.services.commands.commands.language_command import LanguageCommand
 from app.services.commands.commands.messenger_command import SetMessengerCommand
@@ -39,7 +41,8 @@ class CommandFactory:
             # "diet_today": DietTodayCommand,
             # "diet_tomorrow": DietTomorrowCommand,
             # "diet_full": DietFullCommand,
-            # "diet_update": DietUpdateCommand,
+            "diet_update": DietUpdateCommand,
+            "diet_approval": DietApprovalCommand,
             "shopping_list": ShoppingListCommand,
             # "product_bought": ProductBoughtCommand,
             "stats": StatsCommand,
