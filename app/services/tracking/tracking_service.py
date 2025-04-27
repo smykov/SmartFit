@@ -571,4 +571,32 @@ class TrackingService(ITrackingService):
             self.logger.error(f"Error formatting weekly report: {str(e)}")
             return self.get_localized_message(LK.Tracking.Stats.REPORT_ERROR, lang)
 
+    async def get_recent_weight_entries(self, user_id: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """
+        Получает последние записи о весе пользователя
+
+        Args:
+            user_id: ID пользователя
+            limit: Максимальное количество записей
+
+        Returns:
+            List[Dict[str, Any]]: Список записей о весе
+        """
+        try:
+            # Получаем записи о весе через репозиторий
+            entries = await self.weight_entry_repository.get_entries_by_user(user_id, limit)
+
+            # Сортируем по дате (от новых к старым)
+            sorted_entries = sorted(
+                entries,
+                key=lambda entry: entry.get("date", ""),
+                reverse=True
+            )
+
+            # Ограничиваем количество записей
+            return sorted_entries[:limit]
+
+        except Exception as e:
+            self.logger.error(f"Error getting recent weight entries: {str(e)}")
+            return []
 

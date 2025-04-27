@@ -25,12 +25,11 @@ class DietCommand(BaseCommand):
         Returns:
             Dict[str, Any]: Результат выполнения команды
         """
+        # Получаем язык пользователя
+        lang = None
+        if hasattr(self, 'localization_service') and self.localization_service:
+            lang = await self.localization_service.get_user_language(user_id)
         try:
-            # Получаем язык пользователя
-            lang = None
-            if hasattr(self, 'localization_service') and self.localization_service:
-                lang = await self.localization_service.get_user_language(user_id)
-
             # Получаем текущий план диеты
             diet_plan = await self.diet_service.get_current_diet(user_id)
 
@@ -126,11 +125,11 @@ class DietCommand(BaseCommand):
                 "message": self.get_localized_message(LK.Commands.Diet.ERROR, lang)
             }
 
-    def get_error_message(self) -> str:
+    def get_error_message(self, lang) -> str:
         """
         Получение сообщения об ошибке
 
         Returns:
             str: Сообщение об ошибке
         """
-        return self.get_localized_message(LK.Commands.Diet.NO_DIET_PLAN)
+        return self.get_localized_message(LK.Commands.Diet.NO_DIET_PLAN, lang)

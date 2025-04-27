@@ -6,6 +6,7 @@ from enum import Enum
 from typing import Dict, Any, Optional
 
 import pytz
+
 from app.constants.localization_keys import LocalizationKeys as LK
 from app.services.messaging.messenger_registry import MessengerRegistry
 from app.services.user.user_identity_service import UserIdentityService
@@ -17,6 +18,8 @@ from app.services.commands.command_factory import CommandFactory
 from app.services.messaging.interfaces.message_interface import IMessengerService
 from app.services.tracking.tracking_service_interface import ITrackingService
 from app.services.diet.diet_service_interface import IDietService
+from app.services.messaging.command_extraction.command_extraction_interface import ICommandExtractor
+from app.services.messaging.command_extraction.command_executor import CommandExecutor
 from config import settings
 
 
@@ -58,7 +61,9 @@ class MessageProcessorService:
             diet_service: IDietService,
             tracking_service: ITrackingService,
             command_factory: CommandFactory,
-            localization_service: ILocalizationService
+            localization_service: ILocalizationService,
+            command_extractor: ICommandExtractor,
+            command_executor: CommandExecutor
     ):
         """
         Инициализация сервиса обработки сообщений
@@ -74,6 +79,8 @@ class MessageProcessorService:
             tracking_service: Сервис для трекинга прогресса
             command_factory: Фабрика команд для обработки команд пользователя
             localization_service: Сервис локализации для сообщений
+            command_extractor: Экстрактор команд из сообщений пользователя
+            command_executor: Исполнитель команд
         """
         self.messenger_registry = messenger_registry
         self.user_identity_service = user_identity_service
@@ -85,6 +92,8 @@ class MessageProcessorService:
         self.diet_service = diet_service
         self.tracking_service = tracking_service
         self.command_factory = command_factory
+        self.command_extractor = command_extractor
+        self.command_executor = command_executor
         self.logger = logging.getLogger(self.__class__.__name__)
 
         # Регулярные выражения для определения типов сообщений
@@ -192,18 +201,102 @@ class MessageProcessorService:
                 "last_interaction_messenger": messenger_type
             })
 
-            # Определяем стратегию обработки сообщения
-            strategy = await self._determine_processing_strategy(user, message_text)
-            self.logger.info(f"Выбрана стратегия обработки: {strategy} для пользователя {sender_id}")
+            # Если пользователь в процессе онбординга, передаем управление сервису онбординга
+            if not user.get("is_onboarding_completed", False):
+                self.logger.info(f"User {sender_id} is in onboarding process")
+                result = await self.onboarding_service.continue_onboarding(user.get('id'), message_text)
 
-            # Обрабатываем сообщение в соответствии с выбранной стратегией
-            result = await self._process_with_strategy(strategy, user, message_text, message_type)
+                # Отмечаем сообщение как обработанное
+                if message_id:
+                    await self._mark_message_as_processed(message_id, sender_id, message_text)
 
-            # Отмечаем сообщение как обработанное
-            if message_id:
+                return result
+
+            # Получаем контекст пользователя для извлечения команд
+            user_context = await self._get_user_conversation_context(user["id"])
+
+            # Дополняем контекст информацией о текущем состоянии
+            context_with_state = await self._enrich_context_with_state(user_context, user["id"])
+
+            # Извлекаем команды из сообщения пользователя
+            extraction_result = await self.command_extractor.extract_commands(
+                message_text,
+                user["id"],
+                context_with_state
+            )
+
+            # Логируем результат извлечения
+            self.logger.info(f"Command extraction result: source={extraction_result.source}, "
+                             f"commands={[cmd.command_type for cmd in extraction_result.commands]}, "
+                             f"fallback_to_ai={extraction_result.fallback_to_ai}")
+
+            # Сохраняем контекст разговора
+            await self._store_user_conversation_context(user["id"], f"message_received", {
+                "message_text": message_text,
+                "message_type": message_type,
+                "messenger_type": messenger_type,
+                "commands": [cmd.dict() for cmd in extraction_result.commands],
+                "fallback_to_ai": extraction_result.fallback_to_ai
+            })
+
+            # Если есть команды для выполнения и не требуется fallback, выполняем их
+            if extraction_result.commands and extraction_result.execution_required and not extraction_result.fallback_to_ai:
+                # Отправляем дополнительное текстовое сообщение, если оно есть
+                if extraction_result.response_message:
+                    await self.messenger_service.send_message(
+                        sender_id,
+                        extraction_result.response_message,
+                        {"user_id": user["id"], "messenger_type": messenger_type}
+                    )
+
+                # Выполняем команды
+                execution_result = await self.command_executor.execute_commands(
+                    user["id"],
+                    extraction_result.commands,
+                    messenger_type
+                )
+
+                # Отмечаем сообщение как обработанное
                 await self._mark_message_as_processed(message_id, sender_id, message_text)
 
-            return result
+                # Сохраняем результат выполнения в контекст
+                await self._store_user_conversation_context(user["id"], "commands_executed", execution_result)
+
+                return {
+                    "success": True,
+                    "action": "commands_executed",
+                    "execution_result": execution_result
+                }
+
+            # Если нужен fallback на AI или нет команд, используем общий AI-ответ
+            if extraction_result.fallback_to_ai or not extraction_result.commands:
+                # Получаем ответ от ИИ
+                response = await self.diet_service.answer_nutrition_question(user["id"], message_text, lang)
+
+                # Отправляем ответ пользователю
+                await self.messenger_service.send_message(
+                    sender_id,
+                    response,
+                    {"message_type": "ai_response", "user_id": user["id"], "messenger_type": messenger_type}
+                )
+
+                # Отмечаем сообщение как обработанное
+                await self._mark_message_as_processed(message_id, sender_id, message_text)
+
+                # Сохраняем результат в контекст
+                await self._store_user_conversation_context(user["id"], "ai_response_sent", {
+                    "query": message_text,
+                    "response": response
+                })
+
+                return {
+                    "success": True,
+                    "action": "ai_response_sent"
+                }
+
+            # В случае неопределенной ситуации
+            self.logger.warning(f"Unhandled message processing case for user {sender_id}")
+            return {"success": False, "error": "Unhandled message processing case"}
 
         except Exception as e:
             self.logger.error(f"Ошибка обработки сообщения: {str(e)}", exc_info=True)
@@ -231,7 +324,6 @@ class MessageProcessorService:
                 )
 
                 # Отправляем приветственное сообщение
-                # Используем messenger_service вместо прямого вызова messenger
                 context = {
                     "messenger_type": messenger_type,
                     "user_id": user_id
@@ -247,6 +339,169 @@ class MessageProcessorService:
         except Exception as e:
             self.logger.error(f"Ошибка при обработке нового пользователя: {str(e)}")
             return {"success": False, "error": str(e)}
+
+    async def is_message_being_processed(self, message_id: str) -> bool:
+        """
+        Проверяет, находится ли сообщение в процессе обработки
+
+        Args:
+            message_id: ID сообщения
+
+        Returns:
+            bool: True, если сообщение уже обрабатывается
+        """
+        if not message_id:
+            return False
+
+        try:
+            # Проверяем статус сообщения
+            message_status = await self.message_repository.get_message_status(message_id)
+            return message_status == "processed"
+        except Exception as e:
+            self.logger.error(f"Error checking message processing status: {str(e)}")
+            return False
+
+    async def _mark_message_as_processed(self, message_id: str, sender_id: str, message_text: str) -> None:
+        """
+        Отмечает сообщение как обработанное
+
+        Args:
+            message_id: ID сообщения
+            sender_id: Номер отправителя
+            message_text: Текст сообщения
+        """
+        # Проверяем валидность message_id
+        if not message_id:
+            self.logger.warning("Cannot mark message as processed: empty message_id")
+            return
+
+        try:
+            # Используем await для асинхронного метода
+            result = await self.message_repository.mark_as_processed(
+                message_id,
+                sender_id,
+                message_text,
+                datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+            )
+
+            if not result:
+                self.logger.warning(f"Failed to mark message {message_id} as processed")
+        except Exception as e:
+            self.logger.error(f"Error marking message as processed: {str(e)}", exc_info=True)
+
+    async def _get_user_conversation_context(self, user_id: str) -> Dict[str, Any]:
+        """
+        Получает контекст разговора пользователя
+
+        Args:
+            user_id: ID пользователя
+
+        Returns:
+            Dict[str, Any]: Контекст разговора
+        """
+        user = await self.user_repository.get_by_id(user_id)
+        if not user or "last_conversation_context" not in user:
+            return {}
+
+        return user.get("last_conversation_context", {})
+
+    async def _store_user_conversation_context(self, user_id: str, action: str, data: Dict[str, Any] = None) -> None:
+        """
+        Сохраняет контекст разговора пользователя
+
+        Args:
+            user_id: ID пользователя
+            action: Действие, которое было выполнено
+            data: Дополнительные данные
+        """
+        context = {
+            "last_action": action,
+            "last_action_time": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat(),
+            "last_message": data.get("message_text", "") if data else "",
+            "data": data
+        }
+
+        # Сохраняем в репозитории пользователей
+        await self.user_repository.update(user_id, {
+            "last_conversation_context": context,
+            "updated_at": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+        })
+
+    async def _enrich_context_with_state(self, context: Dict[str, Any], user_id: str) -> Dict[str, Any]:
+        """
+        Дополняет контекст информацией о текущем состоянии пользователя
+
+        Args:
+            context: Исходный контекст
+            user_id: ID пользователя
+
+        Returns:
+            Dict[str, Any]: Дополненный контекст
+        """
+        enriched = context.copy() if context else {}
+
+        try:
+            # Проверяем наличие плана диеты
+            current_diet = await self.diet_service.get_current_diet(user_id)
+            if current_diet:
+                enriched["has_diet_plan"] = True
+                enriched["diet_plan_id"] = current_diet.get("id")
+
+                # Добавляем информацию о днях плана питания
+                if "daily_plans" in current_diet:
+                    enriched["current_diet_days"] = list(current_diet["daily_plans"].keys())
+
+            # Получаем последние данные о весе
+            weight_entries = await self.tracking_service.get_recent_weight_entries(user_id, 1)
+            if weight_entries:
+                enriched["latest_weight"] = weight_entries[0].get("weight")
+                enriched["latest_weight_date"] = weight_entries[0].get("date")
+
+            # Получаем последний план с ожиданием согласования
+            pending_plan = await self.diet_service.get_pending_diet_plan(user_id)
+            if pending_plan:
+                enriched["has_pending_diet_plan"] = True
+                enriched["pending_plan_id"] = pending_plan.get("id")
+
+        except Exception as e:
+            self.logger.error(f"Error enriching context with state: {str(e)}")
+
+        return enriched
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     async def _determine_processing_strategy(self, user: Dict[str, Any], message_text: str) -> ProcessingStrategy:
         """
@@ -412,47 +667,6 @@ class MessageProcessorService:
             await self.messenger_service.send_messages(recipient_id, result["messages"], {"user_id": user_id})
 
         return result
-
-    async def is_message_being_processed(self, message_id: str) -> bool:
-        """
-        Проверяет, находится ли сообщение в процессе обработки
-
-        Args:
-            message_id: ID сообщения
-
-        Returns:
-            bool: True, если сообщение уже обрабатывается
-        """
-        try:
-            # Проверяем статус сообщения
-            message_status = await self.message_repository.get_message_status(message_id)
-            return message_status == "processing"
-        except Exception as e:
-            self.logger.error(f"Error checking message processing status: {str(e)}")
-            return False
-
-    def _diagnose_command_type(self, message_text: str) -> str:
-        """
-        Диагностический метод для определения типа команды
-
-        Args:
-            message_text: Текст сообщения
-
-        Returns:
-            str: Диагностическая информация
-        """
-        matches = []
-
-        for cmd_type, pattern in self.command_patterns.items():
-            match = pattern.match(message_text)
-            if match:
-                groups = match.groups() if match.groups() else []
-                matches.append(f"Найдено соответствие для команды '{cmd_type}', группы: {groups}")
-
-        if matches:
-            return "Диагностика команды:\n" + "\n".join(matches)
-        else:
-            return f"Не найдено соответствие ни для одной команды: '{message_text}'"
 
     async def _process_diet_approval(self, user: Dict[str, Any], message_text: str) -> Dict[str, Any]:
         """
@@ -642,94 +856,3 @@ class MessageProcessorService:
         await self.messenger_service.send_message(recipient_id, response, context)
 
         return {"success": True, "action": "ai_response_sent"}
-
-    async def _mark_message_as_processed(self, message_id: str, sender_id: str, message_text: str) -> None:
-        """
-        Отмечает сообщение как обработанное
-
-        Args:
-            message_id: ID сообщения
-            sender_id: Номер отправителя
-            message_text: Текст сообщения
-        """
-        # Проверяем валидность message_id
-        if not message_id:
-            self.logger.warning("Cannot mark message as processed: empty message_id")
-            return
-
-        try:
-            # Используем await для асинхронного метода
-            result = await self.message_repository.mark_as_processed(
-                message_id,
-                sender_id,
-                message_text,
-                datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
-            )
-
-            if not result:
-                self.logger.warning(f"Failed to mark message {message_id} as processed")
-        except Exception as e:
-            self.logger.error(f"Error marking message as processed: {str(e)}", exc_info=True)
-
-    def _is_tracking_data(self, message_text: str) -> bool:
-        """
-        Проверяет, является ли сообщение данными для трекинга
-
-        Args:
-            message_text: Текст сообщения
-
-        Returns:
-            bool: True, если сообщение содержит данные для трекинга
-        """
-        # Реализация логики определения данных трекинга
-        # Пока заглушка
-        return False
-
-    def _is_diet_update_request(self, message_text: str) -> bool:
-        """Проверяет, является ли сообщение запросом на изменение плана питания"""
-        update_keywords = ["убери", "измени", "поменяй", "обнови", "замени", "добавь"]
-        diet_keywords = ["план", "меню", "рацион", "диета", "питание", "мясо", "веганский", "вегетарианский"]
-
-        # Проверяем наличие ключевых слов из обеих категорий
-        has_update_keyword = any(keyword in message_text.lower() for keyword in update_keywords)
-        has_diet_keyword = any(keyword in message_text.lower() for keyword in diet_keywords)
-
-        return has_update_keyword and has_diet_keyword
-
-    async def _has_pending_diet_plan(self, user_id: str) -> bool:
-        """
-        Проверяет, есть ли у пользователя несогласованный план питания
-
-        Args:
-            user_id: ID пользователя
-
-        Returns:
-            bool: True, если есть несогласованный план
-        """
-        plan = await self._get_pending_diet_plan(user_id)
-        return bool(plan)
-
-    async def _get_pending_diet_plan(self, user_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Получает несогласованный план питания пользователя
-
-        Args:
-            user_id: ID пользователя
-
-        Returns:
-            Optional[Dict[str, Any]]: План питания или None
-        """
-        return await self.diet_service.get_pending_diet_plan(user_id)
-
-    def _is_today_updated(self, updated_days: Dict[str, Any]) -> bool:
-        """
-        Проверяет, обновлен ли план на сегодня
-
-        Args:
-            updated_days: Словарь обновленных дней
-
-        Returns:
-            bool: True, если обновлен план на сегодня
-        """
-        today = datetime.now(pytz.timezone(settings.TIMEZONE)).date().isoformat()
-        return today in updated_days

@@ -194,7 +194,7 @@ class DeepSeekLLMService(BaseLLMService):
 
                                 # Логируем начало ответа для отладки
                                 if content:
-                                    logger.info(f"DeepSeek response content (truncated): {content[:100]}...")
+                                    logger.info(f"DeepSeek response content (truncated): {content[:500]}...")
                                 else:
                                     logger.warning("Empty content in DeepSeek response")
 

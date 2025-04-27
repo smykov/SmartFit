@@ -232,26 +232,28 @@ class ComplianceCommand(BaseCommand):
                     "message": self.get_localized_message(LK.Commands.Compliance.INVALID_FORMAT, lang)
                 }
 
-            status_text = command_params[0].lower().strip()
-            meal_type_text = command_params[1].lower().strip()
+            status = None
+            meal_type = None
 
-            # Определяем статус из текста сообщения
-            status = self._get_status_from_text(status_text, lang)
-            if not status:
-                self.logger.error(f"Error recording compliance: Unknown compliance type '{status_text}'")
+            if 'status' in params:
+                status = params['status']
+            elif 'params' in params and len(params['params']) > 0:
+                status = params['params'][0]
+
+            if 'meal_type' in params:
+                meal_type = params['meal_type']
+            elif 'params' in params and len(params['params']) > 1:
+                meal_type = params['params'][1]
+
+            # Проверяем корректность значений
+            if not status or not meal_type:
+                self.logger.error(f"Invalid status or meal type: status={status}, meal_type={meal_type}")
                 return {
                     "success": False,
                     "message": self.get_localized_message(LK.Commands.Compliance.INVALID_TYPE, lang)
                 }
 
-            # Определяем тип приема пищи из текста сообщения
-            meal_type = self._get_meal_type_from_text(meal_type_text, lang)
-            if not meal_type:
-                self.logger.error(f"Error recording compliance: Unknown meal type '{meal_type_text}'")
-                return {
-                    "success": False,
-                    "message": self.get_localized_message(LK.Commands.Compliance.INVALID_MEAL_TYPE, lang)
-                }
+            self.logger.info(f"Recording compliance: type={meal_type}, status={status}")
 
             # Получаем текущую дату
             today = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
@@ -264,8 +266,6 @@ class ComplianceCommand(BaseCommand):
                     "success": False,
                     "message": self.get_localized_message(LK.Commands.Compliance.NO_DIET_PLAN, lang)
                 }
-
-            self.logger.info(f"Recording compliance: type={meal_type}, status={status}")
 
             try:
                 # Записываем соблюдение через трекинг-сервис
@@ -307,13 +307,13 @@ class ComplianceCommand(BaseCommand):
                             status_key = lk
                             break
 
-                    status_text = self.get_localized_message(status_key, lang) if status_key else str(status)
+                    status = self.get_localized_message(status_key, lang) if status_key else str(status)
 
                     message = self.get_localized_message(
                         LK.Commands.Compliance.RECORDED,
                         lang,
                         meal_type=meal_type_display,
-                        status=status_text
+                        status=status
                     )
 
                 return {

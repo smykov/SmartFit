@@ -41,7 +41,7 @@ class TrackingFormatterService:
         return self.tracking_formatter.format_weight_recorded_message(weight, progress_dict, lang)
 
     def format_water_recorded_message(self, amount: float, ml_amount: float,
-                                      status: Optional[Dict[str, Any]] = None,
+                                      status: Optional[DailyTrackingStatus] = None,
                                       lang: Optional[str] = None) -> str:
         """
         Форматирует сообщение о записи потребления воды
@@ -55,7 +55,8 @@ class TrackingFormatterService:
         Returns:
             str: Отформатированное сообщение
         """
-        return self.tracking_formatter.format_water_recorded_message(amount, ml_amount, status, lang)
+        status_dict = self._convert_to_dict(status)
+        return self.tracking_formatter.format_water_recorded_message(amount, ml_amount, status_dict, lang)
 
     def format_compliance_message(self, meal_type: str, status: str,
                                   compliance_data: Optional[Dict[str, Any]] = None,

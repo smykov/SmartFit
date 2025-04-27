@@ -125,7 +125,7 @@ class TrackingFormatter(BaseFormatter):
             return self.handle_exception(
                 e,
                 "Error formatting water recorded message",
-                "tracking.water_recorded",
+                LK.Tracking.Water.RECORDED,
                 lang
             )
 

@@ -117,7 +117,7 @@ class FirebaseComplianceRepository(IComplianceRepository):
             self.logger.error(f"Error getting daily compliance: {str(e)}")
             return None
 
-    async def update_daily_compliance(self, user_id: str, date_value: data) -> bool:
+    async def update_daily_compliance(self, user_id: str, date_value: date) -> bool:
         """
         Обновляет данные о соблюдении плана питания на день
 
@@ -135,6 +135,7 @@ class FirebaseComplianceRepository(IComplianceRepository):
             # Получаем текущие данные о соблюдении или создаем новую запись
             compliance_data = await self.get_daily_compliance(user_id, date_value)
 
+            # Получаем список приемов пищи
             meal_data = compliance_data.get("meals", {})
 
             # Рассчитываем процент соблюдения
@@ -171,21 +172,22 @@ class FirebaseComplianceRepository(IComplianceRepository):
             # Обновляем временную метку
             compliance_data["updated_at"] = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
 
-            # Сохраняем обновленные данные
-            collection_name = "diet_compliance"
-            if compliance_data['id']:
-                compliance_id = await self.firebase_client.add_document("daily_compliance", compliance_data)
+            # Проверяем, существует ли уже запись в БД (есть ли id)
+            compliance_id = compliance_data.get("id")
+            collection_name = "daily_compliance"
+
+            if compliance_id:
+                # Если запись существует, обновляем её
+                result = await self.firebase_client.update_document(collection_name, compliance_id, compliance_data)
             else:
-                compliance_id = compliance_data["id"]
+                # Если записи нет, создаем новую
+                compliance_id = await self.firebase_client.add_document(collection_name, compliance_data)
+                result = bool(compliance_id)
 
             # Логируем для отладки
             self.logger.info(f"Updating compliance for {user_id} on {date_str}: {compliance_data}")
 
-            result = await self.firebase_client.update_document(collection_name, compliance_id, compliance_data)
-            if not result:
-                return False
-
-            return True
+            return result
 
         except Exception as e:
             self.logger.error(f"Error updating daily compliance: {str(e)}", exc_info=True)

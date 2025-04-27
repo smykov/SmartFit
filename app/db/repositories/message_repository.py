@@ -315,16 +315,37 @@ class FirebaseMessageRepository(IMessageRepository):
             bool: Статус обработки сообщения
         """
         try:
+            processed_message = await self._get_processed(message_id)
+            return processed_message is not None
+
+        except Exception as e:
+            self.logger.error(f"Error checking if message is processed: {str(e)}")
+            return False
+
+    async def _get_processed(self, message_id: str) -> Optional[str]:
+        """
+        Получает id документа обработанного сообщения
+
+        Args:
+            message_id: Идентификатор сообщения
+
+        Returns:
+            Optional[str]: ID документа в Firebase или None
+        """
+        try:
             processed_messages = await self.firebase_client.query_documents(
                 "processed_messages",
                 "message_id", "==", message_id
             )
 
-            return len(processed_messages) > 0
+            # Проверка наличия результатов и получение id документа
+            if processed_messages and len(processed_messages) > 0:
+                return processed_messages[0].get('id')
+            return None
 
         except Exception as e:
             self.logger.error(f"Error checking if message is processed: {str(e)}")
-            return False
+            return None
 
     async def mark_as_processing(self, message_id: str, phone_number: str, message_text: str, timestamp: str) -> bool:
         """
@@ -340,6 +361,7 @@ class FirebaseMessageRepository(IMessageRepository):
             bool: Результат операции
         """
         try:
+            message_uid = await self._get_processed(message_id)
             message_data = {
                 "message_id": message_id,
                 "phone_number": phone_number,
@@ -349,7 +371,12 @@ class FirebaseMessageRepository(IMessageRepository):
             }
 
             # Запись в базу данных
-            await self.firebase_client.set_document("processed_messages", message_id, message_data)
+            if message_uid is not None:
+                await self.firebase_client.set_document(collection="processed_messages", message_id=message_uid,
+                                                        data=message_data)
+            else:
+                await self.firebase_client.add_document("processed_messages", message_data)
+
             return True
         except Exception as e:
             self.logger.error(f"Error marking message as processing: {str(e)}")
@@ -366,15 +393,19 @@ class FirebaseMessageRepository(IMessageRepository):
             timestamp: Временная метка обработки
         """
         try:
-            result = await self.firebase_client.add_document("processed_messages", {
+            message_uid = await self._get_processed(message_id)
+            message_data = {
                 "message_id": message_id,
                 "phone_number": phone_number,
                 "message_text": message_text,
                 "status": "processed",
                 "processed_at": timestamp
-            })
-            if not result:
-                return False
+            }
+            # Запись в базу данных
+            if message_uid:
+                await self.firebase_client.set_document("processed_messages", message_uid, message_data)
+            else:
+                await self.firebase_client.add_document("processed_messages", message_data)
 
             return True
         except Exception as e:
@@ -458,7 +489,6 @@ class FirebaseMessageRepository(IMessageRepository):
             self.logger.error(f"Error counting messages for user {phone_number}: {str(e)}")
             return 0
 
-
     async def get_message_status(self, message_id: str) -> Optional[str]:
         """
         Получает статус сообщения
@@ -469,8 +499,22 @@ class FirebaseMessageRepository(IMessageRepository):
         Returns:
             Optional[str]: Статус сообщения или None
         """
-        pass
+        try:
+            processed_messages = await self.firebase_client.query_documents(
+                "processed_messages",
+                "message_id", "==", message_id
+            )
 
+            # Проверяем, есть ли результаты в списке
+            if not processed_messages:
+                return None
+
+            # Получаем первый элемент и извлекаем статус из словаря
+            return processed_messages[0].get("status")
+
+        except Exception as e:
+            self.logger.error(f"Error checking message status: {str(e)}")
+            return None
 
     async def mark_as_failed(self, message_id: str, error: str) -> bool:
         """
