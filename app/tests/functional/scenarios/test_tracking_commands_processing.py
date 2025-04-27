@@ -122,14 +122,16 @@ class TestTrackingCommandsScenario:
         message_processor = MessageProcessorService(
             messenger_registry=messenger_registry,
             user_identity_service=user_identity_service,
-            user_repository=user_repository,
-            message_repository=message_repository,
+            user_repository=firebase_repositories["user_repository"],
+            message_repository=firebase_repositories["message_repository"],
             messenger_service=whatsapp_service_mock,
             localization_service=localization_service_mock,
             onboarding_service=AsyncMock(),
             diet_service=AsyncMock(),
             tracking_service=tracking_service,
-            command_factory=command_factory
+            command_factory=command_factory,
+            command_extractor=AsyncMock(),
+            command_executor=AsyncMock()
         )
 
         # Настраиваем метод обработки сообщений

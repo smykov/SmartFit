@@ -74,7 +74,9 @@ class TestDietPlanGenerationWorkflow:
             onboarding_service=onboarding_service,
             diet_service=diet_service,
             tracking_service=tracking_service,
-            command_factory=command_factory
+            command_factory=command_factory,
+            command_extractor=AsyncMock(),
+            command_executor=AsyncMock()
         )
 
         # Настраиваем обработку команд

@@ -1,10 +1,7 @@
 import pytest
-from datetime import datetime, date, timedelta
-import pytz
-from unittest.mock import AsyncMock, MagicMock, patch, ANY
-
+from datetime import date
+from unittest.mock import AsyncMock
 from app.models.tracking import MealComplianceStatus
-from app.services.messaging.message_processor_service import MessageProcessorService
 
 
 class TestEndToEndUserTracking:

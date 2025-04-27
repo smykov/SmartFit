@@ -1,6 +1,10 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+from app.services.messaging.command_extraction.command_executor import CommandExecutor
+from app.services.messaging.command_extraction.llm_command_extractor import LLMCommandExtractor
+from app.services.messaging.command_extraction.logging_command_extractor import LoggingCommandExtractor
+
 
 @pytest.fixture
 def services(firebase_repositories, llm_service_mock, whatsapp_service_mock, localization_service_mock):
@@ -68,6 +72,23 @@ def services(firebase_repositories, llm_service_mock, whatsapp_service_mock, loc
         localization_service=localization_service_mock
     )
 
+    llm_command_extractor = LLMCommandExtractor(
+        llm_service=llm_service_mock,
+        user_repository=firebase_repositories["user_repository"],
+        diet_plan_repository=firebase_repositories["diet_plan_repository"],
+        min_confidence=0.7
+    )
+    command_extractor = LoggingCommandExtractor(
+        command_extractor=llm_command_extractor
+    )
+
+    command_executor = CommandExecutor(
+        command_factory=command_factory,
+        messenger_service=whatsapp_service_mock,
+        diet_service=diet_service,
+        user_repository=firebase_repositories["user_repository"],
+        localization_service=localization_service_mock
+    )
     # Создаем сервис процессора сообщений
     message_processor_service = MessageProcessorService(
         messenger_registry=messenger_registry,
@@ -79,7 +100,9 @@ def services(firebase_repositories, llm_service_mock, whatsapp_service_mock, loc
         onboarding_service=onboarding_service,
         diet_service=diet_service,
         tracking_service=tracking_service,
-        command_factory=command_factory
+        command_factory=command_factory,
+        command_extractor=command_extractor,
+        command_executor=command_executor
     )
 
     # Создаем сервис напоминаний
