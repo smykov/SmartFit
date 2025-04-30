@@ -84,12 +84,12 @@ async def startup_event():
         await postgres_client.initialize()
 
     # Проверка необходимых переменных окружения
-    required_env_vars = ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"]
-    missing_vars = [var for var in required_env_vars if not getattr(settings, var, None)]
-
-    if missing_vars:
-        logger.error(f"Missing required environment variables: {', '.join(missing_vars)}")
-        raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
+    # required_env_vars = ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"]
+    # missing_vars = [var for var in required_env_vars if not getattr(settings, var, None)]
+    #
+    # if missing_vars:
+    #     logger.error(f"Missing required environment variables: {', '.join(missing_vars)}")
+    #     raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
 
     # Проверка всех зависимостей в контейнере
     try:
