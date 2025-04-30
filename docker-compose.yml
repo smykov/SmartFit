@@ -1,73 +1,44 @@
+version: '3.8'
+
 services:
   api:
-    build: .
-    container_name: guatefit-api
+    image: ${DOCKER_USERNAME}/smartfit-api:${IMAGE_TAG:-latest}
+    container_name: smartfit-api
     restart: always
     ports:
-      - "8000:8000"
+      - "${API_PORT:-8000}:8000"
     volumes:
-      - .:/app
       - ./firebase-credentials.json:/app/firebase-credentials.json:ro
     env_file:
       - .env
-    environment:
-      - DEBUG=True
-      - FIREBASE_CREDENTIALS=/app/firebase-credentials.json
-      - USE_MOCK_SERVICES=${USE_MOCK_SERVICES:-False}
-      - LLM_PROVIDER=${LLM_PROVIDER:-deepseek}
-      - LLM_TASK_MAPPING=${LLM_TASK_MAPPING:-"{}"}
-      # Настройки для WhatsApp сервиса
-      - WHATSAPP_RETRY_INTERVAL_SECONDS=300
-      - WHATSAPP_MAX_MESSAGE_SIZE=1500
-      - WHATSAPP_MAX_MESSAGE_AGE_HOURS=72
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     networks:
-      - guatefit-network
+      - smartfit-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
       timeout: 5s
       retries: 3
-  # Для разработки локально
-
-  ngrok:
-    image: ngrok/ngrok:latest
-    container_name: guatefit-ngrok
-    restart: unless-stopped
-    command: "http api:8000 --log=stdout"
-    environment:
-      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
-    depends_on:
-      - api
-    networks:
-      - guatefit-network
+    labels:
+      - "com.smartfit.environment=${ENVIRONMENT:-production}"
 
   postgres:
     image: postgres:14-alpine
-    container_name: guatefit-postgres
+    container_name: smartfit-postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-guatefit}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-guatefit_password}
-      POSTGRES_DB: ${POSTGRES_DB:-guatefit}
-      PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./init-db:/docker-entrypoint-initdb.d
     ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-guatefit}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
+      - "${POSTGRES_PORT:-5432}:5432"
     networks:
-      - guatefit-network
+      - smartfit-network
+    restart: unless-stopped
 
 volumes:
   postgres-data:
 
-
 networks:
-  guatefit-network:
+  smartfit-network:
     driver: bridge

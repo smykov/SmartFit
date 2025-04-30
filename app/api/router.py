@@ -2,10 +2,13 @@ from fastapi import APIRouter
 
 from app.api.endpoints import (whatsapp, telegram, messaging)
 # , users, diets, tracking
-from app.di.container import container
+from app.api.endpoints import health
 
 # Создание основного роутера
 api_router = APIRouter(prefix="/api")
+
+api_router.include_router(health.router, tags=["health"])
+
 # Универсальный роутер для мессенджеров
 api_router.include_router(
     messaging.router,

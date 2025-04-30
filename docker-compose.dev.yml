@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    container_name: smartfit-api-dev
+    volumes:
+      - .:/app
+      - ./firebase-credentials.json:/app/firebase-credentials.json:ro
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=True
+      - PYTHONUNBUFFERED=1
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      - postgres
+    networks:
+      - smartfit-network
+
+  postgres:
+    image: postgres:14-alpine
+    container_name: smartfit-postgres-dev
+    environment:
+      POSTGRES_USER: smartfit
+      POSTGRES_PASSWORD: smartfit_password
+      POSTGRES_DB: smartfit_dev
+    volumes:
+      - postgres-dev-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - smartfit-network
+
+volumes:
+  postgres-dev-data:
+
+networks:
+  smartfit-network:
+    driver: bridge
