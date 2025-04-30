@@ -111,6 +111,7 @@ class DietCommand(BaseCommand):
             formatted_plan_messages = self.diet_service.get_day_diet_plan(diet_plan, today, lang)
             tracking_info_message = self.diet_service.get_diet_tracking_info_message(lang)
 
+            # добавить учет плана на конкретный день
             # TODO добавить список продуктов\покупок на день + обработка запросов на отметку что есть из списка
 
             return {

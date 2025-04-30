@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   api:
-    image: ${DOCKER_USERNAME}/smartfit-api:${IMAGE_TAG:-latest}
+    image: ${DOCKER_USERNAME:-smykov}/smartfit-api:${IMAGE_TAG:-latest}
     container_name: smartfit-api
     restart: always
     ports:
@@ -11,15 +11,14 @@ services:
       - ./firebase-credentials.json:/app/firebase-credentials.json:ro
     env_file:
       - .env
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     networks:
       - smartfit-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-    labels:
-      - "com.smartfit.environment=${ENVIRONMENT:-production}"
 
   postgres:
     image: postgres:14-alpine
