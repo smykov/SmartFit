@@ -557,8 +557,11 @@ def create_command_extraction_system_prompt():
 
     6. show_diet_plan - Отображение плана питания
        - day: день недели (today, tomorrow, monday, tuesday, wednesday, thursday, friday, saturday, sunday)
-       - full: показать полный план (true/false)
-
+         или конкретная дата в формате YYYY-MM-DD
+       - full: показать полный недельный план (true) или только на указанный день (false).
+         Значение "true" нужно указывать только при запросе полного недельного плана,
+         а не при запросе на конкретную дату или день недели.
+         
     7. show_shopping_list - Отображение списка покупок
 
     8. stats - Отображение статистики прогресса
