@@ -81,7 +81,7 @@ class CommandExecutor:
                                commands: List[Command],
                                messenger_type: str) -> Dict[str, Any]:
         """
-        Выполняет список команд для пользователя
+        Выполняет список команд для пользователя последовательно с учетом приоритета
 
         Args:
             user_id: ID пользователя
@@ -106,28 +106,45 @@ class CommandExecutor:
             self.logger.error(f"Recipient ID not found for user: {user_id}")
             return {"success": False, "error": "Recipient ID not found"}
 
-        # Группируем команды по приоритету
-        commands_by_priority = {}
-        for command in commands:
-            priority = command.priority
-            if priority not in commands_by_priority:
-                commands_by_priority[priority] = []
-            commands_by_priority[priority].append(command)
+        # Сортируем команды по приоритету
+        sorted_commands = sorted(commands, key=lambda cmd: cmd.priority, reverse=True)
+
+        # Логируем порядок выполнения команд
+        command_info = [f"{cmd.command_type}(приоритет:{cmd.priority})" for cmd in sorted_commands]
+        self.logger.info(f"Выполнение {len(sorted_commands)} команд в порядке: {', '.join(command_info)}")
 
         # Результаты выполнения команд
         results = []
 
-        # Выполняем команды группами по приоритету
-        for priority in sorted(commands_by_priority.keys()):
-            priority_commands = commands_by_priority[priority]
+        # Последовательно выполняем команды по порядку приоритета
+        for command in sorted_commands:
+            self.logger.info(f"Выполнение команды {command.command_type} с приоритетом {command.priority}")
 
-            # Параллельно выполняем команды с одинаковым приоритетом
-            group_results = await asyncio.gather(*[
-                self._execute_single_command(user_id, cmd, messenger_type)
-                for cmd in priority_commands
-            ])
+            # Если команда - это общее текстовое сообщение, отправляем его пользователю
+            if command.command_type == "general_response" and "response_text" in command.params:
+                response_text = command.params.get("response_text")
+                if response_text:
+                    await self.messenger_service.send_message(
+                        recipient_id,
+                        response_text,
+                        {"user_id": user_id, "messenger_type": messenger_type}
+                    )
+                    results.append({
+                        "success": True,
+                        "action": "response_sent",
+                        "command": command.command_type
+                    })
+                    continue
 
-            results.extend(group_results)
+            # Выполняем команду
+            result = await self._execute_single_command(user_id, command, messenger_type)
+            results.append(result)
+
+            # Если команда завершилась с ошибкой, логируем это, но продолжаем выполнение остальных команд
+            if not result.get("success", False):
+                self.logger.warning(
+                    f"Команда {command.command_type} завершилась с ошибкой: {result.get('error', 'Неизвестная ошибка')}"
+                )
 
         # Собираем общий результат
         success = all(result.get("success", False) for result in results)
@@ -136,7 +153,6 @@ class CommandExecutor:
             "action": "commands_executed",
             "results": results
         }
-
 
     async def _execute_single_command(self,
                                       user_id: str,
@@ -187,7 +203,6 @@ class CommandExecutor:
                 self.logger.warning(f"Failed to create command: {system_command_type}")
                 return {"success": False, "error": f"Failed to create command: {system_command_type}",
                         "command": command.command_type}
-
 
             # Проверяем возможность выполнения
             if not await system_command.can_execute(user_id):

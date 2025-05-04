@@ -199,12 +199,13 @@ class IDietService(ABC):
         pass
 
     @abstractmethod
-    def get_full_diet_plan(self, diet_plan: Dict[str, Any]) -> List[str]:
+    def get_full_diet_plan(self, diet_plan: Dict[str, Any], lang: Optional[str] = None) -> List[str]:
         """
         Создает полный план диеты на все дни
 
         Args:
             diet_plan: План диеты
+            lang: Код языка
 
         Returns:
             List[str]: Список сообщений с планом диеты

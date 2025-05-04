@@ -1,9 +1,9 @@
 from app.localization.base import LocalizationString, LocalizationModule
-from app.localization.base import LocalizationString, LocalizationModule
 
 # Общие строки
 strings = {
     'plan_not_found': LocalizationString('План диеты не найден'),
+    # Полный план диеты
     'full': {
         'created': LocalizationString(
             '🎉 Твой план питания готов! Я подобрал блюда с учетом твоих параметров и предпочтений. Просмотри план и дай мне знать, если хочешь что-то изменить.'),
@@ -40,6 +40,16 @@ strings = {
         },
 
         'plan': {
+            'header': LocalizationString('🗓️ ПЛАН ПИТАНИЯ НА НЕДЕЛЮ\n\n'),
+            'day_header': LocalizationString('📆 *{day_name}, {date_formatted}*\n\n'),
+            'total_calories': LocalizationString('🔥 Всего калорий: *{calories} ккал*\n'),
+            'macro_ratio': LocalizationString('📊 Соотношение БЖУ: *{ratio}*\n'),
+            'macros': LocalizationString('🥩 Белки: *{proteins}г* | 🧀 Жиры: *{fats}г* | 🍚 Углеводы: *{carbs}г*\n\n'),
+            'meal_header': LocalizationString('{emoji} *{meal_type}*: {title}\n'),
+            'nutrient_info': LocalizationString(
+                '  Пищевая ценность: {calories} ккал | Б:{proteins}г Ж:{fats}г У:{carbs}г\n'),
+            'why_recommended': LocalizationString('  _Почему рекомендуем: {why_recommended}_\n'),
+            'day_tip': LocalizationString('\n💎 *Совет дня:* {tip}\n'),
             'commands_message': LocalizationString(
                 '''*📱 Команды для взаимодействия с планом:*
     - Напишите 'полный план' для просмотра плана на всю неделю
@@ -86,6 +96,7 @@ strings = {
 
     },
 
+    # План на день
     'day': {
         'header': LocalizationString(
             '🗓️ МЕНЮ НА {day_name}, {date_formatted}:\n\n'),
@@ -96,7 +107,7 @@ strings = {
         'macros': LocalizationString(
             '🥩 Белки: {proteins}г | 🧀 Жиры: {fats}г | 🍚 Углеводы: {carbs}г\n\n'),
         'meal_header': LocalizationString(
-            '🍽️ {emoji} {meal_type}: *{title}* {relevance}\n\n'),
+            '🍽️ {emoji} *{meal_type}*: *{title}* {relevance}\n\n'),
         'ingredients_header': LocalizationString(
             '📋 *Ингредиенты:*\n'),
         'ingredient_format': LocalizationString(
