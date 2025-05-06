@@ -4,6 +4,7 @@ import logging
 import re
 from typing import Dict, Any, List, Optional
 
+from app.constants.localization_keys import LocalizationKeys as LK
 from app.db.interfaces.diet_plan_repository_interface import IDietPlanRepository
 from app.models.command import Command, CommandExtractionResult, CommandSource
 from app.services.formatter.diet_data_transformer import DietDataTransformer
@@ -77,11 +78,22 @@ class LLMCommandExtractor(ICommandExtractor):
             # В случае ошибки возвращаем результат с fallback на AI
             return CommandExtractionResult(
                 commands=[],
-                fallback_to_ai=True,
-                response_message=None,
+                fallback_to_ai=False,
+                response_message=self._ai_fallback_response(),
                 execution_required=False,
                 source=CommandSource.FALLBACK
             )
+
+    def _ai_fallback_response(self) -> str:
+        """
+        Ответ по умолчанию при невозможности определить команду
+
+        Returns:
+            str: Стандартный ответ
+        """
+
+        # Общий ответ для неизвестных запросов
+        return LK.Errors.AI_FALLBACK_RESPONSE
 
     def _extract_via_patterns(self, message: str) -> Optional[CommandExtractionResult]:
         """
@@ -189,11 +201,11 @@ class LLMCommandExtractor(ICommandExtractor):
                     source=CommandSource.FALLBACK
                 )
 
-            # Если ничего не получилось, возвращаем режим AI-ответа
+            # Если ничего не получилось
             return CommandExtractionResult(
                 commands=[],
-                response_message=None,
-                fallback_to_ai=True,
+                response_message=self._ai_fallback_response(),
+                fallback_to_ai=False,
                 execution_required=False,
                 source=CommandSource.FALLBACK
             )

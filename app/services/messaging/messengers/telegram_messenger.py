@@ -31,7 +31,7 @@ class TelegramMessenger(MessengerBase):
             Dict[str, Any]: Стандартизированное представление сообщения
         """
         try:
-            if 'message' not in data:
+            if 'message' not in data and 'text' not in data:
                 return {}
 
             message = data['message']

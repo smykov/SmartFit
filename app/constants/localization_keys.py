@@ -420,6 +420,7 @@ class LocalizationKeys:
         """Ключи локализации для ошибок"""
         GENERAL_ERROR = "errors.general"
         NUTRITION_QUESTION_ERROR = "errors.nutrition_question"
+        AI_FALLBACK_RESPONSE = "errors.ai_fallback_response"
 
 
 class ProductCategory(Enum):

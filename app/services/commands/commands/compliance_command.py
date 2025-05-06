@@ -201,7 +201,12 @@ class ComplianceCommand(BaseCommand):
         Args:
             user_id: ID пользователя
             params: Параметры команды (содержит текст сообщения)
+               - meal_type: тип приема пищи (breakfast, lunch, dinner, snack)
+               - status: статус соблюдения (followed, partially, substituted, skipped)
+               - user_report: текст с отчетом о приеме пищи от пользователя
+               - calories: Числовое значение употребленных калорий исходя их отчета пользователя о приеме пищи
 
+               # TODO доделать обработку полей user_report и calories для логирования истории фактических приемов пищи и подсчета следования плану по калориям, а не по факту статуса приема пищи
         Returns:
             Dict[str, Any]: Результат выполнения команды
         """
