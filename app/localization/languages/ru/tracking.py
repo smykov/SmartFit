@@ -29,21 +29,45 @@ strings = {
         'goal_percentage': LocalizationString('Это {percentage:.1f}% от дневной цели в {goal} мл\n\n'),
         'motivation': LocalizationString(
             'Продолжай в том же духе! Регулярное потребление воды помогает контролировать голод и улучшает общее самочувствие.'),
+        'weekly_average': LocalizationString(
+            '📊 Средний показатель: {avg_ml} мл/день за последние {days} дней\n'),
     },
 
     # Сообщения для соблюдения диеты
     'compliance': {
         'followed': LocalizationString('✅ Отлично! {meal_type} выполнен по плану.'),
         'partially': LocalizationString('⚠️ Хорошо! {meal_type} частично выполнен по плану.'),
-        'substituted': LocalizationString('🔄 Понятно! {meal_type} заменен на другое блюдо.'),
-        'skipped': LocalizationString('❌ Отмечено! {meal_type} пропущен.'),
+        'substituted': LocalizationString('🔄 {meal_type} заменен на другое блюдо.'),
+        'skipped': LocalizationString('❌ {meal_type} пропущен.'),
         'generic_status': LocalizationString('Записан статус для приема пищи: {meal_type}.'),
-        'overall_score': LocalizationString('\n\nОбщее соблюдение плана на сегодня: {score:.1f}%'),
-        'excellent': LocalizationString('\n\n👍 Отличная работа! Продолжай в том же духе.'),
-        'good': LocalizationString('\n\n👍 Хороший результат! Старайся следовать плану.'),
-        'keep_trying': LocalizationString('\n\n💪 Не сдавайся! Каждый день - это новая возможность.'),
-    },
+        'overall_score': LocalizationString('Общее соблюдение плана на сегодня: {score:.1f}%'),
+        'excellent': LocalizationString('👍 Отличная работа! Продолжай в том же духе.'),
+        'good': LocalizationString('👍 Хороший результат! Старайся следовать плану.'),
+        'keep_trying': LocalizationString('💪 Не сдавайся! Каждый день - это новая возможность.'),
 
+        # ключи для информации о калориях
+        'calories_info': LocalizationString('Принято {calories} ккал'),
+        'excess': LocalizationString('превышение +{percent}%'),
+        'deficit': LocalizationString('недобор -{percent}%'),
+        'on_target': LocalizationString('в пределах нормы'),
+
+        # Ключи для рекомендаций по калориям
+        'calories_exceeded_significantly': LocalizationString(
+            '⚠️ Вы употребили на {percent}% больше калорий, чем рекомендовано ({actual} вместо {planned} ккал). Рекомендуем уменьшить порции в следующих приемах пищи сегодня.'),
+        'calories_exceeded_slightly': LocalizationString(
+            'ℹ️ Вы употребили немного больше калорий, чем рекомендовано ({actual} вместо {planned} ккал). Это в пределах нормы, но следите за общим количеством калорий в течение дня.'),
+        'calories_on_target': LocalizationString(
+            '✅ Отличная работа! Калорийность соответствует плану ({actual} из {planned} ккал).'),
+        'calories_under': LocalizationString(
+            'ℹ️ Вы употребили на {percent}% меньше калорий, чем рекомендовано ({actual} вместо {planned} ккал). Для достижения ваших целей важно потреблять достаточное количество пищи.'),
+
+        # Ключи для макронутриентов
+        'proteins': LocalizationString('Белки'),
+        'fats': LocalizationString('Жиры'),
+        'carbs': LocalizationString('Углеводы'),
+        'macros_imbalance': LocalizationString(
+            '⚖️ Обратите внимание на баланс БЖУ: {imbalances}. Для оптимальных результатов старайтесь придерживаться рекомендованного соотношения макронутриентов.')
+    },
     # Сообщения для статистики
     'stats': {
         'header': LocalizationString('*📊 СТАТИСТИКА И ПРОГРЕСС*\n\n'),
@@ -76,6 +100,40 @@ strings = {
         'goal_remaining': LocalizationString('• Осталось: {remaining:.1f} кг\n'),
         'goal_percentage': LocalizationString('• Прогресс: {percentage:.1f}% выполнено\n'),
         'report_error': LocalizationString('Еженедельный отчет недоступен. Пожалуйста, попробуйте позже.'),
+
+        'compliance_report_header': LocalizationString('📊 Отчет о соблюдении плана за {date_range}'),
+        'no_compliance_data': LocalizationString('За этот период нет данных о соблюдении плана.'),
+        'overall_adherence': LocalizationString('Общий процент соблюдения плана: {score}%'),
+        'calorie_adherence': LocalizationString('📈 Соблюдение по калориям:'),
+        'planned_calories': LocalizationString('Запланировано: {calories} ккал'),
+        'consumed_calories': LocalizationString('Фактически: {calories} ккал'),
+        'adherence_percentage': LocalizationString('Соответствие: {percent}%'),
+        'macros_adherence': LocalizationString('📊 Соблюдение по макронутриентам:'),
+        'protein_adherence': LocalizationString('Белки: {percent}% от плана'),
+        'fat_adherence': LocalizationString('Жиры: {percent}% от плана'),
+        'carb_adherence': LocalizationString('Углеводы: {percent}% от плана'),
+        'recommendations': LocalizationString('💡 Рекомендации:'),
+        'low_calorie_recommendation': LocalizationString(
+            'Старайтесь придерживаться рекомендованной калорийности. Недостаточное потребление калорий может замедлить метаболизм и снизить эффективность диеты.'),
+        'high_calorie_recommendation': LocalizationString(
+            'Для достижения ваших целей важно контролировать общее потребление калорий. Попробуйте уменьшить размеры порций или выбирать менее калорийные продукты.'),
+        'low_protein_recommendation': LocalizationString(
+            'Увеличьте потребление белка для поддержания мышечной массы и лучшего контроля аппетита. Хорошие источники: мясо, рыба, яйца, бобовые, творог.'),
+        'high_protein_recommendation': LocalizationString(
+            'Вы потребляете больше белка, чем рекомендовано. Для большинства людей достаточно 1.6-2.2 г белка на кг веса.'),
+        'high_fat_recommendation': LocalizationString(
+            'Обратите внимание на потребление жиров. Отдавайте предпочтение полезным ненасыщенным жирам из орехов, авокадо и оливкового масла вместо насыщенных.'),
+        'high_carb_recommendation': LocalizationString(
+            'Для лучшего контроля веса попробуйте уменьшить потребление простых углеводов (сахар, белый хлеб, сладости) в пользу сложных (овощи, цельнозерновые продукты).'),
+        'low_carb_recommendation': LocalizationString(
+            'Умеренное потребление углеводов важно для энергии и нормального функционирования организма. Добавьте в рацион больше сложных углеводов - фруктов, овощей, круп.'),
+        'high_score_motivation': LocalizationString(
+            '🌟 Отличная работа! Вы очень близки к своей цели. Продолжайте придерживаться плана, и вы обязательно достигнете желаемых результатов!'),
+        'medium_score_motivation': LocalizationString(
+            '👍 Вы на правильном пути! Небольшие корректировки в питании помогут вам приблизиться к оптимальному результату. Не останавливайтесь!'),
+        'low_score_motivation': LocalizationString(
+            '💪 Не расстраивайтесь! Каждый день - это новая возможность. Попробуйте составить более реалистичный план питания или постепенно адаптируйтесь к текущему.'),
+        'last_week': LocalizationString('последнюю неделю'),
     },
 }
 

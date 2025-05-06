@@ -1,8 +1,12 @@
 # app/services/commands/commands/stats_command.py
+from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
+
+import pytz
 
 from app.constants.localization_keys import LocalizationKeys as LK
 from app.services.commands.base_command import BaseCommand
+from config import settings
 
 
 class StatsCommand(BaseCommand):
@@ -32,20 +36,34 @@ class StatsCommand(BaseCommand):
             # Получаем статус трекинга на сегодня
             today_status = await self.tracking_service.get_daily_status(user_id)
 
+            # Получаем данные о соблюдении плана за последние 7 дней
+            end_date = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
+            start_date = end_date - timedelta(days=7)
+            weekly_compliance = await self.tracking_service.get_compliance_by_period(user_id, start_date, end_date)
+
             # Получаем данные о соблюдении плана на сегодня
-            today_compliance = await self.tracking_service.get_diet_compliance(user_id)
+            # TODO добавить возможность указать период статистики в команде и обрабатывать день/неделю/месяц или конкретный день, неделю, месяц
+            # today_compliance = await self.tracking_service.get_diet_compliance(user_id)
 
             # Форматируем статистику через форматтер
             stats_message = self.tracking_formatter_service.format_stats_message(
                 weight_progress,
                 today_status,
-                today_compliance,
+                weekly_compliance,
+                lang
+            )
+
+            # Добавляем отчет о соблюдении плана за неделю
+            date_range = self.get_localized_message(LK.Tracking.Stats.LAST_WEEK, lang)
+            compliance_report = self.tracking_formatter_service.format_compliance_report(
+                date_range,
+                weekly_compliance,
                 lang
             )
 
             return {
                 "success": True,
-                "message": stats_message
+                "messages": [stats_message, compliance_report]
             }
 
         except Exception as e:
@@ -56,11 +74,11 @@ class StatsCommand(BaseCommand):
                 "message": self.get_localized_message(LK.Commands.Stats.ERROR, lang)
             }
 
-    def get_error_message(self) -> str:
+    def get_error_message(self, lang) -> str:
         """
         Получение сообщения об ошибке
 
         Returns:
             str: Сообщение об ошибке
         """
-        return self.get_localized_message(LK.Commands.Stats.ERROR)
+        return self.get_localized_message(LK.Commands.Stats.ERROR, lang)

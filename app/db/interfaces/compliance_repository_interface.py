@@ -12,17 +12,27 @@ class IComplianceRepository(ABC):
     @abstractmethod
     async def add_meal_compliance(self, user_id: str, date_value: date, meal_type: str,
                                   status: str, notes: str = None,
-                                  alternative_meal: str = None) -> Optional[str]:
+                                  alternative_meal: str = None,
+                                  calories_consumed: float = None,
+                                  proteins_consumed: float = None,
+                                  fats_consumed: float = None,
+                                  carbs_consumed: float = None,
+                                  adherence_data: Dict[str, float] = None) -> Optional[str]:
         """
-        Добавляет запись о соблюдении приема пищи
+        Добавляет запись о соблюдении приема пищи с расширенными данными
 
         Args:
             user_id: ID пользователя
             date_value: Дата
             meal_type: Тип приема пищи (breakfast, lunch, dinner, snack)
             status: Статус соблюдения (followed, partially, substituted, skipped)
-            notes: Дополнительные заметки
+            notes: Дополнительные заметки (текстовый отчёт пользователя)
             alternative_meal: Альтернативное блюдо (если status=substituted)
+            calories_consumed: Фактически потреблённые калории
+            proteins_consumed: Потреблённые белки
+            fats_consumed: Потреблённые жиры
+            carbs_consumed: Потреблённые углеводы
+            adherence_data: Словарь с процентами соответствия по нутриентам
 
         Returns:
             Optional[str]: ID созданной записи или None в случае ошибки

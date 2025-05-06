@@ -269,8 +269,6 @@ class LLMCommandExtractor(ICommandExtractor):
 
         return enriched
 
-    import json
-
     def _create_user_prompt(self, message: str, context: Dict[str, Any]) -> str:
         """
         Создает пользовательский промпт для LLM
@@ -387,16 +385,17 @@ class LLMCommandExtractor(ICommandExtractor):
                 if isinstance(param, dict) and "name" in param and "value" in param:
                     params[param["name"]] = param["value"]
 
+        command_type = cmd_data.get("command_type")
         # Специальная обработка для определенных типов команд
-        if cmd_data.get("command_type") == "diet_update":
+        if command_type == "diet_update":
             # Преобразуем параметры в текстовый запрос для обновления
             update_request = params.get("user_prompt")
             if update_request:
                 params["update_request"] = update_request
 
-        elif cmd_data.get("command_type") in ["weight_record", "water_record"]:
+        elif command_type in ["weight_record", "water_record"]:
             # Преобразуем числовое значение в кортеж для params
-            value = params.get("weight") if cmd_data.get("command_type") == "weight_record" else params.get("amount")
+            value = params.get("weight") if command_type == "weight_record" else params.get("amount")
             if value is not None:
                 params["params"] = (str(value),)
 

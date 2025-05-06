@@ -16,6 +16,7 @@ class LocalizationKeys:
         MEAL_EMOJIS = "common.meal_emojis.{}"
         DAY_FORMAT = "common.day_format"
         HELP_COMMANDS_LIST = "common.help_commands_list"
+        USER = "common.user"
 
     class Diet:
         """Ключи локализации для диет"""
@@ -336,6 +337,7 @@ class LocalizationKeys:
             DAILY_TOTAL = "tracking.water.daily_total"
             GOAL_PERCENTAGE = "tracking.water.goal_percentage"
             MOTIVATION = "tracking.water.motivation"
+            WEEKLY_AVERAGE = "tracking.water.weekly_average"
 
         class Compliance:
             """Ключи для сообщений о соблюдении диеты"""
@@ -348,6 +350,22 @@ class LocalizationKeys:
             EXCELLENT = "tracking.compliance.excellent"
             GOOD = "tracking.compliance.good"
             KEEP_TRYING = "tracking.compliance.keep_trying"
+
+            # Ключи для информации о калориях
+            CALORIES_INFO = "tracking.compliance.calories_info"
+            EXCESS = "tracking.compliance.excess"
+            DEFICIT = "tracking.compliance.deficit"
+            ON_TARGET = "tracking.compliance.on_target"
+            CALORIES_EXCEEDED_SIGNIFICANTLY = "tracking.compliance.calories_exceeded_significantly"
+            CALORIES_EXCEEDED_SLIGHTLY = "tracking.compliance.calories_exceeded_slightly"
+            CALORIES_ON_TARGET = "tracking.compliance.calories_on_target"
+            CALORIES_UNDER = "tracking.compliance.calories_under"
+
+            # Ключи для макронутриентов
+            PROTEINS = "tracking.compliance.proteins"
+            FATS = "tracking.compliance.fats"
+            CARBS = "tracking.compliance.carbs"
+            MACROS_IMBALANCE = "tracking.compliance.macros_imbalance"
 
         class Stats:
             """Ключи для статистики трекинга"""
@@ -381,6 +399,31 @@ class LocalizationKeys:
             GOAL_REMAINING = "tracking.stats.goal_remaining"
             GOAL_PERCENTAGE = "tracking.stats.goal_percentage"
             REPORT_ERROR = "tracking.stats.report_error"
+            LAST_WEEK = "tracking.stats.last_week"
+
+            # Новые ключи для статистики соблюдения плана
+            COMPLIANCE_REPORT_HEADER = "tracking.stats.compliance_report_header"
+            NO_COMPLIANCE_DATA = "tracking.stats.no_compliance_data"
+            OVERALL_ADHERENCE = "tracking.stats.overall_adherence"
+            CALORIE_ADHERENCE = "tracking.stats.calorie_adherence"
+            PLANNED_CALORIES = "tracking.stats.planned_calories"
+            CONSUMED_CALORIES = "tracking.stats.consumed_calories"
+            ADHERENCE_PERCENTAGE = "tracking.stats.adherence_percentage"
+            MACROS_ADHERENCE = "tracking.stats.macros_adherence"
+            PROTEIN_ADHERENCE = "tracking.stats.protein_adherence"
+            FAT_ADHERENCE = "tracking.stats.fat_adherence"
+            CARB_ADHERENCE = "tracking.stats.carb_adherence"
+            RECOMMENDATIONS = "tracking.stats.recommendations"
+            LOW_CALORIE_RECOMMENDATION = "tracking.stats.low_calorie_recommendation"
+            HIGH_CALORIE_RECOMMENDATION = "tracking.stats.high_calorie_recommendation"
+            LOW_PROTEIN_RECOMMENDATION = "tracking.stats.low_protein_recommendation"
+            HIGH_PROTEIN_RECOMMENDATION = "tracking.stats.high_protein_recommendation"
+            HIGH_FAT_RECOMMENDATION = "tracking.stats.high_fat_recommendation"
+            HIGH_CARB_RECOMMENDATION = "tracking.stats.high_carb_recommendation"
+            LOW_CARB_RECOMMENDATION = "tracking.stats.low_carb_recommendation"
+            HIGH_SCORE_MOTIVATION = "tracking.stats.high_score_motivation"
+            MEDIUM_SCORE_MOTIVATION = "tracking.stats.medium_score_motivation"
+            LOW_SCORE_MOTIVATION = "tracking.stats.low_score_motivation"
 
     class Reminders:
         """Ключи для напоминаний"""

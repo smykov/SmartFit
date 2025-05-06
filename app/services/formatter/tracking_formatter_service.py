@@ -42,7 +42,9 @@ class TrackingFormatterService:
 
     def format_water_recorded_message(self, amount: float, ml_amount: float,
                                       status: Optional[DailyTrackingStatus] = None,
-                                      lang: Optional[str] = None) -> str:
+                                      lang: Optional[str] = None,
+                                      weekly_avg: float = 0,
+                                      days_tracked: int = 0) -> str:
         """
         Форматирует сообщение о записи потребления воды
 
@@ -51,16 +53,27 @@ class TrackingFormatterService:
             ml_amount: Количество в миллилитрах
             status: Статус трекинга
             lang: Код языка
+            weekly_avg: Среднее потребление воды за неделю (мл)
+            days_tracked: Количество дней с отслеживанием воды
 
         Returns:
             str: Отформатированное сообщение
         """
         status_dict = self._convert_to_dict(status)
-        return self.tracking_formatter.format_water_recorded_message(amount, ml_amount, status_dict, lang)
+        return self.tracking_formatter.format_water_recorded_message(
+            amount,
+            ml_amount,
+            status_dict,
+            lang,
+            weekly_avg=weekly_avg,
+            days_tracked=days_tracked
+        )
 
     def format_compliance_message(self, meal_type: str, status: str,
                                   compliance_data: Optional[Dict[str, Any]] = None,
-                                  lang: Optional[str] = None) -> str:
+                                  lang: Optional[str] = None,
+                                  nutrients_consumed: Optional[Dict[str, float]] = None,
+                                  planned_meal: Optional[Dict[str, Any]] = None) -> str:
         """
         Форматирует сообщение о соблюдении режима питания
 
@@ -69,11 +82,32 @@ class TrackingFormatterService:
             status: Статус соблюдения
             compliance_data: Общие данные о соблюдении
             lang: Код языка
+            nutrients_consumed: Данные о потреблённых нутриентах
+            planned_meal: Запланированный приём пищи
 
         Returns:
             str: Отформатированное сообщение
         """
-        return self.tracking_formatter.format_compliance_message(meal_type, status, compliance_data, lang)
+        return self.tracking_formatter.format_compliance_message(meal_type, status, compliance_data, lang,
+                                                                 nutrients_consumed=nutrients_consumed,
+                                                                 planned_meal=planned_meal)
+
+    def format_compliance_report(self,
+                                 date_range: str,
+                                 compliance_data: Optional[Dict[str, Any]],
+                                 lang: Optional[str] = None) -> str:
+        """
+        Форматирует отчет о соблюдении плана за указанный период
+
+        Args:
+            date_range: Строка с описанием периода
+            compliance_data: Список данных о соблюдении плана
+            lang: Код языка
+
+        Returns:
+            str: Отформатированный отчет
+        """
+        return self.tracking_formatter.format_compliance_report(date_range, compliance_data, lang)
 
     def format_stats_message(self, weight_progress: Optional[WeightGoalProgress],
                              today_status: Optional[DailyTrackingStatus],
@@ -95,8 +129,8 @@ class TrackingFormatterService:
         weight_progress_dict = self._convert_to_dict(weight_progress)
         today_status_dict = self._convert_to_dict(today_status)
 
-        return self.tracking_formatter.format_stats_message(weight_progress_dict, today_status_dict, compliance_data, lang)
+        return self.tracking_formatter.format_stats_message(weight_progress_dict, today_status_dict, compliance_data,
+                                                            lang)
 
     def _convert_to_dict(self, obj: Any) -> Dict[str, Any]:
         return FormatHelper.convert_to_dict(obj)
-

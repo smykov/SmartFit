@@ -2,11 +2,10 @@
 import logging
 from datetime import datetime
 from typing import Dict, Any, List, Optional
-import asyncio
 
 import pytz
 
-from app.models.command import Command, CommandStatus
+from app.models.command import Command
 from app.constants.localization_keys import LocalizationKeys as LK
 from app.services.commands.command_factory import CommandFactory
 from app.services.diet.diet_service_interface import IDietService
@@ -197,12 +196,18 @@ class CommandExecutor:
                 return {"success": False, "error": f"Unknown command type: {command.command_type}",
                         "command": command.command_type}
 
+            # подробное логирование параметров
+            self.logger.info(f"Command parameters before transformation: {command.params}")
+
             # Создаем команду через фабрику
             system_command = self.command_factory.create_command(system_command_type)
             if not system_command:
                 self.logger.warning(f"Failed to create command: {system_command_type}")
                 return {"success": False, "error": f"Failed to create command: {system_command_type}",
                         "command": command.command_type}
+
+            # Логируем параметры после трансформации
+            self.logger.info(f"Command parameters after transformation: {command.params}")
 
             # Проверяем возможность выполнения
             if not await system_command.can_execute(user_id):
@@ -220,21 +225,7 @@ class CommandExecutor:
             # Выполняем команду
             self.logger.info(f"Executing command {command.command_type} for user {user_id}")
 
-            # Если команда meal_compliance, форматируем параметры правильно
-            if command.command_type == "meal_compliance":
-                # Преобразуем параметры в формат, ожидаемый ComplianceCommand
-                system_params = {'params': []}
-
-                if 'status' in command.params:
-                    system_params['params'].append(command.params['status'])
-
-                if 'meal_type' in command.params:
-                    system_params['params'].append(command.params['meal_type'])
-
-                result = await system_command.execute(user_id, system_params)
-            else:
-                # Для других команд используем параметры как есть
-                result = await system_command.execute(user_id, command.params)
+            result = await system_command.execute(user_id, command.params)
 
             # Если команда вернула сообщение, отправляем его пользователю
             if "message" in result and result["message"]:
