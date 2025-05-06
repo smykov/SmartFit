@@ -163,8 +163,8 @@ jobs:
       if: always()
       uses: appleboy/telegram-action@master
       with:
-        to: ${{ secrets.TELEGRAM_CHAT_ID }}
-        token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        to: ${{ secrets.TELEGRAM_ADMIN_ID }}
+        token: ${{ secrets.TELEGRAM_ADMIN_BOT_TOKEN }}
         message: |
           🚀 *Deployment Result*
           
