@@ -45,8 +45,6 @@ from app.services.messaging.messenger_registry import MessengerRegistry
 from app.services.messaging.messenger_service import MessengerService
 from app.services.messaging.messengers.telegram_messenger import TelegramMessenger
 from app.services.messaging.messengers.whatsapp_messenger import WhatsAppMessenger
-from app.services.messaging.telegram_service import TelegramService
-from app.services.messaging.whatsapp_service import WhatsAppService
 from app.services.tracking.tracking_service import TrackingService
 from app.services.user.user_identity_service import UserIdentityService
 from app.utils.text_splitter import TextSplitter
@@ -189,16 +187,6 @@ class Container(containers.DeclarativeContainer):
         user_repository=user_repository
     )
 
-    # Сервис трекинга
-    tracking_service = providers.Singleton(
-        TrackingService,
-        user_repository=user_repository,
-        weight_entry_repository=weight_entry_repository,
-        water_entry_repository=water_entry_repository,
-        compliance_repository=compliance_repository,
-        localization_service=localization_service
-    )
-
     # Форматтеры
     diet_formatter_service = providers.Singleton(
         DietFormatterService,
@@ -286,6 +274,17 @@ class Container(containers.DeclarativeContainer):
         product_repository=product_repository,
         shopping_list_repository=shopping_list_repository,
         llm_service=llm_service
+    )
+
+    # Сервис трекинга
+    tracking_service = providers.Singleton(
+        TrackingService,
+        user_repository=user_repository,
+        diet_service=diet_service,
+        weight_entry_repository=weight_entry_repository,
+        water_entry_repository=water_entry_repository,
+        compliance_repository=compliance_repository,
+        localization_service=localization_service
     )
 
     # Сервис обработки команд

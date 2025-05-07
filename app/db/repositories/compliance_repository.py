@@ -5,10 +5,10 @@ from datetime import datetime, date
 
 import pytz
 
-import data
 from app.db.interfaces.compliance_repository_interface import IComplianceRepository
 from app.models.tracking import MealComplianceStatus
 from config import settings
+
 
 class FirebaseComplianceRepository(IComplianceRepository):
     """
@@ -29,7 +29,12 @@ class FirebaseComplianceRepository(IComplianceRepository):
 
     async def add_meal_compliance(self, user_id: str, date_value: date, meal_type: str,
                                   status: str, notes: str = None,
-                                  alternative_meal: str = None) -> Optional[str]:
+                                  alternative_meal: str = None,
+                                  calories_consumed: float = None,
+                                  proteins_consumed: float = None,
+                                  fats_consumed: float = None,
+                                  carbs_consumed: float = None,
+                                  adherence_data: Dict[str, float] = None) -> Optional[str]:
         """
         Добавляет запись о соблюдении приема пищи
 
@@ -38,9 +43,13 @@ class FirebaseComplianceRepository(IComplianceRepository):
             date_value: Дата
             meal_type: Тип приема пищи (breakfast, lunch, dinner, snack)
             status: Статус соблюдения (followed, partially, substituted, skipped)
-            notes: Дополнительные заметки
+            notes: Дополнительные заметки (текстовый отчёт пользователя)
             alternative_meal: Альтернативное блюдо (если status=substituted)
-
+            calories_consumed: Фактически потреблённые калории
+            proteins_consumed: Потреблённые белки
+            fats_consumed: Потреблённые жиры
+            carbs_consumed: Потреблённые углеводы
+            adherence_data: Словарь с процентами соответствия по нутриентам
         Returns:
             Optional[str]: ID созданной записи или None в случае ошибки
         """
@@ -56,8 +65,19 @@ class FirebaseComplianceRepository(IComplianceRepository):
                 "status": status,
                 "notes": notes,
                 "alternative_meal": alternative_meal,
-                "created_at": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+                "created_at": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat(),
+
+                # Добавляем данные о фактическом потреблении
+                "calories_consumed": calories_consumed,
+                "proteins_consumed": proteins_consumed,
+                "fats_consumed": fats_consumed,
+                "carbs_consumed": carbs_consumed,
             }
+
+            # Добавляем данные о соответствии плану, если они предоставлены
+            if adherence_data:
+                for key, value in adherence_data.items():
+                    compliance_data[key] = value
 
             # Сохраняем в базу данных
             compliance_id = await self.firebase_client.add_document("meal_compliance", compliance_data)
@@ -135,18 +155,35 @@ class FirebaseComplianceRepository(IComplianceRepository):
             # Получаем текущие данные о соблюдении или создаем новую запись
             compliance_data = await self.get_daily_compliance(user_id, date_value)
 
-            # Получаем список приемов пищи
-            meal_data = compliance_data.get("meals", {})
+            # Получаем все записи о приемах пищи на указанную дату
+            meal_compliance_entries = await self.firebase_client.query_documents(
+                "meal_compliance",
+                "user_id",
+                "==",
+                user_id
+            )
 
-            # Рассчитываем процент соблюдения
-            total_value = 0
+            # Фильтруем по текущей дате
+            day_entries = [entry for entry in meal_compliance_entries if entry.get("date") == date_str]
 
-            # Получаем все запланированные приемы пищи на этот день
+            # Создаем словарь приемов пищи с их статусами
+            meal_data = {}
+            for entry in day_entries:
+                meal_type = entry.get("meal_type")
+                if meal_type:
+                    meal_data[meal_type] = entry.get("status", MealComplianceStatus.NOT_RECORDED.value)
+
+            # Обновляем meals в compliance_data
+            compliance_data["meals"] = meal_data
+
+            # Получаем запланированные приемы пищи
             planned_meals = await self.get_planned_meals_for_day(user_id, date_value)
 
             # Если нет запланированных приемов пищи, используем отмеченные
             total_meals = len(planned_meals) if planned_meals else len(meal_data)
+            total_value = 0
 
+            # TODO переделать расчет соблюдения исходя не из статуса, а из калорий и бду от запланировананного
             compliance_data["overall_score"] = 0.0
 
             if total_meals > 0:
@@ -159,9 +196,9 @@ class FirebaseComplianceRepository(IComplianceRepository):
                     if meal_status == MealComplianceStatus.FOLLOWED.value:
                         status_weight = 1.0
                     elif meal_status == MealComplianceStatus.PARTIALLY.value:
-                        status_weight = 0.5
+                        status_weight = 0.75
                     elif meal_status == MealComplianceStatus.SUBSTITUTED.value:
-                        status_weight = 0.25
+                        status_weight = 0.5
 
                     total_value += status_weight
 
@@ -226,6 +263,7 @@ class FirebaseComplianceRepository(IComplianceRepository):
         except Exception as e:
             self.logger.error(f"Error getting planned meals for day: {str(e)}")
             return []
+
     async def get_compliance_by_period(self, user_id: str, start_date: date,
                                        end_date: date) -> List[Dict[str, Any]]:
         """
@@ -257,6 +295,8 @@ class FirebaseComplianceRepository(IComplianceRepository):
             for entry in compliance_entries:
                 entry_date = entry.get("date", "")
                 if start_str <= entry_date <= end_str:
+                    # Пытаемся добавить информацию о приемах пищи с нутриентами
+                    await self._enrich_compliance_data(entry)
                     filtered_entries.append(entry)
 
             return filtered_entries
@@ -264,6 +304,62 @@ class FirebaseComplianceRepository(IComplianceRepository):
         except Exception as e:
             self.logger.error(f"Error getting compliance by period: {str(e)}")
             return []
+
+    async def _enrich_compliance_data(self, compliance_data: Dict[str, Any]) -> None:
+        """
+        Обогащает данные о соблюдении информацией о нутриентах
+
+        Args:
+            compliance_data: Данные о соблюдении
+        """
+        try:
+            # Если в данных уже есть информация о приемах пищи с нутриентами, пропускаем
+            if "meals" in compliance_data and any(
+                    "calories_consumed" in meal for meal in compliance_data["meals"].values()):
+                return
+
+            # Получаем все записи о соблюдении для этого дня
+            user_id = compliance_data.get("user_id")
+            date_str = compliance_data.get("date")
+
+            if not user_id or not date_str:
+                return
+
+            # Получаем записи о соблюдении
+            compliance_entries = await self.firebase_client.query_documents(
+                "meal_compliance",
+                "user_id",
+                "==",
+                user_id
+            )
+
+            # Фильтруем по дате
+            day_entries = [entry for entry in compliance_entries if entry.get("date") == date_str]
+
+            # Группируем по типу приема пищи
+            meals_data = {}
+            for entry in day_entries:
+                meal_type = entry.get("meal_type")
+                if meal_type:
+                    meals_data[meal_type] = {
+                        "status": entry.get("status"),
+                        "notes": entry.get("notes"),
+                        "calories_consumed": entry.get("calories_consumed"),
+                        "proteins_consumed": entry.get("proteins_consumed"),
+                        "fats_consumed": entry.get("fats_consumed"),
+                        "carbs_consumed": entry.get("carbs_consumed"),
+                        "calories_adherence": entry.get("calories_adherence"),
+                        "proteins_adherence": entry.get("proteins_adherence"),
+                        "fats_adherence": entry.get("fats_adherence"),
+                        "carbs_adherence": entry.get("carbs_adherence")
+                    }
+
+            # Обновляем данные
+            if meals_data:
+                compliance_data["meals"] = meals_data
+
+        except Exception as e:
+            self.logger.error(f"Error enriching compliance data: {str(e)}")
 
     async def delete_compliance(self, compliance_id: str) -> bool:
         """

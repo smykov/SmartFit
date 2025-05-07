@@ -1,9 +1,12 @@
 # app/services/commands/commands/water_command.py
-import re
+from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
+
+import pytz
 
 from app.constants.localization_keys import LocalizationKeys as LK
 from app.services.commands.base_command import BaseCommand
+from config import settings
 
 
 class WaterCommand(BaseCommand):
@@ -36,40 +39,63 @@ class WaterCommand(BaseCommand):
             }
 
         try:
-            amount = float(params['params'][0].lower().strip().replace(',', '.'))
+            glasses = float(params['params'][0].lower().strip().replace(',', '.'))
 
             # Проверка диапазона потребления воды
-            if amount < 0 or amount >= 20:
-                self.logger.error(f"Error recording water tracking: WATER_OUT_OF_RANGE '{amount}'")
+            if glasses < 0 or glasses >= 20:
+                self.logger.error(f"Error recording water tracking: WATER_OUT_OF_RANGE '{glasses}'")
                 return {
                     "success": False,
                     "message": self.get_localized_message(LK.Commands.Water.OUT_OF_RANGE, lang)
                 }
 
             # Конвертируем стаканы в миллилитры (примерно 250 мл в стакане)
-            ml_amount = amount * 250
+            ml_amount = glasses * 250
 
-            # Запись потребления воды через типизированный сервис трекинга
-            await self.tracking_service.record_water_intake(user_id, ml_amount)
+            # Записываем потребление воды
+            result = await self.tracking_service.record_water_intake(user_id, ml_amount)
 
-            # Получаем статус трекинга
-            status = await self.tracking_service.get_daily_status(user_id)
+            if not result:
+                return {
+                    "success": False,
+                    "message": self.get_localized_message(LK.Commands.Water.ERROR, lang)
+                }
+
+            # Получаем текущий статус трекинга
+            daily_status = await self.tracking_service.get_daily_status(user_id)
+
+            # Получаем данные о потреблении воды за неделю
+            end_date = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
+            start_date = end_date - timedelta(days=7)
+            weekly_water = await self.tracking_service.get_water_history(user_id, start_date, end_date)
+
+            # Расчет средней нормы потребления воды за неделю
+            weekly_avg = 0
+            days_tracked = 0
+
+            if weekly_water:
+                total_water = sum(amount for amount in weekly_water.values())
+                days_tracked = len(weekly_water)
+                if days_tracked > 0:
+                    weekly_avg = total_water / days_tracked
 
             # Получаем форматтер для отображения сообщения
             tracking_formatter = self.dependencies.get('tracking_formatter_service')
             if tracking_formatter:
-                message = tracking_formatter.format_water_recorded_message(
-                    amount,
+                message = self.tracking_formatter_service.format_water_recorded_message(
+                    glasses,
                     ml_amount,
-                    status,
-                    lang
+                    daily_status,
+                    lang,
+                    weekly_avg=weekly_avg,
+                    days_tracked=days_tracked
                 )
             else:
                 # Если форматтер недоступен, используем простое сообщение
                 message = self.get_localized_message(
                     LK.Commands.Water.RECORDED,
                     lang,
-                    amount=amount,
+                    amount=glasses,
                     ml_amount=ml_amount
                 )
 
@@ -91,11 +117,11 @@ class WaterCommand(BaseCommand):
                 "message": self.get_localized_message(LK.Commands.Water.ERROR, lang)
             }
 
-    def get_error_message(self) -> str:
+    def get_error_message(self, lang: str) -> str:
         """
         Получение сообщения об ошибке
 
         Returns:
             str: Сообщение об ошибке
         """
-        return self.get_localized_message(LK.Commands.Water.INVALID_FORMAT)
+        return self.get_localized_message(LK.Commands.Water.INVALID_FORMAT, lang)

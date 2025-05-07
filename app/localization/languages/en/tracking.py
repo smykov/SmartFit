@@ -32,6 +32,29 @@ strings = {
     'compliance.good': LocalizationString('\n\n👍 Good result! Try to follow the plan.'),
     'compliance.keep_trying': LocalizationString('\n\n💪 Don\'t give up! Every day is a new opportunity.'),
 
+    # Keys for calorie information
+    'compliance.calories_info': LocalizationString('Consumed {calories} calories'),
+    'compliance.excess': LocalizationString('excess +{percent}%'),
+    'compliance.deficit': LocalizationString('deficit -{percent}%'),
+    'compliance.on_target': LocalizationString('on target'),
+
+    # Keys for calorie recommendations
+    'compliance.calories_exceeded_significantly': LocalizationString(
+        '⚠️ You consumed {percent}% more calories than recommended ({actual} instead of {planned} calories). Consider reducing portions in your next meals today.'),
+    'compliance.calories_exceeded_slightly': LocalizationString(
+        'ℹ️ You consumed slightly more calories than recommended ({actual} instead of {planned} calories). This is within normal range, but keep an eye on your total calorie intake for the day.'),
+    'compliance.calories_on_target': LocalizationString(
+        '✅ Great job! Your calorie intake is on target ({actual} out of {planned} calories).'),
+    'compliance.calories_under': LocalizationString(
+        'ℹ️ You consumed {percent}% fewer calories than recommended ({actual} instead of {planned} calories). To reach your goals, it\'s important to consume adequate amounts of food.'),
+
+    # Keys for macronutrients
+    'compliance.proteins': LocalizationString('Protein'),
+    'compliance.fats': LocalizationString('Fats'),
+    'compliance.carbs': LocalizationString('Carbs'),
+    'compliance.macros_imbalance': LocalizationString(
+        '⚖️ Pay attention to your macronutrient balance: {imbalances}. For optimal results, try to maintain the recommended ratio of proteins, fats, and carbs.'),
+
     # Сообщения для статистики
     'stats.header': LocalizationString('*📊 STATISTICS AND PROGRESS*\n\n'),
     'stats.weight_section': LocalizationString('*⚖️ Weight progress:*\n'),
@@ -64,6 +87,7 @@ strings = {
     'stats.goal_target': LocalizationString('• Target weight: {target} kg\n'),
     'stats.goal_remaining': LocalizationString('• Remaining: {remaining:.1f} kg\n'),
     'stats.goal_percentage': LocalizationString('• Progress: {percentage:.1f}% complete\n'),
+    'stats.last_week': LocalizationString('the last week'),
 
     'stats.report_error': LocalizationString('Weekly report is unavailable. Please try again later.'),
 }

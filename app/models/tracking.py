@@ -29,6 +29,18 @@ class MealCompliance(BaseModel):
     alternative_meal: Optional[str] = None
     created_at: datetime = None
 
+    # Новые поля для учёта фактического потребления
+    calories_consumed: Optional[float] = None  # Фактически потреблённые калории
+    proteins_consumed: Optional[float] = None  # Потреблённые белки
+    fats_consumed: Optional[float] = None  # Потреблённые жиры
+    carbs_consumed: Optional[float] = None  # Потреблённые углеводы
+
+    # Поля для отклонений от плана (в процентах)
+    calories_adherence: Optional[float] = None  # Процент соответствия по калориям
+    proteins_adherence: Optional[float] = None  # Процент соответствия по белкам
+    fats_adherence: Optional[float] = None  # Процент соответствия по жирам
+    carbs_adherence: Optional[float] = None  # Процент соответствия по углеводам
+
     class Config:
         validate_assignment = True
         extra = "forbid"

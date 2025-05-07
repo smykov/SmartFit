@@ -2,6 +2,7 @@ from app.localization.base import LocalizationString, LocalizationModule
 
 # Общие строки
 strings = {
+    'user': LocalizationString('Пользователь'),
     'yes': LocalizationString('Да'),
     'no': LocalizationString('Нет'),
     'save': LocalizationString('Сохранить'),

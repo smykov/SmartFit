@@ -13,6 +13,7 @@ from app.models.tracking import (
     DailyTrackingStatus,
     WeightGoalProgress, MealComplianceStatus
 )
+from app.services.diet.diet_service_interface import IDietService
 from app.services.tracking.tracking_service_interface import ITrackingService
 from app.services.localization.localization_interface import ILocalizationService
 from app.constants.localization_keys import LocalizationKeys as LK
@@ -27,6 +28,7 @@ class TrackingService(ITrackingService):
     def __init__(
             self,
             user_repository: IUserRepository,
+            diet_service: IDietService,
             weight_entry_repository: IWeightEntryRepository,
             water_entry_repository: IWaterEntryRepository,
             compliance_repository: IComplianceRepository,
@@ -42,6 +44,7 @@ class TrackingService(ITrackingService):
             compliance_repository: Репозиторий для работы с записями соблюдения диеты
             localization_service: Сервис локализации для сообщений
         """
+        self.diet_service = diet_service
         self.user_repository = user_repository
         self.weight_entry_repository = weight_entry_repository
         self.water_entry_repository = water_entry_repository
@@ -107,39 +110,119 @@ class TrackingService(ITrackingService):
     async def record_meal_compliance(
             self,
             user_id: str,
-            date_value: date,
+            date_val: date,
             meal_type: str,
             status: MealComplianceStatus,
             notes: str = None,
-            alternative_meal: str = None
+            alternative_meal: str = None,
+            nutrients_consumed: Dict[str, float] = None
     ) -> bool:
         """
         Записывает соблюдение режима питания
 
         Args:
             user_id: ID пользователя
-            date_value: Дата
-            meal_type: Тип приема пищи (breakfast, lunch, dinner, snack)
-            status: Статус (followed, partially, substituted, skipped)
-            notes: Дополнительные заметки
-            alternative_meal: Альтернативное блюдо (если status=substituted)
-
+            date_val: Дата
+            meal_type: Тип приема пищи
+            status: Статус соблюдения
+            notes: Дополнительные заметки (отчет пользователя)
+            alternative_meal: Альтернативное блюдо
+            nutrients_consumed: Словарь с данными о потреблённых нутриентах
+                {
+                    "calories": float,
+                    "proteins": float,
+                    "fats": float,
+                    "carbs": float
+                }
         Returns:
             bool: Результат операции
         """
         try:
-            # Записываем соблюдение режима питания
+            # Получаем текущий план на день для сравнения с фактическим потреблением
+            day_plan = await self._get_day_plan(user_id, date_val)
+
+            # Находим запланированный прием пищи
+            planned_meal = None
+            if day_plan and "meals" in day_plan:
+                for meal in day_plan.get("meals", []):
+                    if meal.get("type") == meal_type:
+                        planned_meal = meal
+                        break
+
+            # Инициализируем словарь с данными о потреблённых нутриентах
+            if nutrients_consumed is None:
+                nutrients_consumed = {}
+
+            # Рассчитываем соответствие плану по нутриентам
+            adherence_data = {}
+
+            if planned_meal:
+                # Расчёт для калорий
+                if "calories" in nutrients_consumed and planned_meal.get("calories"):
+                    adherence_data["calories_adherence"] = (
+                            nutrients_consumed["calories"] / planned_meal.get("calories") * 100
+                    )
+
+                # Расчёт для белков
+                if "proteins" in nutrients_consumed and planned_meal.get("proteins"):
+                    adherence_data["proteins_adherence"] = (
+                            nutrients_consumed["proteins"] / planned_meal.get("proteins") * 100
+                    )
+
+                # Расчёт для жиров
+                if "fats" in nutrients_consumed and planned_meal.get("fats"):
+                    adherence_data["fats_adherence"] = (
+                            nutrients_consumed["fats"] / planned_meal.get("fats") * 100
+                    )
+
+                # Расчёт для углеводов
+                if "carbs" in nutrients_consumed and planned_meal.get("carbs"):
+                    adherence_data["carbs_adherence"] = (
+                            nutrients_consumed["carbs"] / planned_meal.get("carbs") * 100
+                    )
+
+            # Добавляем запись о соблюдении режима питания
             compliance_id = await self.compliance_repository.add_meal_compliance(
-                user_id, date_value, meal_type, status, notes, alternative_meal
+                user_id,
+                date_val,
+                meal_type,
+                status.value,
+                notes,
+                alternative_meal,
+                nutrients_consumed.get("calories"),
+                nutrients_consumed.get("proteins"),
+                nutrients_consumed.get("fats"),
+                nutrients_consumed.get("carbs"),
+                adherence_data
             )
 
-            # Обновляем общую статистику соблюдения плана питания за день
-            await self.compliance_repository.update_daily_compliance(user_id, date_value)
+            # Обновляем суммарные данные о соблюдении за день
+            if compliance_id:
+                await self.compliance_repository.update_daily_compliance(user_id, date_val)
+                return True
 
-            return compliance_id is not None
+            return False
+
         except Exception as e:
             self.logger.error(f"Error recording meal compliance: {str(e)}")
             return False
+
+    async def _get_day_plan(self, user_id: str, date_val: date) -> Optional[Dict[str, Any]]:
+        """
+        Получает план питания на конкретный день
+
+        Args:
+            user_id: ID пользователя
+            date_val: Дата
+
+        Returns:
+            Optional[Dict[str, Any]]: План на день или None
+        """
+        try:
+            return await self.diet_service.get_diet_for_day(user_id, date_val)
+        except Exception as e:
+            self.logger.error(f"Error getting day plan: {str(e)}")
+            return None
 
     async def calculate_weight_progress(self, user_id: str) -> Optional[WeightGoalProgress]:
         """
@@ -458,12 +541,12 @@ class TrackingService(ITrackingService):
             str: Отформатированный отчет
         """
         # TODO вынести форматирование в отдельный сервис форматирования в будущем
-        try:
-            # Получаем язык пользователя, если доступен локализационный сервис
-            lang = None
-            if hasattr(self, 'localization_service') and self.localization_service:
-                lang = await self.localization_service.get_user_language(user.get('id'))
+        # Получаем язык пользователя, если доступен локализационный сервис
+        lang = None
+        if hasattr(self, 'localization_service') and self.localization_service:
+            lang = await self.localization_service.get_user_language(user.get('id'))
 
+        try:
             report = self.get_localized_message(
                 LK.Tracking.Stats.WEEKLY_REPORT_HEADER,
                 lang,
@@ -583,8 +666,14 @@ class TrackingService(ITrackingService):
             List[Dict[str, Any]]: Список записей о весе
         """
         try:
+            # Получаем текущую дату
+            today = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
+
+            # Получаем дату неделю назад
+            days_ago = today - timedelta(days=limit)
+
             # Получаем записи о весе через репозиторий
-            entries = await self.weight_entry_repository.get_entries_by_user(user_id, limit)
+            entries = await self.weight_entry_repository.get_entries_by_user(user_id, days_ago, today)
 
             # Сортируем по дате (от новых к старым)
             sorted_entries = sorted(
@@ -600,3 +689,61 @@ class TrackingService(ITrackingService):
             self.logger.error(f"Error getting recent weight entries: {str(e)}")
             return []
 
+
+    async def get_compliance_by_period(self, user_id: str, start_date: date = None,
+                                       end_date: date = None) -> List[Dict[str, Any]]:
+        """
+        Получает статистику соблюдения плана питания за период
+
+        Args:
+            user_id: ID пользователя
+            start_date: Начальная дата периода
+            end_date: Конечная дата периода
+
+        Returns:
+            List[Dict[str, Any]]: Список статистик соблюдения по дням
+        """
+        try:
+            # Если даты не указаны, используем текущую неделю
+            if not start_date or not end_date:
+                end_date = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
+                start_date = end_date - timedelta(days=7)
+
+            # Получаем статистику соблюдения через репозиторий
+            compliance_data = await self.compliance_repository.get_compliance_by_period(
+                user_id, start_date, end_date
+            )
+
+            # Дополняем данные информацией о запланированных приемах пищи
+            enhanced_compliance_data = []
+            for day_data in compliance_data:
+                day_date_str = day_data.get("date")
+                if day_date_str:
+                    try:
+                        day_date = datetime.strptime(day_date_str, "%Y-%m-%d").date()
+
+                        # Получаем план на день
+                        day_plan = await self._get_day_plan(user_id, day_date)
+
+                        if day_plan and "meals" in day_plan:
+                            # Добавляем запланированные приемы пищи к данным о соблюдении
+                            if "meals" not in day_data:
+                                day_data["meals"] = {}
+
+                            for meal in day_plan.get("meals", []):
+                                meal_type = meal.get("type")
+                                if meal_type:
+                                    if meal_type not in day_data["meals"]:
+                                        day_data["meals"][meal_type] = {}
+
+                                    day_data["meals"][meal_type]["planned_meal"] = meal
+                    except (ValueError, TypeError):
+                        self.logger.warning(f"Invalid date format: {day_date_str}")
+
+                enhanced_compliance_data.append(day_data)
+
+            return enhanced_compliance_data
+
+        except Exception as e:
+            self.logger.error(f"Error getting compliance by period: {str(e)}")
+            return []

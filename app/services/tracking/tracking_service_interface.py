@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from datetime import date
 from app.models.tracking import (
     WeightGoalProgress,
@@ -50,18 +50,26 @@ class ITrackingService(ABC):
             meal_type: str,
             status: MealComplianceStatus,
             notes: str = None,
-            alternative_meal: str = None
+            alternative_meal: str = None,
+            nutrients_consumed: Dict[str, float] = None
     ) -> bool:
         """
-        Записывает соблюдение режима питания
+        Записывает соблюдение режима питания с расширенными данными
 
         Args:
             user_id: ID пользователя
             date_val: Дата
             meal_type: Тип приема пищи
             status: Статус соблюдения
-            notes: Дополнительные заметки
+            notes: Дополнительные заметки (отчет пользователя)
             alternative_meal: Альтернативное блюдо
+            nutrients_consumed: Словарь с данными о потреблённых нутриентах
+                {
+                    "calories": float,
+                    "proteins": float,
+                    "fats": float,
+                    "carbs": float
+                }
 
         Returns:
             bool: Результат операции
@@ -162,5 +170,21 @@ class ITrackingService(ABC):
 
         Returns:
             Optional[Dict[str, float]]: История потребления воды или None
+        """
+        pass
+
+    @abstractmethod
+    async def get_compliance_by_period(self, user_id: str, start_date: date = None,
+                                       end_date: date = None) -> List[Dict[str, Any]]:
+        """
+        Получает статистику соблюдения плана питания за период
+
+        Args:
+            user_id: ID пользователя
+            start_date: Начальная дата периода
+            end_date: Конечная дата периода
+
+        Returns:
+            List[Dict[str, Any]]: Список статистик соблюдения по дням
         """
         pass
