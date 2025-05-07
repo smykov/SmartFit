@@ -92,6 +92,7 @@ class TestFullUserJourney:
         # Создаем сервис трекинга
         tracking_service = TrackingService(
             user_repository=user_repository,
+            diet_service=AsyncMock(),
             weight_entry_repository=weight_entry_repository,
             water_entry_repository=water_entry_repository,
             compliance_repository=compliance_repository,

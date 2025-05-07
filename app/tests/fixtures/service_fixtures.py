@@ -24,15 +24,6 @@ def services(firebase_repositories, llm_service_mock, whatsapp_service_mock, loc
     diet_formatter_service = DietFormatterService(localization_service_mock)
     tracking_formatter_service = TrackingFormatterService(localization_service_mock)
 
-    # Создаем сервис трекинга
-    tracking_service = TrackingService(
-        user_repository=firebase_repositories["user_repository"],
-        weight_entry_repository=firebase_repositories["weight_entry_repository"],
-        water_entry_repository=firebase_repositories["water_entry_repository"],
-        compliance_repository=firebase_repositories["compliance_repository"],
-        localization_service=localization_service_mock
-    )
-
     # Создаем сервис диет
     diet_service = DietService(
         user_repository=firebase_repositories["user_repository"],
@@ -42,6 +33,15 @@ def services(firebase_repositories, llm_service_mock, whatsapp_service_mock, loc
         product_repository=firebase_repositories["product_repository"],
         shopping_list_repository=firebase_repositories["shopping_list_repository"],
         llm_service=llm_service_mock
+    )
+    # Создаем сервис трекинга
+    tracking_service = TrackingService(
+        user_repository=firebase_repositories["user_repository"],
+        diet_service=diet_service,
+        weight_entry_repository=firebase_repositories["weight_entry_repository"],
+        water_entry_repository=firebase_repositories["water_entry_repository"],
+        compliance_repository=firebase_repositories["compliance_repository"],
+        localization_service=localization_service_mock
     )
 
     # Создаем обработчик команд

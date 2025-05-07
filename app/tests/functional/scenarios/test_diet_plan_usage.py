@@ -40,6 +40,7 @@ class TestDietPlanUsageScenario:
         # Трекинг-сервис
         tracking_service = TrackingService(
             user_repository=user_repository,
+            diet_service=AsyncMock(),
             weight_entry_repository=weight_entry_repository,
             water_entry_repository=water_entry_repository,
             compliance_repository=compliance_repository,
@@ -151,7 +152,7 @@ class TestDietPlanUsageScenario:
                 ml_amount = cups * 250
                 await tracking_service.record_water_intake(user_id, ml_amount)
                 await messenger_service.send_message(phone_number,
-                                                   f"Потребление воды {cups} стаканов (~{ml_amount} мл) записано")
+                                                     f"Потребление воды {cups} стаканов (~{ml_amount} мл) записано")
                 return {"success": True}
 
             elif "выполнено" in message_text:

@@ -94,6 +94,7 @@ class TestUserTrackingWorkflow:
         # Создаем сервис трекинга
         tracking_service = TrackingService(
             user_repository=user_repository,
+            diet_service=AsyncMock(),
             weight_entry_repository=weight_entry_repository,
             water_entry_repository=water_entry_repository,
             compliance_repository=compliance_repository,
@@ -255,7 +256,10 @@ class TestUserTrackingWorkflow:
             user_id,
             today,
             meal_type,
-            status
+            status,
+            None,
+            None,
+            None
         )
 
         # Проверяем результат
@@ -263,7 +267,7 @@ class TestUserTrackingWorkflow:
 
         # Проверяем, что метод репозитория был вызван с правильными параметрами
         setup_tracking_workflow["compliance_repository"].add_meal_compliance.assert_called_once_with(
-            user_id, today, meal_type, status, None, None
+            user_id, today, meal_type, status.value, None, None, None, None, None, None, {}
         )
 
         # Проверяем, что метод обновления общей статистики был вызван
