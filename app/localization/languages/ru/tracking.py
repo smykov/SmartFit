@@ -41,6 +41,8 @@ strings = {
         'skipped': LocalizationString('❌ {meal_type} пропущен.'),
         'generic_status': LocalizationString('Записан статус для приема пищи: {meal_type}.'),
         'overall_score': LocalizationString('Общее соблюдение плана на сегодня: {score:.1f}%'),
+        'score_components': LocalizationString(
+            'Компоненты оценки: выполнение {status_score}%, нутриенты {nutrients_score}%'),
         'excellent': LocalizationString('👍 Отличная работа! Продолжай в том же духе.'),
         'good': LocalizationString('👍 Хороший результат! Старайся следовать плану.'),
         'keep_trying': LocalizationString('💪 Не сдавайся! Каждый день - это новая возможность.'),
@@ -86,6 +88,8 @@ strings = {
         'water_percentage': LocalizationString('• Выполнено: {percentage:.1f}%\n\n'),
         'compliance_section': LocalizationString('*🍽️ Соблюдение плана питания:*\n'),
         'compliance_overall': LocalizationString('\nОбщее соблюдение: {score:.1f}%\n\n'),
+        'score_components_average': LocalizationString(
+            'Средние показатели: выполнение {status_score}%, нутриенты {nutrients_score}%'),
         'motivation': LocalizationString('💪 *Продолжай в том же духе!* Ты на пути к своей цели.'),
         'weekly_report_header': LocalizationString('📊 *Еженедельный отчет о прогрессе для {user_name}*\n\n'),
         'weight_no_data': LocalizationString('⚖️ *Вес:* Нет данных за последнюю неделю\n'),

@@ -139,7 +139,7 @@ class FirebaseComplianceRepository(IComplianceRepository):
 
     async def update_daily_compliance(self, user_id: str, date_value: date) -> bool:
         """
-        Обновляет данные о соблюдении плана питания на день
+        Обновляет данные о соблюдении плана питания на день с учетом калорий и макронутриентов
 
         Args:
             user_id: ID пользователя
@@ -149,86 +149,174 @@ class FirebaseComplianceRepository(IComplianceRepository):
             bool: Результат операции
         """
         try:
-            # Формируем дату в формате строки
-            date_str = date_value.isoformat() if isinstance(date_value, date) else date_value
-
             # Получаем текущие данные о соблюдении или создаем новую запись
             compliance_data = await self.get_daily_compliance(user_id, date_value)
 
-            # Получаем все записи о приемах пищи на указанную дату
-            meal_compliance_entries = await self.firebase_client.query_documents(
-                "meal_compliance",
-                "user_id",
-                "==",
-                user_id
-            )
+            # Получаем приемы пищи за день
+            meals_data = compliance_data.get("meals", {})
 
-            # Фильтруем по текущей дате
-            day_entries = [entry for entry in meal_compliance_entries if entry.get("date") == date_str]
-
-            # Создаем словарь приемов пищи с их статусами
-            meal_data = {}
-            for entry in day_entries:
-                meal_type = entry.get("meal_type")
-                if meal_type:
-                    meal_data[meal_type] = entry.get("status", MealComplianceStatus.NOT_RECORDED.value)
-
-            # Обновляем meals в compliance_data
-            compliance_data["meals"] = meal_data
-
-            # Получаем запланированные приемы пищи
-            planned_meals = await self.get_planned_meals_for_day(user_id, date_value)
+            # Получаем все запланированные приемы пищи на этот день
+            day_plan = await self._get_day_plan_from_diet_service(user_id, date_value)
+            planned_meals = []
+            if day_plan and "meals" in day_plan:
+                planned_meals = [meal["type"] for meal in day_plan["meals"] if "type" in meal]
 
             # Если нет запланированных приемов пищи, используем отмеченные
-            total_meals = len(planned_meals) if planned_meals else len(meal_data)
-            total_value = 0
+            total_meals = len(planned_meals) if planned_meals else len(meals_data)
 
-            # TODO переделать расчет соблюдения исходя не из статуса, а из калорий и бду от запланировананного
-            compliance_data["overall_score"] = 0.0
+            if total_meals == 0:
+                compliance_data["overall_score"] = 0.0
+                # Сохраняем результат
+                return await self._save_daily_compliance(compliance_data)
 
-            if total_meals > 0:
-                # Учитываем все запланированные приемы пищи
-                for planned_meal in planned_meals:
-                    meal_status = meal_data.get(planned_meal, MealComplianceStatus.SKIPPED.value)
+            # 1. Расчет на основе статусов приемов пищи (базовый вес)
+            status_score = 0.0
 
-                    # Определяем вес статуса
-                    status_weight = 0
-                    if meal_status == MealComplianceStatus.FOLLOWED.value:
-                        status_weight = 1.0
-                    elif meal_status == MealComplianceStatus.PARTIALLY.value:
-                        status_weight = 0.75
-                    elif meal_status == MealComplianceStatus.SUBSTITUTED.value:
-                        status_weight = 0.5
+            for meal_type in planned_meals:
+                meal_status = meals_data.get(meal_type, {}).get("status", MealComplianceStatus.SKIPPED.value)
 
-                    total_value += status_weight
+                # Определяем вес статуса
+                status_weight = 0.0
+                if meal_status == MealComplianceStatus.FOLLOWED.value:
+                    status_weight = 1.0
+                elif meal_status == MealComplianceStatus.PARTIALLY.value:
+                    status_weight = 0.75
+                elif meal_status == MealComplianceStatus.SUBSTITUTED.value:
+                    status_weight = 0.5
 
-                # Рассчитываем процент
-                percentage = (total_value / total_meals) * 100
-                compliance_data["overall_score"] = round(percentage, 1)
+                status_score += status_weight
 
-            # Обновляем временную метку
+            status_percentage = (status_score / total_meals) * 100
+
+            # 2. Расчет на основе соответствия калорий и нутриентов
+            nutrients_score = 0.0
+            nutrients_count = 0
+
+            # Весовые коэффициенты для разных нутриентов
+            # TODO сделать распределение важности в зависимости от цели (если цель похудеть, то жиры более важные, если набрать вес, то протеины важны, если поддерживать, то одинкавая важность)
+            nutrient_weights = {
+                "calories": 0.4,  # 40% важности
+                "proteins": 0.25,  # 25% важности
+                "fats": 0.25,  # 25% важности
+                "carbs": 0.1  # 10% важности
+            }
+
+            for meal_type in planned_meals:
+                meal_data = meals_data.get(meal_type, {})
+
+                # Пропускаем, если нет данных или прием пищи пропущен
+                if not meal_data or meal_data.get("status") == MealComplianceStatus.SKIPPED.value:
+                    continue
+
+                # Находим запланированный прием пищи для сравнения
+                planned_meal = None
+                if day_plan and "meals" in day_plan:
+                    for meal in day_plan["meals"]:
+                        if meal.get("type") == meal_type:
+                            planned_meal = meal
+                            break
+
+                if not planned_meal:
+                    continue
+
+                # Рассчитываем соответствие по каждому нутриенту
+                for nutrient, weight in nutrient_weights.items():
+                    # Получаем запланированное и фактическое значение
+                    planned_value = planned_meal.get(nutrient, 0)
+                    consumed_key = f"{nutrient}_consumed"
+                    consumed_value = meal_data.get(consumed_key, 0)
+
+                    if planned_value <= 0:
+                        continue
+
+                    # Рассчитываем соответствие в процентах
+                    adherence = consumed_value / planned_value
+
+                    # Добавляем к общему счету с учетом весового коэффициента
+                    # Если потребление в пределах 80-120% - считаем как полное соответствие
+                    if 0.8 <= adherence <= 1.2:
+                        nutrient_score = 1.0 * weight
+                    # Если потребление в пределах 60-130% - считаем как частичное соответствие
+                    elif 0.6 <= adherence <= 1.3:
+                        nutrient_score = 0.7 * weight
+                    # Если слишком мало или слишком много - минимальное соответствие
+                    else:
+                        nutrient_score = 0.3 * weight
+
+                    nutrients_score += nutrient_score
+                    nutrients_count += weight
+
+            # Если есть данные о нутриентах, рассчитываем процент соответствия
+            nutrients_percentage = 0.0
+            if nutrients_count > 0:
+                nutrients_percentage = (nutrients_score / nutrients_count) * 100
+
+            # 3. Комбинированный расчет с учетом как статуса, так и нутриентов
+            # Если данных о нутриентах нет, используем только статус
+            if nutrients_count == 0:
+                overall_score = status_percentage
+            else:
+                # Если есть данные о нутриентах, используем взвешенную комбинацию
+                # 30% вес статуса, 70% вес соответствия нутриентов
+                overall_score = status_percentage * 0.3 + nutrients_percentage * 0.7
+
+            # Сохраняем результаты в данные соблюдения
+            compliance_data["overall_score"] = round(overall_score, 1)
+            compliance_data["status_score"] = round(status_percentage, 1)
+            compliance_data["nutrients_score"] = round(nutrients_percentage, 1)
             compliance_data["updated_at"] = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
 
-            # Проверяем, существует ли уже запись в БД (есть ли id)
-            compliance_id = compliance_data.get("id")
-            collection_name = "daily_compliance"
-
-            if compliance_id:
-                # Если запись существует, обновляем её
-                result = await self.firebase_client.update_document(collection_name, compliance_id, compliance_data)
-            else:
-                # Если записи нет, создаем новую
-                compliance_id = await self.firebase_client.add_document(collection_name, compliance_data)
-                result = bool(compliance_id)
-
-            # Логируем для отладки
-            self.logger.info(f"Updating compliance for {user_id} on {date_str}: {compliance_data}")
-
-            return result
+            # Сохраняем обновленные данные
+            return await self._save_daily_compliance(compliance_data)
 
         except Exception as e:
             self.logger.error(f"Error updating daily compliance: {str(e)}", exc_info=True)
             return False
+
+    async def _save_daily_compliance(self, compliance_data):
+        """
+        Сохраняет данные о соблюдении плана
+        """
+        # Проверяем, существует ли уже запись в БД (есть ли id)
+        compliance_id = compliance_data.get("id")
+        collection_name = "daily_compliance"
+
+        if compliance_id:
+            # Если запись существует, обновляем её
+            result = await self.firebase_client.update_document(collection_name, compliance_id, compliance_data)
+        else:
+            # Если записи нет, создаем новую
+            compliance_id = await self.firebase_client.add_document(collection_name, compliance_data)
+            result = bool(compliance_id)
+
+        return result
+
+    async def _get_day_plan_from_diet_service(self, user_id, date_value):
+        """
+        Получает план на день из сервиса диет
+        """
+        if self.diet_plan_repository:
+            # Получаем текущий план диеты
+            diet_plan = await self.diet_plan_repository.get_current_diet(user_id)
+            if not diet_plan:
+                return None
+
+            # Определяем день недели
+            day_of_week = date_value.strftime("%A").lower()
+
+            # Получаем план на день по дате или дню недели
+            date_str = date_value.isoformat()
+
+            # Проверяем по дате
+            daily_plans = diet_plan.get("daily_plans", {})
+            if date_str in daily_plans:
+                return daily_plans[date_str]
+
+            # Проверяем по дню недели
+            if day_of_week in daily_plans:
+                return daily_plans[day_of_week]
+
+        return None
 
     # Метод для получения всех запланированных приемов пищи на день
     async def get_planned_meals_for_day(self, user_id: str, date_value: date) -> List[str]:

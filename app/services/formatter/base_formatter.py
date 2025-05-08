@@ -97,5 +97,5 @@ class BaseFormatter:
         Returns:
             str: Локализованное сообщение об ошибке
         """
-        self.logger.error(f"{error_message}: {str(e)}")
+        self.logger.error(f"{error_message}: {str(e)}", exc_info=True)
         return self.get_localized_message(error_key, lang)

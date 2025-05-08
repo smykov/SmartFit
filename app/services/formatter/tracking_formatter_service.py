@@ -1,5 +1,5 @@
 # app/services/formatter/tracking_formatter_service.py
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 from app.models.tracking import WeightGoalProgress, DailyTrackingStatus
 from app.services.formatter.tracking_formatter import TrackingFormatter
@@ -94,7 +94,7 @@ class TrackingFormatterService:
 
     def format_compliance_report(self,
                                  date_range: str,
-                                 compliance_data: Optional[Dict[str, Any]],
+                                 compliance_data: List[Dict[str, Any]],
                                  lang: Optional[str] = None) -> str:
         """
         Форматирует отчет о соблюдении плана за указанный период

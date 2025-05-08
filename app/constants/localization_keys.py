@@ -347,6 +347,7 @@ class LocalizationKeys:
             SKIPPED = "tracking.compliance.skipped"
             GENERIC_STATUS = "tracking.compliance.generic_status"
             OVERALL_SCORE = "tracking.compliance.overall_score"
+            SCORE_COMPONENTS = "tracking.compliance.score_components"
             EXCELLENT = "tracking.compliance.excellent"
             GOOD = "tracking.compliance.good"
             KEEP_TRYING = "tracking.compliance.keep_trying"
@@ -424,6 +425,7 @@ class LocalizationKeys:
             HIGH_SCORE_MOTIVATION = "tracking.stats.high_score_motivation"
             MEDIUM_SCORE_MOTIVATION = "tracking.stats.medium_score_motivation"
             LOW_SCORE_MOTIVATION = "tracking.stats.low_score_motivation"
+            SCORE_COMPONENTS_AVERAGE = "tracking.stats.score_components_average"
 
     class Reminders:
         """Ключи для напоминаний"""

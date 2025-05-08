@@ -1,6 +1,6 @@
 # Обновленный класс TrackingFormatter
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 from app.constants.localization_keys import LocalizationKeys as LK
 from app.models.tracking import MealComplianceStatus
@@ -166,8 +166,9 @@ class TrackingFormatter(BaseFormatter):
                 status_key, lang, meal_type=meal_type
             )
 
-            # Добавляем информацию о калориях и других нутриентах, если она доступна
-            calories_message = ''
+            calories_message = ""
+            bju_message = ''
+            # Добавляем информацию о калориях и других нутриентах
             if nutrients_consumed and 'calories' in nutrients_consumed:
                 # Базовая информация о калориях
                 calorie_info = self.get_localized_message(
@@ -175,14 +176,14 @@ class TrackingFormatter(BaseFormatter):
                     lang,
                     calories=round(nutrients_consumed['calories'])
                 )
-                calories_message = f"\n{calorie_info}"
+                calories_message += f"\n\n{calorie_info}"
 
-                # Если доступны данные о запланированном приёме пищи, добавляем сравнение
+                # Добавляем сравнение с планом
                 if planned_meal and 'calories' in planned_meal:
                     planned_calories = planned_meal['calories']
                     calorie_ratio = nutrients_consumed['calories'] / planned_calories if planned_calories > 0 else 1.0
 
-                    # Добавляем информацию о процентном соотношении
+                    # Информация о процентном соотношении
                     if calorie_ratio > 1.1:
                         calories_message += f" ({self.get_localized_message(LK.Tracking.Compliance.EXCESS, lang, percent=round((calorie_ratio - 1) * 100))})"
                     elif calorie_ratio < 0.9:
@@ -190,38 +191,48 @@ class TrackingFormatter(BaseFormatter):
                     else:
                         calories_message += f" ({self.get_localized_message(LK.Tracking.Compliance.ON_TARGET, lang)})"
 
-            # Добавляем информацию о БЖУ, если доступна
-            bju_info = []
-            bju_message = ''
+                # Добавляем информацию о БЖУ
+                bju_info = []
 
-            for nutrient, key in [
-                ('proteins', LK.Tracking.Compliance.PROTEINS),
-                ('fats', LK.Tracking.Compliance.FATS),
-                ('carbs', LK.Tracking.Compliance.CARBS)
-            ]:
-                if nutrient in nutrients_consumed:
-                    # TODO добавить %% от нормы к нутриентам
-                    name = self.get_localized_message(key, lang)
-                    value = round(nutrients_consumed[nutrient], 1)
-                    bju_info.append(f"{name}: {value} г")
+                for nutrient, key in [
+                    ('proteins', LK.Tracking.Compliance.PROTEINS),
+                    ('fats', LK.Tracking.Compliance.FATS),
+                    ('carbs', LK.Tracking.Compliance.CARBS)
+                ]:
+                    if nutrient in nutrients_consumed:
+                        # TODO добавить %% от нормы к нутриентам
+                        name = self.get_localized_message(key, lang)
+                        value = round(nutrients_consumed[nutrient], 1)
+                        bju_info.append(f"{name}: {value} г")
 
-            if bju_info:
-                bju_message += f"\n{' | '.join(bju_info)}"
+                if bju_info:
+                    bju_message += f"\n{' | '.join(bju_info)}"
 
-            overall_score = compliance_data.get('overall_score', 0)
             # Добавляем общую статистику соблюдения за день
-            overall_message = f"\n{self.get_localized_message(LK.Tracking.Compliance.OVERALL_SCORE, lang, score=round(overall_score, 1))}"
+            overall_message = ''
+            motivation_message = ''
+            if compliance_data:
+                # Общий процент соблюдения
+                overall_score = compliance_data.get("overall_score", 0)
+                overall_message += f"\n\n{self.get_localized_message(LK.Tracking.Compliance.OVERALL_SCORE, lang, score=round(overall_score, 1))}"
 
-            # Добавляем мотивационное сообщение
-            motivation_message = ""
-            if overall_score >= 80:
-                motivation_message += f"\n{self.get_localized_message(LK.Tracking.Compliance.EXCELLENT, lang)}"
-            elif overall_score >= 50:
-                motivation_message += f"\n{self.get_localized_message(LK.Tracking.Compliance.GOOD, lang)}"
-            else:
-                motivation_message += f"\n{self.get_localized_message(LK.Tracking.Compliance.KEEP_TRYING, lang)}"
+                # Добавляем детализацию по компонентам, если они есть
+                status_score = compliance_data.get("status_score")
+                nutrients_score = compliance_data.get("nutrients_score")
 
-            return f"{status_message}\n{calories_message}\n{bju_message}\n{overall_message}\n{motivation_message}"
+                if status_score is not None and nutrients_score is not None:
+                    overall_message += f"\n{self.get_localized_message(LK.Tracking.Compliance.SCORE_COMPONENTS, lang, status_score=round(status_score, 1), nutrients_score=round(nutrients_score, 1))}"
+
+                # Добавляем мотивационное сообщение
+                motivation_message += "\n"
+                if overall_score >= 80:
+                    motivation_message += f"\n{self.get_localized_message(LK.Tracking.Compliance.EXCELLENT, lang)}"
+                elif overall_score >= 50:
+                    motivation_message += f"\n{self.get_localized_message(LK.Tracking.Compliance.GOOD, lang)}"
+                else:
+                    motivation_message += f"\n{self.get_localized_message(LK.Tracking.Compliance.KEEP_TRYING, lang)}"
+
+            return f"{status_message}{calories_message}{bju_message}{overall_message}{motivation_message}"
 
         except Exception as e:
             self.logger.error(f"Error formatting compliance message: {str(e)}")
@@ -343,17 +354,17 @@ class TrackingFormatter(BaseFormatter):
                 message += self.get_localized_message(LK.Tracking.Stats.COMPLIANCE_SECTION, lang)
 
                 emoji_map = {
-                    "followed": "✅",
-                    "partially": "⚠️",
-                    "substituted": "🔄",
-                    "skipped": "❌",
-                    "not_recorded": "❓"
+                    MealComplianceStatus.FOLLOWED.value: "✅",
+                    MealComplianceStatus.PARTIALLY.value: "⚠️",
+                    MealComplianceStatus.SUBSTITUTED.value: "🔄",
+                    MealComplianceStatus.SKIPPED.value: "❌",
+                    MealComplianceStatus.NOT_RECORDED.value: "❓"
                 }
 
-                for meal_type, status in compliance_data["meals"].items():
-                    # Получаем локализованный тип приема пищи
+                for meal_type, status_dict in compliance_data["meals"].items():
                     meal_type_ru = self.get_localized_meal_type(meal_type, lang)
-                    emoji = emoji_map.get(status, "❓")
+                    status_value = status_dict.get("status", MealComplianceStatus.NOT_RECORDED.value)
+                    emoji = emoji_map.get(status_value, "❓")
                     message += f"• {meal_type_ru}: {emoji}\n"
 
                 if "overall_score" in compliance_data:
@@ -378,7 +389,7 @@ class TrackingFormatter(BaseFormatter):
 
     def format_compliance_report(self,
                                  date_range: str,
-                                 compliance_data: Optional[Dict[str, Any]],
+                                 compliance_data: List[Dict[str, Any]],
                                  lang: Optional[str] = None) -> str:
         """
         Форматирует отчет о соблюдении плана за указанный период
@@ -409,8 +420,17 @@ class TrackingFormatter(BaseFormatter):
 
             # Расчет общих показателей
             total_days = len(compliance_data)
-            total_score = sum(
-                item.get("overall_score", 0) for item in compliance_data) / total_days if total_days > 0 else 0
+
+            # Обычный общий процент соблюдения - из overall_score
+            overall_scores = [item.get("overall_score", 0) for item in compliance_data]
+            total_score = sum(overall_scores) / total_days if total_days > 0 else 0
+
+            # Средний процент соблюдения по статусам и нутриентам отдельно
+            status_scores = [item.get("status_score", 0) for item in compliance_data]
+            nutrients_scores = [item.get("nutrients_score", 0) for item in compliance_data]
+
+            avg_status_score = sum(status_scores) / total_days if total_days > 0 and status_scores else 0
+            avg_nutrients_score = sum(nutrients_scores) / total_days if total_days > 0 and nutrients_scores else 0
 
             # Суммарные данные по нутриентам
             total_calories = {
@@ -437,17 +457,17 @@ class TrackingFormatter(BaseFormatter):
 
                 for meal_type, meal_data in day_meals.items():
                     # Запланированные нутриенты
-                    planned_meal = meal_data.get("planned_meal", {})
-                    total_calories["planned"] += planned_meal.get("calories", 0)
-                    total_proteins["planned"] += planned_meal.get("proteins", 0)
-                    total_fats["planned"] += planned_meal.get("fats", 0)
-                    total_carbs["planned"] += planned_meal.get("carbs", 0)
+                    planned_meal = meal_data.get("planned_meal", {}) or {}
+                    total_calories["planned"] += planned_meal.get("calories", 0) or 0
+                    total_proteins["planned"] += planned_meal.get("proteins", 0) or 0
+                    total_fats["planned"] += planned_meal.get("fats", 0) or 0
+                    total_carbs["planned"] += planned_meal.get("carbs", 0) or 0
 
                     # Фактически потребленные нутриенты
-                    total_calories["consumed"] += meal_data.get("calories_consumed", 0)
-                    total_proteins["consumed"] += meal_data.get("proteins_consumed", 0)
-                    total_fats["consumed"] += meal_data.get("fats_consumed", 0)
-                    total_carbs["consumed"] += meal_data.get("carbs_consumed", 0)
+                    total_calories["consumed"] += meal_data.get("calories_consumed", 0) or 0
+                    total_proteins["consumed"] += meal_data.get("proteins_consumed", 0) or 0
+                    total_fats["consumed"] += meal_data.get("fats_consumed", 0) or 0
+                    total_carbs["consumed"] += meal_data.get("carbs_consumed", 0) or 0
 
             # Процент соответствия по нутриентам
             calorie_adherence = (total_calories["consumed"] / total_calories["planned"] * 100) if total_calories[
@@ -455,10 +475,15 @@ class TrackingFormatter(BaseFormatter):
             protein_adherence = (total_proteins["consumed"] / total_proteins["planned"] * 100) if total_proteins[
                                                                                                       "planned"] > 0 else 0
             fat_adherence = (total_fats["consumed"] / total_fats["planned"] * 100) if total_fats["planned"] > 0 else 0
-            carb_adherence = (total_carbs["consumed"] / total_carbs["planned"] * 100) if total_carbs["planned"] > 0 else 0
+            carb_adherence = (total_carbs["consumed"] / total_carbs["planned"] * 100) if total_carbs[
+                                                                                             "planned"] > 0 else 0
 
             # Добавляем общую статистику соблюдения
             message += f"\n{self.get_localized_message(LK.Tracking.Stats.OVERALL_ADHERENCE, lang, score=round(total_score, 1))}"
+
+            # Добавляем детализацию по компонентам
+            if avg_status_score > 0 or avg_nutrients_score > 0:
+                message += f"\n{self.get_localized_message(LK.Tracking.Stats.SCORE_COMPONENTS_AVERAGE, lang, status_score=round(avg_status_score, 1), nutrients_score=round(avg_nutrients_score, 1))}"
 
             # Добавляем статистику по калориям
             message += f"\n\n{self.get_localized_message(LK.Tracking.Stats.CALORIE_ADHERENCE, lang)}"
@@ -514,5 +539,9 @@ class TrackingFormatter(BaseFormatter):
             return self.format_for_whatsapp(message)
 
         except Exception as e:
-            self.logger.error(f"Error formatting compliance report: {str(e)}")
-            return self.get_localized_message(LK.Tracking.Stats.REPORT_ERROR, lang)
+            return self.handle_exception(
+                e,
+                "Error formatting compliance report",
+                LK.Tracking.Stats.REPORT_ERROR,
+                lang
+            )
