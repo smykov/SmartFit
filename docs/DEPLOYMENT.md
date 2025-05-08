@@ -1,6 +1,6 @@
-# Руководство по развертыванию GuateFit
+# Руководство по развертыванию SmartFit
 
-Данное руководство описывает процесс развертывания MVP GuateFit на сервере.
+Данное руководство описывает процесс развертывания MVP SmartFit на сервере.
 
 ## Предварительные требования
 
@@ -57,8 +57,8 @@ sudo certbot --nginx -d your-domain.com
 1. Клонируйте репозиторий:
 
 ```bash
-git clone https://github.com/yourusername/guatefit-mvp.git
-cd guatefit-mvp
+git clone https://github.com/yourusername/smartfit-mvp.git
+cd smartfit-mvp
 ```
 
 2. Создайте файл .env на основе .env.example:
@@ -92,7 +92,7 @@ WHATSAPP_WEBHOOK_URL=https://your-domain.com/api/whatsapp/webhook
 
 ```bash
 # Скопируйте файл с локального компьютера на сервер
-scp firebase-credentials.json username@your-server:/path/to/guatefit-mvp/
+scp firebase-credentials.json username@your-server:/path/to/smartfit-mvp/
 ```
 
 ## Шаг 4: Настройка Docker

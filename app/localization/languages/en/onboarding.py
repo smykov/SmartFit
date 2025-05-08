@@ -5,7 +5,7 @@ from app.localization.base import LocalizationString, LocalizationModule
 strings = {
     # Welcome and basic onboarding messages
     'welcome': LocalizationString(
-        '👋 Welcome to GuateFit - your personal assistant for weight loss. I will help you create a personalized diet plan based on your preferences, local products, and budget.'),
+        '👋 Welcome to SmartFit - your personal assistant for weight loss. I will help you create a personalized diet plan based on your preferences, local products, and budget.'),
     'nameRequest': LocalizationString('What is your name?'),
     'ageRequest': LocalizationString('How old are you?'),
     'ageRequestExample': LocalizationString('For example: 30'),
@@ -45,7 +45,7 @@ Reply with a number or describe in your own words:'''),
         'Are there products you don\'t like or don\'t want to include in your diet? List them separated by commas or write "no":'),
     'budgetRequest': LocalizationString('What is your weekly food budget (in quetzales)?'),
     'completed': LocalizationString(
-        '🎉 Congratulations! You have completed the setup. Now you can use commands like "plan", "stats", "weight XX", "water X" to interact with GuateFit.'),
+        '🎉 Congratulations! You have completed the setup. Now you can use commands like "plan", "stats", "weight XX", "water X" to interact with SmartFit.'),
     'invalidInput': LocalizationString('❌ Invalid input. Please try again.\n\n{step_message}'),
 
     # Weight goal determination messages

@@ -723,7 +723,7 @@ def format_help_message():
     """
     commands = get_bot_commands_info()
 
-    message = "*📱 ДОСТУПНЫЕ КОМАНДЫ GUATEFIT*\n\n"
+    message = "*📱 ДОСТУПНЫЕ КОМАНДЫ SmartFit*\n\n"
 
     # Группируем команды по категориям для лучшей читаемости
     categories = {

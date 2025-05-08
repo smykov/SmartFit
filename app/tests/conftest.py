@@ -157,8 +157,8 @@ def localization_service_mock():
         },
         "onboarding.welcome": {
             "es": "¡Bienvenido a GuateFit!",
-            "ru": "Добро пожаловать в GuateFit!",
-            "en": "Welcome to GuateFit!"
+            "ru": "Добро пожаловать в SmartFit!",
+            "en": "Welcome to SmartFit!"
         }
         # Можно добавить больше переводов по мере необходимости
     }

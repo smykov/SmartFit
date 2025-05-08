@@ -9,7 +9,7 @@ load_dotenv()
 
 class Settings(BaseSettings):
     # Основные настройки приложения
-    APP_NAME: str = "GuateFit"
+    APP_NAME: str = "SmartFit"
     APP_VERSION: str = "0.1.0"
     DEBUG: bool = os.getenv("DEBUG", "False").lower() == "true"
 
@@ -50,7 +50,8 @@ class Settings(BaseSettings):
     TELEGRAM_MAX_MESSAGE_SIZE = int(os.getenv("TELEGRAM_MAX_MESSAGE_SIZE", "4000"))
     TELEGRAM_MAX_MESSAGE_AGE_HOURS = int(os.getenv("TELEGRAM_MAX_MESSAGE_AGE_HOURS", "72"))
     # Временная зона для Гватемалы
-    TIMEZONE: str = "America/Guatemala"
+    #TIMEZONE: str = "America/Guatemala"
+    TIMEZONE: str = "Asia/Novosibirsk"
 
     # Настройки для тестирования и разработки
     USE_MOCK_SERVICES: bool = os.getenv("USE_MOCK_SERVICES", "False").lower() == "true"

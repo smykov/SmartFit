@@ -41,8 +41,8 @@ def localization_translations():
         },
         "onboarding.welcome": {
             "es": "👋 ¡Hola! Bienvenido a GuateFit - tu asistente personal para adelgazar.",
-            "ru": "👋 Привет! Добро пожаловать в GuateFit - твой персональный ассистент для похудения.",
-            "en": "👋 Hello! Welcome to GuateFit - your personal weight loss assistant."
+            "ru": "👋 Привет! Добро пожаловать в SmartFit - твой персональный ассистент для похудения.",
+            "en": "👋 Hello! Welcome to SmartFit - your personal weight loss assistant."
         },
         "common.weekday_names.monday": {
             "es": "Lunes",
