@@ -45,7 +45,8 @@ class LLMCommandExtractor(ICommandExtractor):
             "diet": re.compile(r'^(диета|план|план питания|меню)$', re.IGNORECASE),
             "shopping_list": re.compile(r'^список покупок$', re.IGNORECASE),
             "stats": re.compile(r'^(статистика|прогресс)$', re.IGNORECASE),
-            "meal_compliance": re.compile(r'^(выполнено|частично|заменил[а]?|пропустил[а]?)\s+(\w+)$', re.IGNORECASE),
+            "meal_compliance": re.compile(r'^(выполнено|частично|заменил[а]?|пропустил[а]?|1|2|3|4)\s+(завтрак|обед|ужин|перекус)$',
+                                          re.IGNORECASE),
             "diet_update": re.compile(r'^(измени|поменяй|обнови|замени|скорректируй)\s+(план|меню|рацион|питание)(.*)$',
                                       re.IGNORECASE),
         }

@@ -188,14 +188,26 @@ class ComplianceCommand(BaseCommand):
                     nutrients_consumed['carbs'] = float(params['carbs'])
 
                 # Формат 2: Параметры с внутренним массивом 'params'
-                if 'params' in params and isinstance(params['params'], list):
+                if 'params' in params and isinstance(params['params'], tuple) and len(params['params']) >= 2:
                     params_list = params['params']
-                    if len(params_list) >= 2:
-                        # Первый параметр обычно статус, второй - тип приема пищи
-                        if not status and len(params_list) > 0:
-                            status = params_list[0]
-                        if not meal_type and len(params_list) > 1:
-                            meal_type = params_list[1]
+
+                    # Первый параметр обычно статус, второй - тип приема пищи
+                    status_text = params_list[0].lower() if len(params_list) > 0 else None
+                    meal_type_text = params_list[1].lower() if len(params_list) > 1 else None
+
+                    # Пытаемся сопоставить текст с статусом из доступных языков
+                    if status_text and not status:
+                        for lang_code, status_map in self._status_keyword_mapping.items():
+                            if status_text in status_map:
+                                status = status_map[status_text].value
+                                break
+
+                    # Пытаемся сопоставить текст с типом приема пищи из доступных языков
+                    if meal_type_text and not meal_type:
+                        for lang_code, meal_map in self._meal_type_mapping.items():
+                            if meal_type_text in meal_map:
+                                meal_type = meal_map[meal_type_text]
+                                break
 
             # Логируем для диагностики
             self.logger.info(
