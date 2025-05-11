@@ -161,8 +161,8 @@ class DietRecoveryService:
 
             if full_plan and full_plan.get("status") == "active":
                 # Если план успешно сгенерирован, отправляем уведомление
-                summary_message = self.diet_service.diet_formatter_service.get_diet_summary(full_plan, lang)
-                tracking_info_message = self.diet_service.diet_formatter_service.get_diet_tracking_info_message(lang)
+                summary_message = self.diet_service.get_diet_summary(full_plan, lang)
+                tracking_info_message = self.diet_service.get_diet_tracking_info_message(lang)
 
                 # Отправляем сообщения пользователю
                 await self.messenger_service.send_message(

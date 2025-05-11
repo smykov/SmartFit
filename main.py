@@ -156,8 +156,6 @@ async def shutdown_event():
             await postgres_client.close()
 
 
-app.add_event_handler("startup", startup_event)
-
 if __name__ == "__main__":
     import uvicorn
 

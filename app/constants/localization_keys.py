@@ -74,6 +74,7 @@ class LocalizationKeys:
             NO_PLAN = "diet.full.no_plan"
             CREATING_ERROR = "diet.full.creating_error"
             NO_UPDATES = "diet.full.no_updates"
+            RECOVERY_GENERATION = "diet.full.recovery_generation"
 
         class Short:
             """Ключи для краткой версии диеты"""
