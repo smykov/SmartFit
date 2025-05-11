@@ -108,6 +108,7 @@ async def startup_event():
         container.command_factory()
         container.command_handler_service()
         container.onboarding_service()
+        container.diet_recovery_service()
 
         logger.info("All dependencies successfully resolved")
     except Exception as e:
@@ -134,6 +135,15 @@ async def startup_event():
         logger.error(f"Error initializing messaging services: {str(e)}", exc_info=True)
         raise
 
+    try:
+        # Восстановление прерванных операций
+        recovery_service = container.diet_recovery_service()
+        recovered_count = await recovery_service.recover_plans_in_progress()
+
+        logger.info(f"Startup recovery: recovered {recovered_count} diet plans in progress")
+    except Exception as e:
+        logger.error(f"Error recovery service: {str(e)}", exc_info=True)
+        raise
 
 @app.on_event("shutdown")
 async def shutdown_event():

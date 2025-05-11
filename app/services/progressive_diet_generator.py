@@ -28,7 +28,8 @@ class ProgressiveDietGenerator:
             llm_service,
             diet_plan_repository: IDietPlanRepository,
             short_plan_id: str,
-            user_data: Dict[str, Any]
+            user_data: Dict[str, Any],
+            full_plan_id: Optional[str] = None
     ):
         """
         Инициализация генератора
@@ -43,7 +44,7 @@ class ProgressiveDietGenerator:
         self.diet_plan_repository = diet_plan_repository
         self.short_plan_id = short_plan_id
         self.user_data = user_data
-        self.full_plan_id = None
+        self.full_plan_id = full_plan_id
         self.system_prompt = create_full_diet_system_prompt()
 
     async def generate_full_plan(self) -> Optional[Dict[str, Any]]:
@@ -60,19 +61,48 @@ class ProgressiveDietGenerator:
                 logger.error(f"Short plan {self.short_plan_id} not found")
                 return None
 
-            # Создаем базовую структуру полного плана
-            full_plan = self._initialize_full_plan(short_plan)
+            # Если у нас есть ID существующего плана, получаем его из БД
+            full_plan = None
+            if self.full_plan_id:
+                full_plan = await self.diet_plan_repository.get_by_id(self.full_plan_id)
+                if not full_plan:
+                    logger.error(f"Full plan {self.full_plan_id} not found, will create a new one")
+                    self.full_plan_id = None
+                elif full_plan.get("status") != "in_progress":
+                    logger.warning(
+                        f"Full plan {self.full_plan_id} is not in 'in_progress' status: {full_plan.get('status')}"
+                    )
+                    # Если план не в статусе in_progress, создадим новый
+                    self.full_plan_id = None
+                    full_plan = None
 
-            # Сохраняем базовую структуру в БД для отслеживания прогресса
-            self.full_plan_id = await self.diet_plan_repository.create(full_plan)
-            if not self.full_plan_id:
-                logger.error("Failed to save initial full diet plan to database")
-                return None
+            # Если у нас нет существующего плана, создаем новый
+            if not full_plan:
+                # Создаем базовую структуру полного плана
+                full_plan = self._initialize_full_plan(short_plan)
 
-            full_plan["id"] = self.full_plan_id
+                # Сохраняем базовую структуру в БД для отслеживания прогресса
+                self.full_plan_id = await self.diet_plan_repository.create(full_plan)
+                if not self.full_plan_id:
+                    logger.error("Failed to save initial full diet plan to database")
+                    return None
 
-            # Генерируем план для каждого дня недели
+                full_plan["id"] = self.full_plan_id
+
+            # Определяем, какие дни уже сгенерированы
+            generated_days = set()
+            if "daily_plans" in full_plan and full_plan["daily_plans"]:
+                generated_days = set(full_plan["daily_plans"].keys())
+                logger.info(f"Found already generated days: {', '.join(generated_days)}")
+
+            # Генерируем план для каждого недостающего дня недели
             for day_of_week in self.DAYS_OF_WEEK:
+                # Пропускаем уже сгенерированные дни
+                if day_of_week in generated_days:
+                    logger.info(f"Skipping already generated day: {day_of_week}")
+                    continue
+
+                logger.info(f"Generating plan for day: {day_of_week}")
                 day_plan = await self._generate_day_plan(day_of_week, short_plan)
 
                 if day_plan:
@@ -92,7 +122,7 @@ class ProgressiveDietGenerator:
                 # Обновляем статус плана на "active"
                 await self.diet_plan_repository.update(
                     self.full_plan_id,
-                    {"status": "active"}
+                    {"status": "active", "updated_at": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()}
                 )
                 logger.info(f"Full plan generation completed successfully")
             else:

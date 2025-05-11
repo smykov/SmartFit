@@ -45,6 +45,7 @@ from app.services.messaging.messenger_registry import MessengerRegistry
 from app.services.messaging.messenger_service import MessengerService
 from app.services.messaging.messengers.telegram_messenger import TelegramMessenger
 from app.services.messaging.messengers.whatsapp_messenger import WhatsAppMessenger
+from app.services.recovery.diet_recovery_service import DietRecoveryService
 from app.services.tracking.tracking_service import TrackingService
 from app.services.user.user_identity_service import UserIdentityService
 from app.utils.text_splitter import TextSplitter
@@ -384,4 +385,14 @@ class Container(containers.DeclarativeContainer):
     reminder_service_interface = providers.Factory(
         lambda reminder_service: reminder_service,
         reminder_service=reminder_service
+    )
+
+    # Сервис восстановления диетических планов
+    diet_recovery_service = providers.Singleton(
+        DietRecoveryService,
+        diet_plan_repository=diet_plan_repository,
+        user_repository=user_repository,
+        diet_service=diet_service,
+        messenger_service=messenger_service,
+        llm_service=llm_service
     )
