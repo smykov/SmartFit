@@ -36,9 +36,9 @@ class ReminderService(IReminderService):
             messenger_service: IMessengerService,
             user_repository: IUserRepository,
             reminder_repository: IReminderRepository,
-            tracking_service: ITrackingService = None,
-            diet_service: IDietService = None,
-            localization_service: ILocalizationService = None
+            tracking_service: ITrackingService,
+            diet_service: IDietService,
+            localization_service: ILocalizationService,
     ):
         """
         Инициализация сервиса напоминаний
@@ -406,7 +406,8 @@ class ReminderService(IReminderService):
         """
         try:
             # Получаем константу для типа напоминания
-            reminder_type = self.get_localized_message(strategy.get_reminder_type(), lang)
+            reminder_type_key = strategy.get_reminder_type()
+            reminder_type = self.get_localized_message(reminder_type_key, lang)
 
             # Проверяем, можно ли отправить напоминание
             if not await self.can_send_reminder(phone_number, reminder_type, strategy.get_interval_seconds()):
@@ -420,7 +421,7 @@ class ReminderService(IReminderService):
                     LK.Reminders.REMINDER_TYPE_WEEKLY_REPORT, lang):
                 message = await self.tracking_service.generate_weekly_report(user_id)
             else:
-                # Передаем дополнительные параметры из контекста (например, дни для LK.Reminders.PLAN_APPROVAL_REMINDER_DAYS)
+                # Передаем дополнительные параметры из контекста
                 params = {}
                 if context:
                     params.update({k: v for k, v in context.items() if k in ["days"]})
@@ -432,8 +433,18 @@ class ReminderService(IReminderService):
                 reminder_context = {
                     "reminder_type": reminder_type,
                     "user_id": user_id
-                    **(context or {})
                 }
+
+                # Добавляем дополнительный контекст, если он предоставлен
+                if context:
+                    reminder_context.update(context)
+
+                # Добавляем тип мессенджера в контекст для корректной отправки
+                if "messenger_type" not in reminder_context:
+                    # Определяем предпочтительный мессенджер пользователя
+                    user = await self.user_repository.get_by_id(user_id)
+                    messenger_type = user.get("preferred_messenger", "whatsapp") if user else "whatsapp"
+                    reminder_context["messenger_type"] = messenger_type
 
                 await self.messenger_service.send_message(
                     phone_number,
@@ -475,5 +486,41 @@ class ReminderService(IReminderService):
             "is_night": 23 <= current_hour or current_hour < 5,  # 23:00 - 4:59
             "is_sunday": today.weekday() == 6,  # Воскресенье
             "current_hour": current_hour,
-            "today": today
+            "today": today.isoformat()
         }
+
+    def log_reminder_status(self) -> Dict[str, Any]:
+        """
+        Формирует отчет о текущем состоянии сервиса напоминаний для диагностики
+
+        Returns:
+            Dict[str, Any]: Статус сервиса напоминаний
+        """
+        try:
+            # Получаем информацию о стратегиях
+            strategy_info = []
+            for strategy in self.reminder_strategies:
+                strategy_info.append({
+                    "type": strategy.get_reminder_type(),
+                    "message_key": strategy.get_message_key(),
+                    "interval_seconds": strategy.get_interval_seconds()
+                })
+
+            # Формируем отчет
+            return {
+                "status": "active",
+                "strategies_count": len(self.reminder_strategies),
+                "strategies": strategy_info,
+                "has_messenger_service": self.messenger_service is not None,
+                "has_user_repository": self.user_repository is not None,
+                "has_reminder_repository": self.reminder_repository is not None,
+                "has_tracking_service": self.tracking_service is not None,
+                "has_diet_service": self.diet_service is not None,
+                "has_localization_service": self.localization_service is not None
+            }
+        except Exception as e:
+            self.logger.error(f"Error generating reminder status report: {str(e)}")
+            return {
+                "status": "error",
+                "error": str(e)
+            }

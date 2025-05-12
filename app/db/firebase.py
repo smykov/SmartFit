@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 
 import firebase_admin
 from firebase_admin import credentials, firestore, auth
@@ -79,7 +79,7 @@ class FirebaseClient:
 
             return document_id
         except Exception as e:
-            logger.error(f"Ошибка при добавлении документа в {collection}: {str(e)}")
+            logger.error(f"Ошибка при добавлении документа в {collection}: {str(e)}", exc_info=True)
             return None
 
     async def set_document(self, collection: str, document_id: str, data: Dict[str, Any], merge: bool = True) -> bool:
@@ -206,3 +206,38 @@ class FirebaseClient:
         except Exception as e:
             logger.error(f"Ошибка при получении пользователя по телефону {phone}: {str(e)}")
             return None
+
+
+    async def query_documents_compound(self, collection: str, conditions: List[Tuple[str, str, Any]]) -> List[
+        Dict[str, Any]]:
+        """
+        Запрос документов по нескольким условиям
+
+        Args:
+            collection: Название коллекции
+            conditions: Список условий в формате [(field, operator, value), ...]
+
+        Returns:
+            List[Dict[str, Any]]: Список документов
+        """
+        try:
+            # Начинаем с базового запроса к коллекции
+            query = self.db.collection(collection)
+
+            # Добавляем каждое условие
+            for field, operator, value in conditions:
+                query = query.where(filter=firestore.FieldFilter(field, operator, value))
+
+            docs = query.get()
+
+            # Преобразуем результаты
+            result = []
+            for doc in docs:
+                data = doc.to_dict()
+                data["id"] = doc.id
+                result.append(data)
+
+            return result
+        except Exception as e:
+            logger.error(f"Ошибка при запросе документов из {collection}: {str(e)}")
+            return []

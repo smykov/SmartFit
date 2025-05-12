@@ -109,6 +109,7 @@ async def startup_event():
         container.command_handler_service()
         container.onboarding_service()
         container.diet_recovery_service()
+        container.reminder_service()
 
         logger.info("All dependencies successfully resolved")
     except Exception as e:
@@ -136,6 +137,16 @@ async def startup_event():
         raise
 
     try:
+        reminder_service = container.reminder_service()
+        # Инициализация сервиса напоминаний
+        await reminder_service.initialize()
+        logger.info("Reminder service initialized successfully")
+
+    except Exception as e:
+        logger.error(f"Error initializing Reminder service: {str(e)}", exc_info=True)
+        raise
+    
+    try:
         # Восстановление прерванных операций
         recovery_service = container.diet_recovery_service()
         recovered_count = await recovery_service.recover_plans_in_progress()
@@ -144,6 +155,7 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Error recovery service: {str(e)}", exc_info=True)
         raise
+
 
 @app.on_event("shutdown")
 async def shutdown_event():

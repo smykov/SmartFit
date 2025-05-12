@@ -1,5 +1,6 @@
 # app/services/reminders/reminder_service_interface.py
 from abc import ABC, abstractmethod
+from typing import Dict, Any
 
 
 class IReminderService(ABC):
@@ -23,8 +24,13 @@ class IReminderService(ABC):
         pass
 
     @abstractmethod
-    async def send_tracking_reminders(self) -> None:
-        """Отправляет напоминания о трекинге с учетом времени суток"""
+    async def send_tracking_reminders(self, context: Dict[str, Any] = None) -> None:
+        """
+        Отправляет напоминания о трекинге с учетом времени суток
+
+        Args:
+            context: Опциональный контекст с данными времени суток
+        """
         pass
 
     @abstractmethod
@@ -50,5 +56,15 @@ class IReminderService(ABC):
         Args:
             phone_number: Номер телефона пользователя
             reminder_type: Тип напоминания
+        """
+        pass
+
+    @abstractmethod
+    def log_reminder_status(self) -> Dict[str, Any]:
+        """
+        Формирует отчет о текущем состоянии сервиса напоминаний для диагностики
+
+        Returns:
+            Dict[str, Any]: Статус сервиса напоминаний
         """
         pass

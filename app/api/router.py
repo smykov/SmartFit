@@ -45,3 +45,8 @@ api_router.include_router(
 #     prefix="/tracking",
 #     tags=["Tracking"]
 # )
+# api_router.include_router(
+#     reminders.router,
+#     prefix="/reminders",
+#     tags=["Reminders"]
+# )

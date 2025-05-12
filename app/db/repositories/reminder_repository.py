@@ -70,13 +70,15 @@ class FirebaseReminderRepository(IReminderRepository):
             Optional[Dict[str, Any]]: Информация о последнем напоминании или None
         """
         try:
-            # Получаем напоминания для данного номера телефона и типа
-            reminders = await self.firebase_client.query_documents(
+            # Используем новый метод для составных запросов
+            conditions = [
+                ("phone_number", "==", phone_number),
+                ("reminder_type", "==", reminder_type)
+            ]
+
+            reminders = await self.firebase_client.query_documents_compound(
                 self.collection_name,
-                field_path="phone_number",
-                op_string="==",
-                value=phone_number,
-                additional_query=[("reminder_type", "==", reminder_type)]
+                conditions
             )
 
             if not reminders:
@@ -90,7 +92,7 @@ class FirebaseReminderRepository(IReminderRepository):
             )
 
             # Возвращаем самое последнее напоминание
-            return sorted_reminders[0]
+            return sorted_reminders[0] if sorted_reminders else None
 
         except Exception as e:
             self.logger.error(f"Error getting last reminder: {str(e)}")
@@ -115,13 +117,14 @@ class FirebaseReminderRepository(IReminderRepository):
             start_time = datetime.now(pytz.timezone(settings.TIMEZONE)) - timedelta(hours=hours)
             start_time_str = start_time.isoformat()
 
-            # Получаем все напоминания для данного номера телефона и типа
-            reminders = await self.firebase_client.query_documents(
+            conditions = [
+                ("phone_number", "==", phone_number),
+                ("reminder_type", "==", reminder_type)
+            ]
+
+            reminders = await self.firebase_client.query_documents_compound(
                 self.collection_name,
-                field_path="phone_number",
-                op_string="==",
-                value=phone_number,
-                additional_query=[("reminder_type", "==", reminder_type)]
+                conditions
             )
 
             if not reminders:
@@ -162,8 +165,8 @@ class FirebaseReminderRepository(IReminderRepository):
             # Получаем все старые напоминания
             old_reminders = await self.firebase_client.query_documents(
                 self.collection_name,
-                field_path="timestamp",
-                op_string="<",
+                field="timestamp",
+                operator="<",
                 value=cut_off_date_str
             )
 
@@ -204,8 +207,8 @@ class FirebaseReminderRepository(IReminderRepository):
             # Получаем все напоминания данного типа
             reminders = await self.firebase_client.query_documents(
                 self.collection_name,
-                field_path="reminder_type",
-                op_string="==",
+                field="reminder_type",
+                operator="==",
                 value=reminder_type
             )
 
