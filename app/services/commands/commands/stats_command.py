@@ -39,12 +39,16 @@ class StatsCommand(BaseCommand):
             # Получаем данные о соблюдении плана за последние 7 дней
             end_date = today = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
             start_date = end_date - timedelta(days=7)
-            weekly_compliance = await self.tracking_service.get_compliance_by_period(user_id, start_date, end_date)
-            today_compliance_list = await self.tracking_service.get_compliance_by_period(user_id, today, today)
-            today_compliance = None
+            period_data = await self.tracking_service.get_compliance_by_period(user_id, start_date, end_date)
 
-            if today_compliance_list and len(today_compliance_list) >= 1:
-                today_compliance = today_compliance_list[0]
+            # Извлекаем данные о соблюдении плана и потреблении воды
+            weekly_compliance = period_data.get("compliance_data", [])
+            water_history = period_data.get("water_history", {})
+
+            # Получаем данные о соблюдении плана на сегодня
+            today_compliance_list = [item for item in weekly_compliance
+                                     if item.get("date") == today.isoformat()]
+            today_compliance = today_compliance_list[0] if today_compliance_list else None
 
             # Получаем данные о соблюдении плана на сегодня
             # TODO добавить возможность указать период статистики в команде и обрабатывать день/неделю/месяц или конкретный день, неделю, месяц
@@ -65,6 +69,7 @@ class StatsCommand(BaseCommand):
             compliance_report = self.tracking_formatter_service.format_compliance_report(
                 date_range,
                 weekly_compliance,
+                water_history,
                 lang
             )
 

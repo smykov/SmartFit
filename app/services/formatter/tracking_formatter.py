@@ -330,7 +330,7 @@ class TrackingFormatter(BaseFormatter):
 
             # Анализ потребления воды
             if today_status:
-                message += self.get_localized_message(LK.Tracking.Stats.WATER_SECTION, lang)
+                message += self.get_localized_message(LK.Tracking.Stats.WATER_SECTION_TODAY, lang)
                 message += self.get_localized_message(
                     LK.Tracking.Stats.WATER_CONSUMED,
                     lang,
@@ -390,6 +390,7 @@ class TrackingFormatter(BaseFormatter):
     def format_compliance_report(self,
                                  date_range: str,
                                  compliance_data: List[Dict[str, Any]],
+                                 water_history: Dict[str, float] = None,
                                  lang: Optional[str] = None) -> str:
         """
         Форматирует отчет о соблюдении плана за указанный период
@@ -397,6 +398,7 @@ class TrackingFormatter(BaseFormatter):
         Args:
             date_range: Строка с описанием периода
             compliance_data: Список данных о соблюдении плана
+            water_history: История потребления воды (дата: объем в мл)
             lang: Код языка
 
         Returns:
@@ -421,11 +423,9 @@ class TrackingFormatter(BaseFormatter):
             # Расчет общих показателей
             total_days = len(compliance_data)
 
-            # Обычный общий процент соблюдения - из overall_score
             overall_scores = [item.get("overall_score", 0) for item in compliance_data]
             total_score = sum(overall_scores) / total_days if total_days > 0 else 0
 
-            # Средний процент соблюдения по статусам и нутриентам отдельно
             status_scores = [item.get("status_score", 0) for item in compliance_data]
             nutrients_scores = [item.get("nutrients_score", 0) for item in compliance_data]
 
@@ -480,10 +480,33 @@ class TrackingFormatter(BaseFormatter):
 
             # Добавляем общую статистику соблюдения
             message += f"\n{self.get_localized_message(LK.Tracking.Stats.OVERALL_ADHERENCE, lang, score=round(total_score, 1))}"
-
             # Добавляем детализацию по компонентам
             if avg_status_score > 0 or avg_nutrients_score > 0:
                 message += f"\n{self.get_localized_message(LK.Tracking.Stats.SCORE_COMPONENTS_AVERAGE, lang, status_score=round(avg_status_score, 1), nutrients_score=round(avg_nutrients_score, 1))}"
+
+            if water_history:
+                # Расчет средних показателей потребления воды
+                total_water = sum(water_history.values())
+                days_with_water = len(water_history)
+
+                if days_with_water > 0:
+                    avg_water_ml = total_water / days_with_water
+                    avg_water_l = avg_water_ml / 1000  # Пересчет в литры
+
+                    # Добавляем секцию с информацией о воде
+                    message += f"\n\n{self.get_localized_message(LK.Tracking.Stats.WATER_SECTION_PERIOD, lang)}"
+                    message += f"{self.get_localized_message(LK.Tracking.Stats.WATER_DAYS_TRACKED, lang, days=days_with_water)}"
+                    message += f"{self.get_localized_message(LK.Tracking.Stats.WATER_AVERAGE, lang, avg=round(avg_water_l, 1))}"
+
+                    # Добавляем оценку потребления воды
+                    if avg_water_ml >= 2000:
+                        message += f"{self.get_localized_message(LK.Tracking.Stats.WATER_EXCELLENT, lang)}"
+                    elif avg_water_ml >= 1500:
+                        message += f"{self.get_localized_message(LK.Tracking.Stats.WATER_GOOD, lang)}"
+                    else:
+                        message += f"{self.get_localized_message(LK.Tracking.Stats.WATER_INSUFFICIENT, lang)}"
+                else:
+                    message += f"\n\n{self.get_localized_message(LK.Tracking.Stats.WATER_NO_DATA, lang)}"
 
             # Добавляем статистику по калориям
             message += f"\n\n{self.get_localized_message(LK.Tracking.Stats.CALORIE_ADHERENCE, lang)}"

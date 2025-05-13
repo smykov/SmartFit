@@ -86,6 +86,34 @@ class FirebaseComplianceRepository(IComplianceRepository):
                 self.logger.error(f"Failed to save meal compliance for user {user_id}")
                 return None
 
+            # Обновление данных в daily_compliance
+            # Получаем текущий документ daily_compliance
+            daily_compliance = await self.get_daily_compliance(user_id, date_value)
+
+            if daily_compliance:
+                # Инициализируем meals, если его нет
+                if "meals" not in daily_compliance:
+                    daily_compliance["meals"] = {}
+
+                # Обновляем информацию о конкретном приеме пищи
+                daily_compliance["meals"][meal_type] = {
+                    "status": status,
+                    "notes": notes,
+                    "calories_consumed": calories_consumed,
+                    "proteins_consumed": proteins_consumed,
+                    "fats_consumed": fats_consumed,
+                    "carbs_consumed": carbs_consumed
+                }
+
+                # Добавляем данные о соответствии, если они есть
+                if adherence_data:
+                    for key, value in adherence_data.items():
+                        daily_compliance["meals"][meal_type][key] = value
+
+                # Сохраняем обновленный документ
+                result_data = await self._save_daily_compliance(daily_compliance)
+                self.logger.info(f"Daily compliance after update: {result_data}")
+
             return compliance_id
 
         except Exception as e:
@@ -149,11 +177,15 @@ class FirebaseComplianceRepository(IComplianceRepository):
             bool: Результат операции
         """
         try:
+            self.logger.info(f"Updating daily compliance for user {user_id}, date {date_value}")
             # Получаем текущие данные о соблюдении или создаем новую запись
             compliance_data = await self.get_daily_compliance(user_id, date_value)
 
             # Получаем приемы пищи за день
             meals_data = compliance_data.get("meals", {})
+
+            # Проверим, нет ли проблем с структурой meals_data
+            self.logger.info(f"Meals data for user {user_id}, date {date_value}: {meals_data}")
 
             # Получаем все запланированные приемы пищи на этот день
             day_plan = await self._get_day_plan_from_diet_service(user_id, date_value)
@@ -161,10 +193,19 @@ class FirebaseComplianceRepository(IComplianceRepository):
             if day_plan and "meals" in day_plan:
                 planned_meals = [meal["type"] for meal in day_plan["meals"] if "type" in meal]
 
-            # Если нет запланированных приемов пищи, используем отмеченные
+            # Логируем для отладки
+            self.logger.info(f"Planned meals for user {user_id}, date {date_value}: {planned_meals}")
+
+            # Используем все возможные типы приемов пищи, если запланированных нет
+            if not planned_meals:
+                planned_meals = ["breakfast", "lunch", "dinner", "snack"]
+
+            # Если после этого все еще нет приемов пищи, используем отмеченные
             total_meals = len(planned_meals) if planned_meals else len(meals_data)
 
+            # Проверка на деление на ноль
             if total_meals == 0:
+                self.logger.warning(f"No meals found for user {user_id}, date {date_value}")
                 compliance_data["overall_score"] = 0.0
                 # Сохраняем результат
                 return await self._save_daily_compliance(compliance_data)
@@ -173,7 +214,7 @@ class FirebaseComplianceRepository(IComplianceRepository):
             status_score = 0.0
 
             for meal_type in planned_meals:
-                meal_status = meals_data.get(meal_type, {}).get("status", MealComplianceStatus.SKIPPED.value)
+                meal_status = meals_data.get(meal_type, {}).get("status", MealComplianceStatus.NOT_RECORDED.value)
 
                 # Определяем вес статуса
                 status_weight = 0.0
@@ -182,7 +223,9 @@ class FirebaseComplianceRepository(IComplianceRepository):
                 elif meal_status == MealComplianceStatus.PARTIALLY.value:
                     status_weight = 0.75
                 elif meal_status == MealComplianceStatus.SUBSTITUTED.value:
-                    status_weight = 0.5
+                    status_weight = 0.7
+                elif meal_status == MealComplianceStatus.SKIPPED.value:
+                    status_weight = 0.1
 
                 status_score += status_weight
 
@@ -226,6 +269,9 @@ class FirebaseComplianceRepository(IComplianceRepository):
                     consumed_key = f"{nutrient}_consumed"
                     consumed_value = meal_data.get(consumed_key, 0)
 
+                    if consumed_value is None:
+                        consumed_value = 0
+
                     if planned_value <= 0:
                         continue
 
@@ -266,8 +312,13 @@ class FirebaseComplianceRepository(IComplianceRepository):
             compliance_data["nutrients_score"] = round(nutrients_percentage, 1)
             compliance_data["updated_at"] = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
 
+            self.logger.info(
+                f"Status score: {status_percentage}, nutrients score: {nutrients_percentage}, overall score: {overall_score}")
+
             # Сохраняем обновленные данные
-            return await self._save_daily_compliance(compliance_data)
+            result = await self._save_daily_compliance(compliance_data)
+            self.logger.info(f"Daily compliance updated: {result}")
+            return result
 
         except Exception as e:
             self.logger.error(f"Error updating daily compliance: {str(e)}", exc_info=True)
@@ -295,28 +346,58 @@ class FirebaseComplianceRepository(IComplianceRepository):
         """
         Получает план на день из сервиса диет
         """
-        if self.diet_plan_repository:
-            # Получаем текущий план диеты
-            diet_plan = await self.diet_plan_repository.get_current_diet(user_id)
-            if not diet_plan:
-                return None
+        try:
+            if self.diet_plan_repository:
+                # Получаем текущий план диеты
+                diet_plan = await self.diet_plan_repository.get_current_diet(user_id)
+                if not diet_plan:
+                    self.logger.warning(f"No diet plan found for user {user_id}")
+                    return None
 
-            # Определяем день недели
-            day_of_week = date_value.strftime("%A").lower()
+                # Определяем день недели
+                day_of_week = self._get_day_of_week(date_value)
 
-            # Получаем план на день по дате или дню недели
-            date_str = date_value.isoformat()
+                # Получаем план на день по дате или дню недели
+                date_str = date_value.isoformat()
 
-            # Проверяем по дате
-            daily_plans = diet_plan.get("daily_plans", {})
-            if date_str in daily_plans:
-                return daily_plans[date_str]
+                # Проверяем по дате
+                daily_plans = diet_plan.get("daily_plans", {})
 
-            # Проверяем по дню недели
-            if day_of_week in daily_plans:
-                return daily_plans[day_of_week]
+                # Логируем для отладки
+                self.logger.info(f"Daily plans keys: {daily_plans.keys()}")
+
+                if date_str in daily_plans:
+                    return daily_plans[date_str]
+
+                # Проверяем по дню недели
+                if day_of_week in daily_plans:
+                    return daily_plans[day_of_week]
+
+                # Если не найдено, проверим другие форматы дат
+                for day_key in daily_plans.keys():
+                    if day_key.startswith(date_str) or date_str.startswith(day_key):
+                        return daily_plans[day_key]
+        except Exception as e:
+            self.logger.error(f"Error getting day plan: {str(e)}")
 
         return None
+
+    def _get_day_of_week(self, date_val: date) -> str:
+        """
+        Возвращает день недели для указанной даты в формате 'monday', 'tuesday' и т.д.
+
+        Args:
+            date_val: Дата
+
+        Returns:
+            str: День недели
+        """
+        # Получаем номер дня недели (0 - понедельник, 6 - воскресенье)
+        weekday = date_val.weekday()
+
+        # Преобразуем в строковое представление
+        days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+        return days[weekday]
 
     # Метод для получения всех запланированных приемов пищи на день
     async def get_planned_meals_for_day(self, user_id: str, date_value: date) -> List[str]:
@@ -337,7 +418,7 @@ class FirebaseComplianceRepository(IComplianceRepository):
                 return []
 
             # Определяем день недели
-            day_of_week = date_value.strftime("%A").lower()
+            day_of_week = self._get_day_of_week(date_value)
 
             # Получаем план на день
             daily_plan = diet_plan.get("daily_plans", {}).get(day_of_week, {})
@@ -401,6 +482,7 @@ class FirebaseComplianceRepository(IComplianceRepository):
             compliance_data: Данные о соблюдении
         """
         try:
+            self.logger.info(f"Enriching compliance data: {compliance_data}")
             # Если в данных уже есть информация о приемах пищи с нутриентами, пропускаем
             if "meals" in compliance_data and any(
                     "calories_consumed" in meal for meal in compliance_data["meals"].values()):

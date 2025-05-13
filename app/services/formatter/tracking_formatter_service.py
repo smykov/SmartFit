@@ -95,6 +95,7 @@ class TrackingFormatterService:
     def format_compliance_report(self,
                                  date_range: str,
                                  compliance_data: List[Dict[str, Any]],
+                                 water_history: Dict[str, float] = None,
                                  lang: Optional[str] = None) -> str:
         """
         Форматирует отчет о соблюдении плана за указанный период
@@ -102,12 +103,13 @@ class TrackingFormatterService:
         Args:
             date_range: Строка с описанием периода
             compliance_data: Список данных о соблюдении плана
+            water_history: История потребления воды (дата: объем в мл)
             lang: Код языка
 
         Returns:
             str: Отформатированный отчет
         """
-        return self.tracking_formatter.format_compliance_report(date_range, compliance_data, lang)
+        return self.tracking_formatter.format_compliance_report(date_range, compliance_data, water_history, lang)
 
     def format_stats_message(self, weight_progress: Optional[WeightGoalProgress],
                              today_status: Optional[DailyTrackingStatus],

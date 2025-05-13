@@ -175,7 +175,7 @@ class ITrackingService(ABC):
 
     @abstractmethod
     async def get_compliance_by_period(self, user_id: str, start_date: date = None,
-                                       end_date: date = None) -> List[Dict[str, Any]]:
+                                       end_date: date = None) -> Dict[str, Any]:
         """
         Получает статистику соблюдения плана питания за период
 

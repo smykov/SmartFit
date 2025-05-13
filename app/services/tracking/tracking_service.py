@@ -138,6 +138,8 @@ class TrackingService(ITrackingService):
             bool: Результат операции
         """
         try:
+            self.logger.info(
+                f"Recording meal compliance: user_id={user_id}, meal_type={meal_type}, status={status.value}, nutrients={nutrients_consumed}")
             # Получаем текущий план на день для сравнения с фактическим потреблением
             day_plan = await self._get_day_plan(user_id, date_val)
 
@@ -326,7 +328,7 @@ class TrackingService(ITrackingService):
                 weight_recorded=weight_recorded,
                 current_water_intake=current_water_intake,
                 water_goal=water_goal,
-                meal_compliance=meal_compliance,
+                meal_compliance={k: self._convert_to_enum(v) for k, v in meal_compliance.items()},
                 overall_compliance_score=overall_compliance_score
             )
 
@@ -338,6 +340,14 @@ class TrackingService(ITrackingService):
         except Exception as e:
             logger.error(f"Error getting daily status: {str(e)}")
             return None
+
+    def _convert_to_enum(self, status_str: str) -> MealComplianceStatus:
+        """Преобразует строковый статус в Enum значение"""
+        try:
+            return MealComplianceStatus(status_str)
+        except (ValueError, TypeError):
+            # В случае ошибки возвращаем "не записано"
+            return MealComplianceStatus.NOT_RECORDED
 
     async def get_diet_compliance(self, user_id: str, date_value: date = None) -> Optional[Dict[str, Any]]:
         """
@@ -457,7 +467,6 @@ class TrackingService(ITrackingService):
             if not user:
                 logger.error(f"User {user_id} not found")
                 return None
-
 
             # Получаем текущую дату
             today = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
@@ -601,7 +610,7 @@ class TrackingService(ITrackingService):
                 avg_water = total_water / len(water_history)
                 days_tracked = len(water_history)
 
-                report += self.get_localized_message(LK.Tracking.Stats.WATER_SECTION, lang)
+                report += self.get_localized_message(LK.Tracking.Stats.WATER_SECTION_PERIOD, lang)
                 report += self.get_localized_message(
                     LK.Tracking.Stats.WATER_DAYS_TRACKED,
                     lang,
@@ -689,9 +698,8 @@ class TrackingService(ITrackingService):
             self.logger.error(f"Error getting recent weight entries: {str(e)}")
             return []
 
-
     async def get_compliance_by_period(self, user_id: str, start_date: date = None,
-                                       end_date: date = None) -> List[Dict[str, Any]]:
+                                       end_date: date = None) -> Dict[str, Any]:
         """
         Получает статистику соблюдения плана питания за период
 
@@ -709,10 +717,46 @@ class TrackingService(ITrackingService):
                 end_date = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
                 start_date = end_date - timedelta(days=7)
 
+            # Получаем текущий активный план диеты
+            diet_plan = await self.diet_service.get_current_diet(user_id)
+            plan_activation_date = None
+
+            # Определяем дату активации плана
+            if diet_plan:
+                activation_timestamp = diet_plan.get("activated_at")
+                if activation_timestamp:
+                    try:
+                        # Пробуем преобразовать timestamp в объект даты
+                        activation_datetime = datetime.fromisoformat(activation_timestamp)
+                        plan_activation_date = activation_datetime.date()
+                        self.logger.info(f"Plan activation date for user {user_id}: {plan_activation_date}")
+                    except (ValueError, TypeError) as e:
+                        self.logger.warning(f"Error parsing activation date: {str(e)}")
+
+            # Если план еще не активирован или дата активации неизвестна, используем дату создания плана
+            if not plan_activation_date and diet_plan:
+                creation_timestamp = diet_plan.get("created_at")
+                if creation_timestamp:
+                    try:
+                        creation_datetime = datetime.fromisoformat(creation_timestamp)
+                        plan_activation_date = creation_datetime.date()
+                        self.logger.info(f"Using plan creation date for user {user_id}: {plan_activation_date}")
+                    except (ValueError, TypeError) as e:
+                        self.logger.warning(f"Error parsing creation date: {str(e)}")
+
+            # Корректируем начальную дату, чтобы она не была раньше даты активации плана
+            if plan_activation_date and start_date < plan_activation_date:
+                self.logger.info(
+                    f"Adjusting start date from {start_date} to plan activation date {plan_activation_date}")
+                start_date = plan_activation_date
+
             # Получаем статистику соблюдения через репозиторий
             compliance_data = await self.compliance_repository.get_compliance_by_period(
                 user_id, start_date, end_date
             )
+
+            # Получаем данные о потреблении воды за период
+            water_history = await self.get_water_history(user_id, start_date, end_date)
 
             # Дополняем данные информацией о запланированных приемах пищи
             enhanced_compliance_data = []
@@ -742,8 +786,21 @@ class TrackingService(ITrackingService):
 
                 enhanced_compliance_data.append(day_data)
 
-            return enhanced_compliance_data
-
+            return {
+                "compliance_data": enhanced_compliance_data,
+                "water_history": water_history,
+                "period": {
+                    "start_date": start_date.isoformat(),
+                    "end_date": end_date.isoformat()
+                }
+            }
         except Exception as e:
             self.logger.error(f"Error getting compliance by period: {str(e)}")
-            return []
+            return {
+                "compliance_data": [],
+                "water_history": {},
+                "period": {
+                    "start_date": start_date.isoformat() if start_date else None,
+                    "end_date": end_date.isoformat() if end_date else None
+                }
+            }
