@@ -8,6 +8,9 @@ class ILocalizationService(ABC):
     Интерфейс для сервиса локализации сообщений
     """
 
+    def __init__(self):
+        self.DEFAULT_LANGUAGE = "en"
+
     @abstractmethod
     def get_message(self, key: str, lang: Optional[str] = None, **params) -> str:
         """

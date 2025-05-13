@@ -18,13 +18,14 @@ async def set_user_language(
 
     Args:
         user_id: ID пользователя
-        language_code: Код языка (es, ru)
+        language_code: Код языка (es, ru, en)
 
     Returns:
         Dict[str, Any]: Результат операции
     """
     # Проверяем доступные языки
-    available_languages = ["es", "ru"]
+    # TODO брать из модуля локализации список языков
+    available_languages = ["es", "ru", "en"]
 
     if language_code not in available_languages:
         raise HTTPException(

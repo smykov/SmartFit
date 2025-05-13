@@ -1,16 +1,17 @@
-# app/localization/languages/ru/__init__.py
+# app/localization/languages/en/__init__.py
 from app.localization.base import LanguageBase
 
 # Импортируем все модули
-from app.localization.languages.ru import common
-from app.localization.languages.ru import commands
-from app.localization.languages.ru import diet
-from app.localization.languages.ru import onboarding
-from app.localization.languages.ru import tracking
+from app.localization.languages.en import common
+from app.localization.languages.en import commands
+from app.localization.languages.en import diet
+from app.localization.languages.en import onboarding
+from app.localization.languages.en import tracking
 from app.localization.languages.en import shopping
 from app.localization.languages.en import messaging
-from app.localization.languages.ru import errors
+from app.localization.languages.en import errors
 from app.localization.languages.en import reminders
+from app.localization.languages.en import user
 
 # Создаем экземпляр языка
 language = LanguageBase()
@@ -25,8 +26,9 @@ language.register_module('shopping', shopping.module)
 language.register_module('messaging', messaging.module)
 language.register_module('errors', errors.module)
 language.register_module('reminders', reminders.module)
+language.register_module('user', user.module)
 
 # Проверка структуры языка (для диагностики)
-print(f"Russian language initialized with modules: {list(language.modules.keys())}")
+print(f"English language initialized with modules: {list(language.modules.keys())}")
 for module_name, module in language.modules.items():
     print(f"Module '{module_name}' registered with keys: {list(module.strings.keys())}")

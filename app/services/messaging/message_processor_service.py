@@ -94,6 +94,7 @@ class MessageProcessorService:
         self.command_factory = command_factory
         self.command_extractor = command_extractor
         self.command_executor = command_executor
+        self.DEFAULT_LANGUAGE = self.localization_service.DEFAULT_LANGUAGE
         self.logger = logging.getLogger(self.__class__.__name__)
 
         # Регулярные выражения для определения типов сообщений
@@ -167,10 +168,10 @@ class MessageProcessorService:
             message_text = parsed_message.get("message_text")
             message_type = parsed_message.get("message_type", "text")
             message_id = parsed_message.get("message_id")
-            lang = parsed_message.get("language_code", "en")
-            # TODO проверка на доступные языки и сообщать какие поддерживаемые
+            lang = parsed_message.get("language_code", self.DEFAULT_LANGUAGE)
+            # TODO брать из модуля локализации список языков
             if not lang or lang not in ["ru", "en", "es"]:
-                lang = "ru"
+                lang = self.DEFAULT_LANGUAGE
 
             # Сразу отмечаем сообщение как "в обработке"
             if message_id:

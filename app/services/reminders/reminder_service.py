@@ -480,10 +480,10 @@ class ReminderService(IReminderService):
         today = now.date()
 
         return {
-            "is_morning": 5 <= current_hour < 11,  # 5:00 - 10:59
-            "is_afternoon": 11 <= current_hour < 16,  # 11:00 - 15:59
-            "is_evening": 16 <= current_hour < 23,  # 16:00 - 22:59
-            "is_night": 23 <= current_hour or current_hour < 5,  # 23:00 - 4:59
+            "is_morning": 8 <= current_hour < 12,  # 8:00 - 11:59
+            "is_afternoon": 12 <= current_hour < 18,  # 12:00 - 17:59
+            "is_evening": 18 <= current_hour < 24,  # 18:00 - 23:59
+            "is_night": 24 <= current_hour or current_hour < 8,  # 24:00 - 7:59
             "is_sunday": today.weekday() == 6,  # Воскресенье
             "current_hour": current_hour,
             "today": today.isoformat()

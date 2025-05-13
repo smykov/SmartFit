@@ -65,6 +65,7 @@ class ComplianceCommand(BaseCommand):
         self._meal_type_mapping = {}
         self._meal_type_display_mapping = {}
 
+        # TODO брать из модуля локализации список языков
         for lang_code in ["ru", "en", "es"]:
             # Сопоставление ключевых слов статусов с enum статусов
             status_words = {}
