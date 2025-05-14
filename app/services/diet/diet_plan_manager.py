@@ -14,11 +14,10 @@ from app.db.interfaces.user_repository_interface import IUserRepository
 from app.services.diet.base_service import BaseDietService
 from app.services.localization.localization_interface import ILocalizationService
 from app.templates.prompts import (
-    create_diet_system_prompt,
     create_short_diet_system_prompt,
     create_short_diet_user_prompt,
     update_diet_user_prompt,
-    update_short_diet_user_prompt
+    update_short_diet_user_prompt, create_full_diet_system_prompt
 )
 from config import settings
 
@@ -472,10 +471,10 @@ class DietPlanManager(BaseDietService):
                 return {"error": self.get_localized_message(LK.Diet.Full.NO_PLAN, lang)}
 
             # Создаем промпт для обновления
-            user_prompt = update_diet_user_prompt(update_request)
+            user_prompt = update_diet_user_prompt(update_request, diet_plan)
 
             # Получаем исторические данные для LLM
-            system_prompt = create_diet_system_prompt()
+            system_prompt = create_full_diet_system_prompt()
 
             # Передаем запрос в LLM
             response = await self.llm_service.generate_completion(system_prompt, user_prompt)

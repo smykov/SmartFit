@@ -4,7 +4,7 @@ from typing import Dict, Any, List, Optional
 
 from app.services.llm.base_llm_service import BaseLLMService
 from app.templates.formatting_helpers import clean_json_from_markdown
-from app.templates.prompts import create_diet_system_prompt, update_diet_user_prompt
+from app.templates.prompts import create_full_diet_system_prompt, update_diet_user_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +130,7 @@ class HybridLLMService(BaseLLMService):
             Dict[str, Any]: Обновленные дни плана и комментарий
         """
         try:
-            system_prompt = create_diet_system_prompt()
+            system_prompt = create_full_diet_system_prompt()
             user_prompt = update_diet_user_prompt(update_request)
 
             history_messages = []

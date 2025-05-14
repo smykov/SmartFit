@@ -6,7 +6,7 @@ import openai
 
 from app.services.llm.base_llm_service import BaseLLMService
 from app.templates.formatting_helpers import clean_json_from_markdown
-from app.templates.prompts import create_diet_system_prompt, create_diet_user_prompt, \
+from app.templates.prompts import create_full_diet_system_prompt, create_full_diet_user_prompt, \
     create_nutrition_question_prompt, get_bot_commands_prompt, update_diet_user_prompt, create_short_diet_system_prompt, \
     update_short_diet_user_prompt, create_shopping_list_user_prompt, create_shopping_list_system_prompt
 
@@ -83,8 +83,8 @@ class OpenAILLMService(BaseLLMService):
         """
         try:
             # Формируем промпты для генерации диеты
-            system_prompt = create_diet_system_prompt(product_list)
-            user_prompt = create_diet_user_prompt(user_data, days)
+            system_prompt = create_full_diet_system_prompt(product_list)
+            user_prompt = create_full_diet_user_prompt(user_data, days)
 
             # Вызываем OpenAI API
             response = await self.generate_completion(system_prompt, user_prompt)

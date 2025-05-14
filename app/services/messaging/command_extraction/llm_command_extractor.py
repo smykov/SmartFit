@@ -11,7 +11,7 @@ from app.services.formatter.diet_data_transformer import DietDataTransformer
 from app.services.messaging.command_extraction.command_extraction_interface import ICommandExtractor
 from app.services.llm.base_llm_service import BaseLLMService
 from app.db.interfaces.user_repository_interface import IUserRepository
-from app.templates.prompts import create_command_extraction_system_prompt
+from app.templates.prompts import create_command_extraction_system_prompt, create_command_extraction_user_prompt
 from app.templates.formatting_helpers import clean_json_from_markdown
 
 
@@ -153,7 +153,7 @@ class LLMCommandExtractor(ICommandExtractor):
         system_prompt = create_command_extraction_system_prompt()
 
         # Создаем пользовательский промпт
-        user_prompt = self._create_user_prompt(message, enriched_context)
+        user_prompt = create_command_extraction_user_prompt(message, enriched_context)
 
         # Вызываем LLM
         self.logger.info(f"Calling LLM for command extraction: {message[:50]}...")
@@ -269,104 +269,6 @@ class LLMCommandExtractor(ICommandExtractor):
                 enriched["last_message"] = last_context.get("last_message", "")
 
         return enriched
-
-    def _create_user_prompt(self, message: str, context: Dict[str, Any]) -> str:
-        """
-        Создает пользовательский промпт для LLM
-
-        Args:
-            message: Текст сообщения
-            context: Контекст пользователя и разговора
-
-        Returns:
-            str: Пользовательский промпт
-        """
-        prompt_parts = []
-
-        # Добавляем контекст, если он есть
-        if context:
-            prompt_parts.append("Контекст:")
-
-            # Базовая информация о пользователе
-            if "user_name" in context:
-                prompt_parts.append(f"- Имя пользователя: {context['user_name']}")
-
-            if "user_gender" in context:
-                prompt_parts.append(f"- Пол: {context['user_gender']}")
-
-            if "age" in context and context["age"]:
-                prompt_parts.append(f"- Возраст: {context['age']}")
-
-            if "current_weight" in context and context["current_weight"]:
-                prompt_parts.append(f"- Текущий вес: {context['current_weight']}")
-
-            if "target_weight" in context and context["target_weight"]:
-                prompt_parts.append(f"- Целевой вес: {context['target_weight']}")
-
-            if "activity_level" in context and context["activity_level"]:
-                prompt_parts.append(f"- Уровень активности: {context['activity_level']}")
-
-            if "diet_preference" in context and context["diet_preference"]:
-                prompt_parts.append(f"- Предпочтения в питании: {context['diet_preference']}")
-
-            if "budget_limit" in context and context["budget_limit"]:
-                prompt_parts.append(f"- Бюджет на питание в неделю: {context['budget_limit']}")
-
-            if "allergies" in context and context["allergies"]:
-                prompt_parts.append(f"- Аллергии: {context['allergies']}")
-
-            if "disliked_products" in context and context["disliked_products"]:
-                prompt_parts.append(f"- Нелюбимые продукты: {context['disliked_products']}")
-
-            if "language" in context:
-                prompt_parts.append(f"- Язык пользователя: {context['language']}")
-
-            # Информация о диетическом плане
-            if "diet_plan" in context:
-                prompt_parts.append("- Информация о плане питания:")
-                diet_plan = context["diet_plan"]
-
-                if "status" in diet_plan:
-                    prompt_parts.append(f"  • Статус: {diet_plan['status']}")
-
-                if "version" in diet_plan:
-                    prompt_parts.append(f"  • Версия: {diet_plan['version']}")
-
-                if "updated_at" in diet_plan:
-                    prompt_parts.append(f"  • Обновлен: {diet_plan['updated_at']}")
-
-                # Вывод структуры daily_plans в виде JSON
-                if "daily_plans" in diet_plan and diet_plan["daily_plans"]:
-                    prompt_parts.append(f"  • План содержит дни: {', '.join(diet_plan['daily_plans'].keys())}")
-                    try:
-                        # Преобразуем словарь в JSON-строку с отступами для лучшей читаемости
-                        plans_json = json.dumps(diet_plan["daily_plans"], ensure_ascii=False, indent=2)
-                        prompt_parts.append(f"  • Детали плана питания (JSON):\n{plans_json}")
-                    except Exception as e:
-                        prompt_parts.append(f"  • Не удалось сериализовать план в JSON: {str(e)}")
-
-            # Информация о последних действиях
-            if "last_action" in context:
-                prompt_parts.append(f"- Последнее действие: {context['last_action']}")
-
-            if "last_message" in context:
-                prompt_parts.append(f"- Последнее сообщение: {context['last_message']}")
-
-            if "is_onboarding_completed" in context:
-                status = "завершен" if context["is_onboarding_completed"] else "не завершен"
-                prompt_parts.append(f"- Статус онбординга: {status}")
-
-            if "onboarding_step" in context and context["onboarding_step"]:
-                prompt_parts.append(f"- Текущий шаг онбординга: {context['onboarding_step']}")
-
-            prompt_parts.append("")  # Пустая строка для разделения
-
-        # Добавляем сообщение пользователя
-        prompt_parts.append(f"Сообщение пользователя: \"{message}\"")
-        prompt_parts.append("")
-        prompt_parts.append("Определи команды для выполнения из этого сообщения:")
-
-        return "\n".join(prompt_parts)
 
     def _transform_params(self, cmd_data: Dict[str, Any]) -> Dict[str, Any]:
         """
