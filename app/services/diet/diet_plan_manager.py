@@ -476,6 +476,16 @@ class DietPlanManager(BaseDietService):
             # Получаем исторические данные для LLM
             system_prompt = create_full_diet_system_prompt()
 
+            # TODO добавить историю сообщений
+            # simplified_diet_plan = self.create_simplified_diet_plan(diet_plan)
+            #
+            # history_messages = [
+            #     # {"role": "system", "content": metadata["system_prompt"]},
+            #     {"role": "user", "content": metadata["user_prompt"]},
+            #     # {"role": "assistant", "content": metadata["response"]},
+            #     {"role": "assistant", "content": json.dumps(simplified_diet_plan, ensure_ascii=False)},
+            # ]
+
             # Передаем запрос в LLM
             response = await self.llm_service.generate_completion(system_prompt, user_prompt)
 

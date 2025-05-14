@@ -610,7 +610,8 @@ def create_command_extraction_user_prompt(message: str, context: Dict[str, Any])
                 user_prompt_parts.append(f"  • План содержит дни: {', '.join(diet_plan['daily_plans'].keys())}")
                 try:
                     # Преобразуем словарь в JSON-строку с отступами для лучшей читаемости
-                    plans_json = json.dumps(diet_plan["daily_plans"], ensure_ascii=False, indent=2)
+                    simplified_diet_plan = create_simplified_diet_plan(diet_plan)
+                    plans_json = json.dumps(simplified_diet_plan["daily_plans"], ensure_ascii=False)
                     user_prompt_parts.append(f"  • Детали плана питания (JSON):\n{plans_json}")
                 except Exception as e:
                     user_prompt_parts.append(f"  • Не удалось сериализовать план в JSON: {str(e)}")
@@ -709,7 +710,8 @@ def update_diet_user_prompt(update_request: str, diet_plan: Dict[str, Any]) -> s
     user_prompt = f"""Пользователь просит: "{update_request}"
     """
 
-    plans_json = json.dumps(diet_plan["daily_plans"], ensure_ascii=False, indent=2)
+    simplified_diet_plan = create_simplified_diet_plan(diet_plan)
+    plans_json = json.dumps(simplified_diet_plan["daily_plans"], ensure_ascii=False)
     user_prompt += f"  • Детали плана питания (JSON):\n{plans_json}"
 
     user_prompt += """/nПожалуйста, обнови или предложи альтернативный план питания в соответствии с запросом пользователя, и дай краткий комментарий о внесенных изменениях.
@@ -755,7 +757,7 @@ def update_diet_user_prompt(update_request: str, diet_plan: Dict[str, Any]) -> s
             "tuesday": { ... },
             ...
         },
-        "comment": "Твой комментарий о внесенных изменениях"
+        "comment": "Твой детальный комментарий о внесенных изменениях в план, с описанием что на что поменял и почему максмимально детально"
     }
     """
     user_prompt += f"""Если нужно обновить план на конкретную дату, используй ДЕНЬ НЕДЕЛИ (monday, tuesday, wednesday, thursday, friday, saturday, sunday) этой даты
@@ -779,7 +781,7 @@ def update_short_diet_user_prompt(update_request: str, diet_plan: Dict[str, Any]
     message = f"""Пользователь просит: "{update_request}"
         
         Текущий план питания:
-        {json.dumps(diet_plan, ensure_ascii=False, indent=2)}
+        {json.dumps(create_simplified_diet_plan(diet_plan), ensure_ascii=False)}
     """
     message += """Пожалуйста, обнови или предложи альтернативный КРАТКИЙ план питания по дням недели в соответствии с запросом пользователя, и дай краткий комментарий о внесенных изменениях.
     Важные принципы:
@@ -811,3 +813,38 @@ def update_short_diet_user_prompt(update_request: str, diet_plan: Dict[str, Any]
     """
 
     return message
+
+def create_simplified_diet_plan(full_diet_plan: Dict[str, Any]):
+    """
+    Создает упрощенную версию плана диеты для уменьшения количества токенов.
+
+    Args:
+        full_diet_plan (dict): Полный план диеты
+
+    Returns:
+        dict: Упрощенный план диеты, содержащий только базовую структуру и названия блюд
+    """
+    simplified_plan = {
+        "user_id": full_diet_plan.get("user_id", ""),
+        "start_date": full_diet_plan.get("start_date", ""),
+        "end_date": full_diet_plan.get("end_date", ""),
+        "daily_plans": {}
+    }
+
+    # Обрабатываем планы по дням
+    for date, day_plan in full_diet_plan.get("daily_plans", {}).items():
+        simplified_day = {
+            "meals": []
+        }
+
+        # Добавляем только тип и название для каждого приема пищи
+        for meal in day_plan.get("meals", []):
+            simplified_meal = {
+                "type": meal.get("type", ""),
+                "title": meal.get("title", "")
+            }
+            simplified_day["meals"].append(simplified_meal)
+
+        simplified_plan["daily_plans"][date] = simplified_day
+
+    return simplified_plan

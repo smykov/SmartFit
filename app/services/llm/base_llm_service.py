@@ -71,56 +71,6 @@ class BaseLLMService(ABC):
         pass
 
     @abstractmethod
-    async def generate_diet_plan(self,
-                                 user_data: Dict[str, Any],
-                                 days: int = 7,
-                                 product_list: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
-        """
-        Генерирует план диеты на основе данных пользователя.
-
-        Args:
-            user_data: Данные пользователя (пол, возраст, вес, цели и т.д.)
-            days: Количество дней для плана (по умолчанию 7)
-            product_list: Список доступных продуктов с ценами
-
-        Returns:
-            Dict[str, Any]: План диеты
-        """
-        pass
-
-    @abstractmethod
-    async def update_short_diet_plan(self,
-                                     diet_plan: Dict[str, Any],
-                                     update_request: str) -> Dict[str, Any]:
-        """
-        Обновляет краткий план диеты на основе запроса пользователя
-
-        Args:
-            diet_plan: Текущий краткий план диеты
-            update_request: Текст запроса пользователя на изменение
-
-        Returns:
-            Dict[str, Any]: Обновленные дни плана и комментарий
-        """
-        pass
-
-    @abstractmethod
-    async def update_diet_plan(self,
-                               diet_plan: Dict[str, Any],
-                               update_request: str) -> Dict[str, Any]:
-        """
-        Обновляет план диеты на основе запроса пользователя.
-
-        Args:
-            diet_plan: Текущий план диеты
-            update_request: Текст запроса пользователя на изменение
-
-        Returns:
-            Dict[str, Any]: Обновленный фрагмент плана диеты
-        """
-        pass
-
-    @abstractmethod
     async def answer_nutrition_question(self,
                                         user_id: str,
                                         question: str) -> str:
