@@ -12,10 +12,9 @@ from app.services.llm.base_llm_service import (
     LLMParseError, LLMServerError
 )
 from app.templates.formatting_helpers import clean_json_from_markdown
-from app.templates.prompts import create_diet_system_prompt, create_diet_user_prompt, \
-    create_nutrition_question_prompt, get_bot_commands_prompt, update_diet_user_prompt, \
+from app.templates.prompts import create_nutrition_question_prompt, get_bot_commands_prompt, update_diet_user_prompt, \
     create_short_diet_system_prompt, update_short_diet_user_prompt, \
-    create_shopping_list_user_prompt, create_shopping_list_system_prompt
+    create_shopping_list_user_prompt, create_shopping_list_system_prompt, create_full_diet_system_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -266,79 +265,6 @@ class DeepSeekLLMService(BaseLLMService):
 
         return "{}"
 
-    async def generate_diet_plan(self,
-                                 user_data: Dict[str, Any],
-                                 days: int = 7,
-                                 product_list: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
-        """
-        Генерирует план диеты с использованием DeepSeek
-
-        Args:
-            user_data: Данные пользователя
-            days: Количество дней для плана
-            product_list: Список доступных продуктов
-
-        Returns:
-            Dict[str, Any]: План диеты
-        """
-        try:
-            # Формируем промпты для генерации диеты
-            system_prompt = create_diet_system_prompt(product_list)
-            user_prompt = create_diet_user_prompt(user_data, days)
-
-            # Добавляем дополнительную инструкцию для возврата JSON
-            system_prompt += "\nВажно: Вернуть только валидный JSON без дополнительного текста."
-
-            # Вызываем DeepSeek API
-            response = await self.generate_completion(system_prompt, user_prompt)
-
-            # Логируем полученный ответ для отладки
-            logger.info(f"Raw DeepSeek response: {response}")
-
-            # Проверяем, не пустой ли ответ
-            if not response or response.strip() == "":
-                logger.error("Empty response from DeepSeek API")
-                return {"error": "Empty response from DeepSeek API"}
-
-            # Очищаем ответ от маркдауна если они есть
-            response_clean = clean_json_from_markdown(response)
-
-            # Парсим и валидируем результат
-            try:
-                diet_plan = json.loads(response_clean)
-
-                # Дополнительная проверка структуры ответа
-                if not isinstance(diet_plan, dict):
-                    logger.error(f"Unexpected response format: {type(diet_plan)}")
-                    return {"error": "Invalid diet plan format"}
-
-                # Проверка на наличие минимальных необходимых полей
-                required_fields = ["daily_plans"]
-                missing_fields = [field for field in required_fields if field not in diet_plan]
-
-                if missing_fields:
-                    logger.error(f"Missing required fields in diet plan: {missing_fields}")
-                    return {"error": f"Missing required fields: {', '.join(missing_fields)}"}
-
-                # Добавляем метаданные о генерации
-                diet_plan["diet_generation_metadata"] = {
-                    "system_prompt": system_prompt,
-                    "user_prompt": user_prompt,
-                    "response": response
-                }
-
-                return diet_plan
-            except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse JSON response: {str(e)}")
-                logger.info(f"Raw response: {response}")
-
-                return {"error": "Failed to parse diet plan response"}
-
-
-        except Exception as e:
-            logger.error(f"Error generating diet plan: {str(e)}")
-            return {"error": str(e)}
-
 
     async def update_diet_plan(self,
                                diet_plan: Dict[str, Any],
@@ -354,7 +280,7 @@ class DeepSeekLLMService(BaseLLMService):
             Dict[str, Any]: Обновленные дни плана и комментарий
         """
         try:
-            system_prompt = create_diet_system_prompt()
+            system_prompt = create_full_diet_system_prompt()
             user_prompt = update_diet_user_prompt(update_request)
 
             history_messages = []
