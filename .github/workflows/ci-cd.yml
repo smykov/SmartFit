@@ -136,6 +136,7 @@ jobs:
           grep -q "^TELEGRAM_BOT_TOKEN=" .env || echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> .env
           grep -q "^OPENAI_API_KEY=" .env || echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> .env
           grep -q "^DEEPSEEK_API_KEY=" .env || echo "DEEPSEEK_API_KEY=${{ secrets.DEEPSEEK_API_KEY }}" >> .env
+          grep -q "^DEEPSEEK_MODEL=" .env || echo "DEEPSEEK_MODEL=${{ secrets.DEEPSEEK_MODEL }}" >> .env
           
           # Вход в Docker Hub с использованием переданных учетных данных
           echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
@@ -216,6 +217,7 @@ jobs:
           echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> .env
           echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> .env
           echo "DEEPSEEK_API_KEY=${{ secrets.DEEPSEEK_API_KEY }}" >> .env
+          echo "DEEPSEEK_MODEL=${{ secrets.DEEPSEEK_MODEL }}" >> .env
           
           # Обновляем образы и перезапускаем контейнеры
           docker pull ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}

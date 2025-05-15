@@ -133,7 +133,7 @@ class DeepSeekLLMService(BaseLLMService):
                 # Определяем, требуется ли формат JSON в ответе
                 requires_json = any("json" in msg.get("content", "").lower() for msg in messages)
                 # Добавляем response_format только если в промпте есть упоминание о json
-                if requires_json:
+                if requires_json and self.model != "deepseek-reasoner":
                     payload["response_format"] = {"type": "json_object"}
 
                 # Логирование для отладки (без полного содержимого промптов)
@@ -220,7 +220,12 @@ class DeepSeekLLMService(BaseLLMService):
 
                                 # Логируем начало ответа для отладки
                                 logger.info(f"DeepSeek response content (truncated): {content[:500]}...")
-                                return content
+
+                                if self.model == "deepseek-reasoner":
+                                    # Применить специальную обработку для DeepSeek Reasoner
+                                    return clean_json_from_markdown(content)
+                                else:
+                                    return content
                             else:
                                 logger.error("Unexpected DeepSeek response structure: missing 'message' or 'content'")
                                 logger.info(f"Response JSON: {json.dumps(response_json)}")
