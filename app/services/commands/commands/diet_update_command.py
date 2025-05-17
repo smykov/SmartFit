@@ -311,11 +311,11 @@ class FullDietUpdateCommand(DietUpdateCommandBase):
                 messages = [update_message]
 
                 # Если был обновлен план на сегодня, отправляем его
-                if self._is_today_updated(result.get("updated_days", {})):
-                    today = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
-                    today_plan = self.diet_service.get_day_diet_plan(result["plan"], today, lang)
-                    if today_plan:
-                        messages.extend(today_plan)
+                # if self._is_today_updated(result.get("updated_days", {})):
+                #     today = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
+                #     today_plan = self.diet_service.get_day_diet_plan(result["plan"], today, lang)
+                #     if today_plan:
+                #         messages.extend(today_plan)
 
                 return {
                     "success": True,
