@@ -49,6 +49,22 @@ jobs:
     - name: Stop and remove containers
       run: docker compose -f docker-compose-tests.yml down -v
 
+    - name: Send notification on test failure
+      if: failure()
+      uses: appleboy/telegram-action@master
+      with:
+        to: ${{ secrets.TELEGRAM_ADMIN_ID }}
+        token: ${{ secrets.TELEGRAM_ADMIN_BOT_TOKEN }}
+        message: |
+          ❌ *Тесты не прошли*
+          
+          *Project*: SmartFit
+          *Commit*: ${{ github.sha }}
+          *Branch*: ${{ github.ref_name }}
+          *Triggered by*: ${{ github.actor }}
+          
+          [View details](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
   build:
     name: Build Docker Image
     runs-on: ubuntu-latest
@@ -78,17 +94,33 @@ jobs:
         cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:buildcache
         cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
 
+    - name: Send notification on build failure
+      if: failure()
+      uses: appleboy/telegram-action@master
+      with:
+        to: ${{ secrets.TELEGRAM_ADMIN_ID }}
+        token: ${{ secrets.TELEGRAM_ADMIN_BOT_TOKEN }}
+        message: |
+          ❌ *Ошибка сборки Docker образа*
+          
+          *Project*: SmartFit
+          *Commit*: ${{ github.sha }}
+          *Branch*: ${{ github.ref_name }}
+          *Triggered by*: ${{ github.actor }}
+          
+          [View details](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
   deploy-staging:
     name: Deploy to Staging
     runs-on: ubuntu-latest
     needs: build
     if: github.ref == 'refs/heads/develop'
     environment: staging
-    
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
-    
+
     - name: Copy files to server
       uses: appleboy/scp-action@master
       with:
@@ -97,7 +129,7 @@ jobs:
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         source: "docker-compose.yml,.env.example"
         target: "${{ secrets.DEPLOY_PATH }}/staging"
-    
+
     - name: Deploy to staging
       uses: appleboy/ssh-action@master
       with:
@@ -151,15 +183,36 @@ jobs:
             DOCKER_COMPOSE="docker-compose"
           fi
           
+          # Создаем директорию для логов, если её нет
+          LOG_DIR="${{ secrets.DEPLOY_PATH }}/staging/logs"
+          mkdir -p "$LOG_DIR"
+          
+          # Определяем имя контейнера (может отличаться из-за Docker Compose)
+          CONTAINER_NAME=$(docker ps -q --filter name=guatefit-api || docker ps -q --filter name=smartfit-api)
+          
+          # Сохраняем логи перед обновлением
+          if [ -n "$CONTAINER_NAME" ]; then
+            LOG_DATE=$(date +"%d.%m.%y-%H.%M.%S")
+            echo "Сохранение логов контейнера в файл $LOG_DIR/log-$LOG_DATE.log"
+            docker logs $CONTAINER_NAME > "$LOG_DIR/log-$LOG_DATE.log" 2>&1
+          else
+            echo "Контейнер не найден, логи не сохранены"
+            exit 1
+          fi
+          
           # Запускаем с явным указанием переменных из .env
           $DOCKER_COMPOSE -f docker-compose.yml up -d --force-recreate api
           
           # Очистка старых образов
           docker image prune -f
           
+          # Проверка здоровья приложения
+          sleep 10
+          curl -f http://localhost:8000/health || exit 1
+          
           # Выход из Docker Hub для безопасности
           docker logout
-          
+
     - name: Send notification about deployment result
       if: always()
       uses: appleboy/telegram-action@master
@@ -167,16 +220,17 @@ jobs:
         to: ${{ secrets.TELEGRAM_ADMIN_ID }}
         token: ${{ secrets.TELEGRAM_ADMIN_BOT_TOKEN }}
         message: |
-          🚀 *Deployment Result*
+          🚀 *Результат деплоя на Staging*
           
           *Project*: SmartFit
-          *Environment*: Production
+          *Environment*: Staging
           *Status*: ${{ job.status }}
           *Commit*: ${{ github.sha }}
+          *Branch*: ${{ github.ref_name }}
           *Deployed by*: ${{ github.actor }}
           
           [View details](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
-      
+
   deploy-production:
     name: Deploy to Production
     runs-on: ubuntu-latest
@@ -221,6 +275,24 @@ jobs:
           
           # Обновляем образы и перезапускаем контейнеры
           docker pull ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          
+          # Создаем директорию для логов, если её нет
+          LOG_DIR="${{ secrets.DEPLOY_PATH }}/production/logs"
+          mkdir -p "$LOG_DIR"
+          
+          # Определяем имя контейнера (может отличаться из-за Docker Compose)
+          CONTAINER_NAME=$(docker ps -q --filter name=guatefit-api || docker ps -q --filter name=smartfit-api)
+          
+          # Сохраняем логи перед обновлением
+          if [ -n "$CONTAINER_NAME" ]; then
+            LOG_DATE=$(date +"%d.%m.%y-%H.%M.%S")
+            echo "Сохранение логов контейнера в файл $LOG_DIR/log-$LOG_DATE.log"
+            docker logs $CONTAINER_NAME > "$LOG_DIR/log-$LOG_DATE.log" 2>&1
+          else
+            echo "Контейнер не найден, логи не сохранены"
+            exit 1
+          fi
+          
           docker compose -f docker-compose.yml up -d --force-recreate api
           
           # Очистка старых образов
@@ -229,3 +301,41 @@ jobs:
           # Проверка здоровья приложения
           sleep 10
           curl -f http://localhost:8000/health || exit 1
+          
+          # Выход из Docker Hub для безопасности
+          docker logout
+
+    - name: Send notification about deployment result
+      if: always()
+      uses: appleboy/telegram-action@master
+      with:
+        to: ${{ secrets.TELEGRAM_ADMIN_ID }}
+        token: ${{ secrets.TELEGRAM_ADMIN_BOT_TOKEN }}
+        message: |
+          🚀 *Результат деплоя на Production*
+          
+          *Project*: SmartFit
+          *Environment*: Production
+          *Status*: ${{ job.status }}
+          *Commit*: ${{ github.sha }}
+          *Branch*: ${{ github.ref_name }}
+          *Deployed by*: ${{ github.actor }}
+          
+          [View details](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+    - name: Send notification on deploy failure
+      if: failure()
+      uses: appleboy/telegram-action@master
+      with:
+        to: ${{ secrets.TELEGRAM_ADMIN_ID }}
+        token: ${{ secrets.TELEGRAM_ADMIN_BOT_TOKEN }}
+        message: |
+          ❌ *Критическая ошибка деплоя в Production*
+          
+          *Project*: SmartFit
+          *Commit*: ${{ github.sha }}
+          *Branch*: ${{ github.ref_name }}
+          
+          Требуется срочное вмешательство! Приложение может быть недоступно.
+          
+          [View details](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
