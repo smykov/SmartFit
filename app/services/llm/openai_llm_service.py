@@ -7,7 +7,7 @@ import openai
 from app.services.llm.base_llm_service import BaseLLMService
 from app.templates.formatting_helpers import clean_json_from_markdown
 from app.templates.prompts import create_full_diet_system_prompt, create_full_diet_user_prompt, \
-    create_nutrition_question_prompt, get_bot_commands_prompt, update_diet_user_prompt, create_short_diet_system_prompt, \
+    create_nutrition_question_prompt, get_bot_commands_prompt, update_full_diet_user_prompt, create_short_diet_system_prompt, \
     update_short_diet_user_prompt, create_shopping_list_user_prompt, create_shopping_list_system_prompt
 
 logger = logging.getLogger(__name__)
@@ -178,8 +178,8 @@ class OpenAILLMService(BaseLLMService):
             Dict[str, Any]: Обновленные дни плана и комментарий
         """
         try:
-            system_prompt = create_diet_system_prompt()
-            user_prompt = update_diet_user_prompt(update_request)
+            system_prompt = create_full_diet_system_prompt()
+            user_prompt = update_full_diet_user_prompt(update_request)
 
             history_messages = []
 

@@ -82,12 +82,12 @@ class DietUpdateCommandBase(BaseCommand):
 
         # Проверяем по ISO формату
         today_iso = today.date().isoformat()
-        if today_iso in updated_days:
+        if today_iso in updated_days.keys():
             return True
 
         # Проверяем по дню недели
         day_of_week = today.strftime("%A").lower()
-        if day_of_week in updated_days:
+        if day_of_week in updated_days.keys():
             return True
 
         return False

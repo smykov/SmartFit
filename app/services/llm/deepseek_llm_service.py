@@ -12,8 +12,7 @@ from app.services.llm.base_llm_service import (
     LLMParseError, LLMServerError
 )
 from app.templates.formatting_helpers import clean_json_from_markdown
-from app.templates.prompts import create_nutrition_question_prompt, get_bot_commands_prompt, update_diet_user_prompt, \
-    create_short_diet_system_prompt, update_short_diet_user_prompt, \
+from app.templates.prompts import create_nutrition_question_prompt, get_bot_commands_prompt, update_full_diet_user_prompt, \
     create_shopping_list_user_prompt, create_shopping_list_system_prompt, create_full_diet_system_prompt
 
 logger = logging.getLogger(__name__)
@@ -286,7 +285,7 @@ class DeepSeekLLMService(BaseLLMService):
         """
         try:
             system_prompt = create_full_diet_system_prompt()
-            user_prompt = update_diet_user_prompt(update_request)
+            user_prompt = update_full_diet_user_prompt(update_request)
 
             history_messages = []
 

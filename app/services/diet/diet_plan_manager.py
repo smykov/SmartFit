@@ -16,8 +16,9 @@ from app.services.localization.localization_interface import ILocalizationServic
 from app.templates.prompts import (
     create_short_diet_system_prompt,
     create_short_diet_user_prompt,
-    update_diet_user_prompt,
-    update_short_diet_user_prompt, create_full_diet_system_prompt
+    update_short_diet_user_prompt,
+    update_full_diet_system_prompt,
+    update_full_diet_user_prompt
 )
 from config import settings
 
@@ -275,6 +276,7 @@ class DietPlanManager(BaseDietService):
             if "daily_plans" not in diet_plan:
                 diet_plan["daily_plans"] = {}
 
+            #TODO не переписывать весь день, а только те данные которые были переданы
             for date_str, day_data in updated_days.items():
                 diet_plan["daily_plans"][date_str] = day_data
 
@@ -470,11 +472,17 @@ class DietPlanManager(BaseDietService):
             if not diet_plan:
                 return {"error": self.get_localized_message(LK.Diet.Full.NO_PLAN, lang)}
 
+            # Получаем данные пользователя
+            user_data = await self.user_repository.get_by_id(user_id)
+            if not user_data:
+                self.logger.error(f"User {user_id} not found")
+                return {"error": self.get_localized_message(LK.User.NOT_FOUND, lang)}
+
             # Создаем промпт для обновления
-            user_prompt = update_diet_user_prompt(update_request, diet_plan)
+            user_prompt = update_full_diet_user_prompt(user_data, update_request, diet_plan)
 
             # Получаем исторические данные для LLM
-            system_prompt = create_full_diet_system_prompt()
+            system_prompt = update_full_diet_system_prompt()
 
             # TODO добавить историю сообщений
             # simplified_diet_plan = self.create_simplified_diet_plan(diet_plan)
