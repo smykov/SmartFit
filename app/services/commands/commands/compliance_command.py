@@ -7,6 +7,8 @@ import pytz
 from app.services.commands.base_command import BaseCommand
 from app.models.tracking import MealComplianceStatus
 from app.constants.localization_keys import LocalizationKeys as LK
+from app.utils import date_helper
+from app.utils.date_helper import DateHelper
 from config import settings
 
 
@@ -251,7 +253,7 @@ class ComplianceCommand(BaseCommand):
                 f"Recording compliance: type={meal_type}, status={status}, nutrients={nutrients_consumed}, user_report={user_report}")
 
             # Получаем текущую дату
-            today = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
+            today = DateHelper.get_tracking_date()
 
             # Проверяем наличие плана диеты
             # Получаем план на день (для отображения рекомендаций)
@@ -275,9 +277,9 @@ class ComplianceCommand(BaseCommand):
                 # Записываем соблюдение через трекинг-сервис
                 result = await self.tracking_service.record_meal_compliance(
                     user_id,
-                    today,
                     meal_type,
                     status_enum,
+                    today,
                     user_report,  # отчёт пользователя
                     None,  # alternative_meal
                     nutrients_consumed  # данные о потреблённых нутриентах

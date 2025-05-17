@@ -146,3 +146,24 @@ class DateHelper:
             ValueError: Если строка имеет неверный формат
         """
         return datetime.strptime(date_string, format_string).date()
+
+    @staticmethod
+    def get_tracking_date(current_datetime=None):
+        """
+        Определяет дату для записи трекинга с учетом времени суток.
+        Если время от 00:00 до 5:00, возвращает предыдущий день.
+
+        Args:
+            current_datetime: Текущая дата и время (если None, используется текущее время)
+
+        Returns:
+            date: Дата для записи трекинга
+        """
+        if current_datetime is None:
+            current_datetime = datetime.now(pytz.timezone(settings.TIMEZONE))
+
+        # Если время от 00:00 до 5:00, возвращаем предыдущий день
+        if current_datetime.hour < 5:
+            return (current_datetime - timedelta(days=1)).date()
+        else:
+            return current_datetime.date()
