@@ -322,7 +322,7 @@ class DietPlanManager(BaseDietService):
                 return False, {"error": self.get_localized_message(LK.Diet.Full.UPDATE_FAILED, lang)}
 
         except Exception as e:
-            self.logger.error(f"Ошибка при обновлении плана диеты: {str(e)}")
+            self.logger.error(f"Ошибка при обновлении плана диеты: {str(e)}", exc_info=True)
             return False, {"error": str(e)}
 
     async def get_diet_plan_by_id(self, plan_id: str) -> Optional[Dict[str, Any]]:
@@ -527,7 +527,7 @@ class DietPlanManager(BaseDietService):
                 return {"error": self.get_localized_message(LK.Diet.Update.UPDATE_FAILED, lang)}
 
         except Exception as e:
-            self.logger.error(f"Ошибка при обновлении плана диеты: {str(e)}")
+            self.logger.error(f"Ошибка при обновлении плана диеты: {str(e)}", exc_info=True)
             return {"error": str(e)}
 
     async def update_short_diet_plan_by_request(self, plan_id: str, update_request: str) -> Dict[str, Any]:

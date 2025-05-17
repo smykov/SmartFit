@@ -28,6 +28,7 @@ class TestDietPlanManagerIntegration:
         product_repository.get_all = AsyncMock(return_value=[])
 
         user_repository.get_by_id = AsyncMock()
+        diet_plan_repository.user_repository = user_repository
 
         # Создаем DietPlanManager с моками
         diet_plan_manager = DietPlanManager(
@@ -194,7 +195,7 @@ class TestDietPlanManagerIntegration:
         # Проверка, что статус был изменен на "approved"
         assert mock_diet_plan_repo.update.call_args[0][1]["status"] == "approved"
 
-    async def test_update_diet_flow(self, setup_services, test_diet_plan_data):
+    async def test_update_diet_flow(self, setup_services, test_diet_plan_data, test_user_data):
         """Тестирование полного потока обновления плана диеты."""
         # Arrange
         plan_id = "test-diet-plan-id"
@@ -208,6 +209,9 @@ class TestDietPlanManagerIntegration:
         # Настройка мока репозитория планов диет
         diet_plan_repository.get_by_id.return_value = test_diet_plan_data
         diet_plan_repository.update.return_value = True
+
+        # Настраиваем возвращаемые значения
+        diet_plan_manager.user_repository.get_by_id = AsyncMock(return_value=test_user_data)
 
         # Создаем правильный ответ LLM
         llm_response = {

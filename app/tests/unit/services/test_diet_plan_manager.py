@@ -675,7 +675,7 @@ class TestDietPlanManager:
 
     # Тесты для обновления плана диеты на основе запроса пользователя
 
-    async def test_update_diet_plan_success(self, diet_plan_manager, test_diet_plan_data):
+    async def test_update_diet_plan_success(self, diet_plan_manager, test_diet_plan_data, test_user_data):
         """Тестирование успешного обновления плана диеты на основе запроса пользователя."""
         # Arrange
         plan_id = "test-diet-plan-id"
@@ -705,7 +705,8 @@ class TestDietPlanManager:
 
         diet_plan_manager.diet_plan_repository.get_by_id.return_value = test_diet_plan_data
         diet_plan_manager.llm_service.generate_completion.return_value = llm_response
-
+        # Настраиваем возвращаемые значения
+        diet_plan_manager.user_repository.get_by_id = AsyncMock(return_value=test_user_data)
         # Настраиваем метод update_diet_plan_partially
         diet_plan_manager.update_diet_plan_partially = AsyncMock(return_value=(True, test_diet_plan_data))
 
@@ -723,7 +724,7 @@ class TestDietPlanManager:
         diet_plan_manager.llm_service.generate_completion.assert_called_once()
         diet_plan_manager.update_diet_plan_partially.assert_called_once()
 
-    async def test_update_diet_plan_parse_error(self, diet_plan_manager, test_diet_plan_data):
+    async def test_update_diet_plan_parse_error(self, diet_plan_manager, test_diet_plan_data, test_user_data):
         """Тестирование обновления плана диеты, когда невозможно разобрать ответ LLM."""
         # Arrange
         plan_id = "test-diet-plan-id"
@@ -732,6 +733,9 @@ class TestDietPlanManager:
         diet_plan_manager.diet_plan_repository.get_by_id.return_value = test_diet_plan_data
         diet_plan_manager.llm_service.generate_completion.return_value = "Invalid JSON"
         diet_plan_manager.localization_service.get_user_language = AsyncMock(return_value="ru")
+
+        # Настраиваем возвращаемые значения
+        diet_plan_manager.user_repository.get_by_id = AsyncMock(return_value=test_user_data)
 
         # Заменим метод на AsyncMock
         diet_plan_manager.update_diet_plan_partially = AsyncMock()
