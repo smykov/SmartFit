@@ -188,7 +188,7 @@ jobs:
           mkdir -p "$LOG_DIR"
           
           # Определяем имя контейнера (может отличаться из-за Docker Compose)
-          CONTAINER_NAME=$(docker ps -q --filter name=guatefit-api || docker ps -q --filter name=smartfit-api)
+          CONTAINER_NAME=$(docker ps -q --filter name=smartfit-api)
           
           # Сохраняем логи перед обновлением
           if [ -n "$CONTAINER_NAME" ]; then
@@ -197,6 +197,7 @@ jobs:
             docker logs $CONTAINER_NAME > "$LOG_DIR/log-$LOG_DATE.log" 2>&1
           else
             echo "Контейнер не найден, логи не сохранены"
+            docker ps
             exit 1
           fi
           
