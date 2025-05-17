@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch, ANY
 from app.models.tracking import MealComplianceStatus, WeightGoalProgress
 from app.services.tracking.tracking_service import TrackingService
 from app.services.messaging.message_processor_service import MessageProcessorService
+from app.utils.date_helper import DateHelper
 
 
 class TestUserTrackingWorkflow:
@@ -164,7 +165,7 @@ class TestUserTrackingWorkflow:
 
         # Проверяем, что метод репозитория был вызван с правильными параметрами
         setup_tracking_workflow["weight_entry_repository"].add_entry.assert_called_once_with(
-            user_id, 83.5, notes="Запись после тренировки"
+            user_id, 83.5, DateHelper.get_tracking_date(), "Запись после тренировки"
         )
 
         # Получаем прогресс по весу для отображения пользователю
@@ -213,7 +214,7 @@ class TestUserTrackingWorkflow:
 
         # Проверяем, что метод репозитория был вызван с правильными параметрами
         setup_tracking_workflow["water_entry_repository"].add_entry.assert_called_once_with(
-            user_id, ml_amount
+            user_id, ml_amount, DateHelper.get_tracking_date()
         )
 
         # Получаем общее потребление воды за день
@@ -254,9 +255,9 @@ class TestUserTrackingWorkflow:
         # Вызываем метод записи соблюдения плана
         result = await tracking_service.record_meal_compliance(
             user_id,
-            today,
             meal_type,
             status,
+            today,
             None,
             None,
             None
