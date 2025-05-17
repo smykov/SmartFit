@@ -46,9 +46,9 @@ class ITrackingService(ABC):
     async def record_meal_compliance(
             self,
             user_id: str,
-            date_val: date,
             meal_type: str,
             status: MealComplianceStatus,
+            date_val: date,
             notes: str = None,
             alternative_meal: str = None,
             nutrients_consumed: Dict[str, float] = None

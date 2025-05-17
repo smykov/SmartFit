@@ -17,6 +17,7 @@ from app.services.diet.diet_service_interface import IDietService
 from app.services.tracking.tracking_service_interface import ITrackingService
 from app.services.localization.localization_interface import ILocalizationService
 from app.constants.localization_keys import LocalizationKeys as LK
+from app.utils.date_helper import DateHelper
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -44,6 +45,7 @@ class TrackingService(ITrackingService):
             compliance_repository: Репозиторий для работы с записями соблюдения диеты
             localization_service: Сервис локализации для сообщений
         """
+        self.date_helper = DateHelper
         self.diet_service = diet_service
         self.user_repository = user_repository
         self.weight_entry_repository = weight_entry_repository
@@ -81,8 +83,9 @@ class TrackingService(ITrackingService):
             bool: Результат операции
         """
         try:
+            tracking_date = self.date_helper.get_tracking_date()
             # Используем репозиторий записей веса
-            entry_id = await self.weight_entry_repository.add_entry(user_id, weight, notes=notes)
+            entry_id = await self.weight_entry_repository.add_entry(user_id, weight, tracking_date, notes)
             return entry_id is not None
         except Exception as e:
             logger.error(f"Error recording weight: {str(e)}")
@@ -100,8 +103,9 @@ class TrackingService(ITrackingService):
             bool: Результат операции
         """
         try:
+            tracking_date = self.date_helper.get_tracking_date()
             # Используем репозиторий записей потребления воды
-            entry_id = await self.water_entry_repository.add_entry(user_id, amount)
+            entry_id = await self.water_entry_repository.add_entry(user_id, amount, tracking_date)
             return entry_id is not None
         except Exception as e:
             logger.error(f"Error recording water intake: {str(e)}")
@@ -110,9 +114,9 @@ class TrackingService(ITrackingService):
     async def record_meal_compliance(
             self,
             user_id: str,
-            date_val: date,
             meal_type: str,
             status: MealComplianceStatus,
+            tracking_date: date = None,
             notes: str = None,
             alternative_meal: str = None,
             nutrients_consumed: Dict[str, float] = None
@@ -122,7 +126,7 @@ class TrackingService(ITrackingService):
 
         Args:
             user_id: ID пользователя
-            date_val: Дата
+            tracking_date: Дата
             meal_type: Тип приема пищи
             status: Статус соблюдения
             notes: Дополнительные заметки (отчет пользователя)
@@ -140,8 +144,11 @@ class TrackingService(ITrackingService):
         try:
             self.logger.info(
                 f"Recording meal compliance: user_id={user_id}, meal_type={meal_type}, status={status.value}, nutrients={nutrients_consumed}")
+            if not tracking_date:
+                tracking_date = self.date_helper.get_tracking_date()
+
             # Получаем текущий план на день для сравнения с фактическим потреблением
-            day_plan = await self._get_day_plan(user_id, date_val)
+            day_plan = await self._get_day_plan(user_id, tracking_date)
 
             # Находим запланированный прием пищи
             planned_meal = None
@@ -186,7 +193,7 @@ class TrackingService(ITrackingService):
             # Добавляем запись о соблюдении режима питания
             compliance_id = await self.compliance_repository.add_meal_compliance(
                 user_id,
-                date_val,
+                tracking_date,
                 meal_type,
                 status.value,
                 notes,
@@ -200,7 +207,7 @@ class TrackingService(ITrackingService):
 
             # Обновляем суммарные данные о соблюдении за день
             if compliance_id:
-                await self.compliance_repository.update_daily_compliance(user_id, date_val)
+                await self.compliance_repository.update_daily_compliance(user_id, tracking_date)
                 return True
 
             return False
