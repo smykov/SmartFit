@@ -261,7 +261,13 @@ class MessageProcessorService:
                 await self._mark_message_as_processed(message_id, sender_id, message_text)
 
                 # Сохраняем результат выполнения в контекст
-                await self._store_user_conversation_context(user["id"], "commands_executed", execution_result)
+                await self._store_user_conversation_context(user["id"], "commands_executed", {
+                    "message_text": message_text,
+                    "message_type": message_type,
+                    "messenger_type": messenger_type,
+                    "commands": [cmd.dict() for cmd in extraction_result.commands],
+                    "response_message": extraction_result.response_message
+                })
 
                 return {
                     "success": True,
