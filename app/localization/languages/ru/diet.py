@@ -44,12 +44,14 @@ strings = {
             'day_header': LocalizationString('📆 *{day_name}, {date_formatted}*\n\n'),
             'total_calories': LocalizationString('🔥 Всего калорий: *{calories} ккал*\n'),
             'macro_ratio': LocalizationString('📊 Соотношение БЖУ: *{ratio}*\n'),
-            'macros': LocalizationString('🥩 Белки: *{proteins}г* | 🧀 Жиры: *{fats}г* | 🍚 Углеводы: *{carbs}г*\n\n'),
+            'macros': LocalizationString('🥩 Белки: *{proteins}г* | 🧀 Жиры: *{fats}г* | 🍚 Углеводы: *{carbs}г*\n'),
             'meal_header': LocalizationString('{emoji} *{meal_type}*: {title}\n'),
             'nutrient_info': LocalizationString(
-                '  Пищевая ценность: {calories} ккал | Б:{proteins}г Ж:{fats}г У:{carbs}г\n'),
-            'why_recommended': LocalizationString('  _Почему рекомендуем: {why_recommended}_\n'),
+                'Пищевая ценность: {calories} ккал | Б:{proteins}г Ж:{fats}г У:{carbs}г\n'),
+            'why_recommended': LocalizationString('💡 Почему рекомендуем:_ {why_recommended} _\n'),
             'day_tip': LocalizationString('\n💎 *Совет дня:* {tip}\n'),
+            'price': LocalizationString(
+                '💰 Примерная стоимость: {price} {currency}\n'),
             'commands_message': LocalizationString(
                 '''*📱 Команды для взаимодействия с планом:*
     - Напишите 'полный план' для просмотра плана на всю неделю
@@ -105,7 +107,9 @@ strings = {
         'macro_ratio': LocalizationString(
             '📊 Соотношение макронутриентов: {ratio}\n'),
         'macros': LocalizationString(
-            '🥩 Белки: {proteins}г | 🧀 Жиры: {fats}г | 🍚 Углеводы: {carbs}г\n\n'),
+            '🥩 Белки: {proteins}г | 🧀 Жиры: {fats}г | 🍚 Углеводы: {carbs}г\n'),
+        'nutrient_info': LocalizationString(
+            '🔥 Пищевая ценность: {calories} ккал | Б:{proteins}г Ж:{fats}г У:{carbs}г\n'),
         'meal_header': LocalizationString(
             '🍽️ {emoji} *{meal_type}*: *{title}* {relevance}\n\n'),
         'ingredients_header': LocalizationString(
@@ -124,7 +128,11 @@ strings = {
             '• Углеводы: {carbs} г\n'),
         'fiber': LocalizationString(
             '• Клетчатка: {fiber} г\n'),
-        'why_recommended_header': LocalizationString(
+        'vitamins': LocalizationString(
+            '• Витамины: {vitamins}\n'),
+        'minerals': LocalizationString(
+            '• Минералы: {minerals}\n'),
+        'why_recommended': LocalizationString(
             '\n💡 *Почему рекомендуется:* {why_recommended}\n'),
         'preparation_header': LocalizationString(
             '\n👨‍🍳 *Приготовление:* {preparation}\n'),
@@ -134,7 +142,8 @@ strings = {
             'Ошибка при создании плана питания на день. Пожалуйста, попробуйте позже.'),
         'no_plan': LocalizationString(
             'К сожалению, на указанную дату нет плана питания.'),
-
+        'price': LocalizationString(
+            '💰 Примерная стоимость: {price} {currency}\n'),
         'tracking': {
             'header': LocalizationString(
                 '*📱 Отметьте выполнение плана:*\n'),

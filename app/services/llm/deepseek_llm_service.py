@@ -218,7 +218,7 @@ class DeepSeekLLMService(BaseLLMService):
                                     raise LLMParseError("Пустой контент в ответе", raw_response=response_json)
 
                                 # Логируем начало ответа для отладки
-                                logger.info(f"DeepSeek response content (truncated): {content[:500]}...")
+                                logger.info(f"DeepSeek response content (truncated): {content[:1500]}...")
 
                                 if self.model == "deepseek-reasoner":
                                     # Применить специальную обработку для DeepSeek Reasoner
