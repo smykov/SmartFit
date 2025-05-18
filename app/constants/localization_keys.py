@@ -66,6 +66,7 @@ class LocalizationKeys:
                 WHY_RECOMMENDED = "diet.full.plan.why_recommended"
                 DAY_TIP = "diet.full.plan.day_tip"
                 COMMANDS_MESSAGE = "diet.full.plan.commands_message"
+                PRICE = "diet.full.plan.price"
 
             # Сообщения статуса
             CREATED = "diet.full.created"
@@ -123,9 +124,13 @@ class LocalizationKeys:
             FATS = "diet.day.fats"
             CARBS = "diet.day.carbs"
             FIBER = "diet.day.fiber"
+            VITAMINS = "diet.day.vitamins"
+            MINERALS = "diet.day.minerals"
             WHY_RECOMMENDED_HEADER = "diet.day.why_recommended_header"
             PREPARATION_HEADER = "diet.day.preparation_header"
             TIP = "diet.day.tip"
+            NUTRIENT_INFO = "diet.day.nutrient_info"
+            PRICE = "diet.day.price"
 
             class Tracking:
                 """Ключи для трекинга плана"""
@@ -148,9 +153,9 @@ class LocalizationKeys:
         CATEGORY_WITH_COUNT_FORMAT = "diet.shopping.category_with_count_format"
         SHOPPING_PROGRESS = "diet.shopping.shopping_progress"
         ITEM_FORMAT = "shopping.item_format"
-        ITEM_INFO_FORMAT = "shopping.item_info_format"  # Новый ключ
-        PRICE_FORMAT = "shopping.price_format"  # Новый ключ
-        PURCHASED_ITEM_FORMAT = "shopping.purchased_item_format"  # Новый ключ
+        ITEM_INFO_FORMAT = "shopping.item_info_format"
+        PRICE_FORMAT = "shopping.price_format"
+        PURCHASED_ITEM_FORMAT = "shopping.purchased_item_format"
         TOTAL_PRICE = "shopping.total_price"
         INSTRUCTIONS = "shopping.instructions"
         GENERATING = "shopping.generating"

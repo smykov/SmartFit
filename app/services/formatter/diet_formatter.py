@@ -1,15 +1,12 @@
 # app/services/formatter/diet_formatter.py
 from datetime import date
-from typing import Dict, Any, List, Optional, Tuple, Set, Type
-
-from pyexpat.errors import messages
+from typing import Dict, Any, List, Optional
 
 from app.constants.localization_keys import LocalizationKeys as LK
 from app.services.formatter.base_formatter import BaseFormatter
 from app.services.localization.localization_interface import ILocalizationService
 from app.utils.date_helper import DateHelper
 from app.utils.format_helper import FormatHelper
-from app.exceptions.formatter_exceptions import FormatterException
 
 
 class DietFormatter(BaseFormatter):
@@ -233,11 +230,13 @@ class DietFormatter(BaseFormatter):
 
                 for day_key in sorted_dates:
                     day_messages = self._create_day_messages(diet_plan, day_key, lang, is_full_plan=True)
-                    for day_message in day_messages:
-                        if day_message:
-                            messages.append(
-                                self.format_for_whatsapp(day_message)
-                            )
+                    # Фильтруем пустые сообщения и объединяем в одну строку с разделителем \n
+                    filtered_messages = [msg for msg in day_messages if msg]
+                    if filtered_messages:
+                        combined_message = "\n".join(filtered_messages)
+                        messages.append(
+                            self.format_for_whatsapp(combined_message)
+                        )
 
             return messages
 
@@ -494,8 +493,15 @@ class DietFormatter(BaseFormatter):
         )
         # Добавляем информацию о калориях и макронутриентах
         nutritional_info = self._get_nutritional_summary(day_plan, lang, prefix)
-
-        messages = [header + nutritional_info]
+        message_price = ''
+        if day_plan.get("estimated_total_price"):
+            message_price += self.get_localized_message(
+                f"{prefix}.price",
+                lang,
+                price=day_plan['estimated_total_price'],
+                currency='' #TODO добавить валюту юзеру
+            )
+        messages = [header + nutritional_info + message_price]
         # Добавляем приемы пищи
         if "meals" in day_plan:
             for meal in day_plan["meals"]:
@@ -510,7 +516,8 @@ class DietFormatter(BaseFormatter):
                 lang,
                 tip=day_plan['tips']
             )
-        messages.append(tips)
+        if not is_full_plan:
+            messages.append(tips)
 
         # TODO добавить список покупок на день (просто суммированный список продуктов из ингредиентов блюд)
 
@@ -545,7 +552,8 @@ class DietFormatter(BaseFormatter):
                 lang,
                 ratio=day_plan['macros_ratio']
             )
-        elif "total_proteins" in day_plan and "total_fats" in day_plan and "total_carbs" in day_plan:
+
+        if "total_proteins" in day_plan and "total_fats" in day_plan and "total_carbs" in day_plan:
             message += self.get_localized_message(
                 f"{prefix}.macros",
                 lang,
@@ -578,7 +586,7 @@ class DietFormatter(BaseFormatter):
         emoji = self.get_meal_emoji(meal.get("type", ""), lang)
 
         # Добавляем заголовок приема пищи
-        message = self.get_localized_message(
+        message_header = self.get_localized_message(
             f"{prefix}.meal_header",
             lang,
             emoji=emoji,
@@ -587,37 +595,45 @@ class DietFormatter(BaseFormatter):
             relevance=relevance
         )
 
-        # Если это сокращенный формат или полный план, возвращаем без дополнительных деталей
-        if is_summary:
-            return message
-
         # Добавляем описание, если есть
+        message_description = ''
         if description:
-            message += f"{self.format_helper.apply_style(description, 'italic')}\n\n"
+            message_description = f"{self.format_helper.apply_style(description, 'italic')}\n\n"
 
         # Добавляем информацию о продуктах
+        message_products = ''
         if "products" in meal and meal["products"]:
-            message += self.get_localized_message(f"{prefix}.ingredients_header", lang)
+            message_products = self.get_localized_message(f"{prefix}.ingredients_header", lang)
             for product in meal["products"]:
                 name = product.get("name", "")
                 quantity = product.get("quantity", "")
                 unit = product.get("unit", "")
                 if quantity > 0:
-                    message += self.get_localized_message(
+                    message_products += self.get_localized_message(
                         f"{prefix}.ingredient_format",
                         lang,
                         name=name,
                         quantity=quantity,
                         unit=unit
                     )
-            message += f"\n"
+            message_products += f"\n"
 
         # Добавляем информацию о питательных веществах
-        message += self.get_localized_message(f"{prefix}.nutrition_header", lang)
+        message_nutrition = self.get_localized_message(f"{prefix}.nutrition_header", lang)
+        message_bju = ''
+        if meal.get("calories") and meal.get("proteins") and meal.get("proteins") and meal.get("fats"):
+            message_bju += self.get_localized_message(
+                f"{prefix}.nutrient_info",
+                lang,
+                calories=meal['calories'],
+                proteins = meal['proteins'],
+                fats = meal['fats'],
+                carbs = meal['carbs']
+            )
 
         # Добавляем калории
         if meal.get("calories"):
-            message += self.get_localized_message(
+            message_nutrition += self.get_localized_message(
                 f"{prefix}.calories",
                 lang,
                 calories=meal['calories']
@@ -625,7 +641,7 @@ class DietFormatter(BaseFormatter):
 
         # Добавляем белки
         if meal.get("proteins"):
-            message += self.get_localized_message(
+            message_nutrition += self.get_localized_message(
                 f"{prefix}.proteins",
                 lang,
                 proteins=meal['proteins']
@@ -633,7 +649,7 @@ class DietFormatter(BaseFormatter):
 
         # Добавляем жиры
         if meal.get("fats"):
-            message += self.get_localized_message(
+            message_nutrition += self.get_localized_message(
                 f"{prefix}.fats",
                 lang,
                 fats=meal['fats']
@@ -641,7 +657,7 @@ class DietFormatter(BaseFormatter):
 
         # Добавляем углеводы
         if meal.get("carbs"):
-            message += self.get_localized_message(
+            message_nutrition += self.get_localized_message(
                 f"{prefix}.carbs",
                 lang,
                 carbs=meal['carbs']
@@ -649,32 +665,53 @@ class DietFormatter(BaseFormatter):
 
         # Добавляем клетчатку
         if meal.get("fiber"):
-            message += self.get_localized_message(
+            message_nutrition += self.get_localized_message(
                 f"{prefix}.fiber",
                 lang,
                 fiber=meal['fiber']
             )
 
-        message += f"\n"
+        # Добавляем витамины
+        if meal.get("vitamins"):
+            message_nutrition += self.get_localized_message(
+                f"{prefix}.vitamins",
+                lang,
+                vitamins=meal['vitamins']
+            )
+
+        # Добавляем минералы
+        if meal.get("minerals"):
+            message_nutrition += self.get_localized_message(
+                f"{prefix}.minerals",
+                lang,
+                minerals=meal['minerals']
+            )
+
+        message_nutrition += f"\n"
 
         # Добавляем объяснение, почему блюдо рекомендовано
         why_recommended = meal.get("why_recommended", "")
+        message_why_recommended = ''
         if why_recommended:
-            message += self.get_localized_message(
-                f"{prefix}.why_recommended_header",
+            message_why_recommended += self.get_localized_message(
+                f"{prefix}.why_recommended",
                 lang,
                 why_recommended=self.format_helper.apply_style(why_recommended, "italic")
             )
-            message += f"\n"
+            message_why_recommended += f"\n"
 
         # Добавляем инструкцию по приготовлению
         preparation = self.format_for_whatsapp(meal.get("preparation", ""))
+        message_preparation = ''
         if preparation:
-            message += self.get_localized_message(
+            message_preparation += self.get_localized_message(
                 f"{prefix}.preparation_header",
                 lang,
                 preparation=preparation
             )
 
-        message += "\n"
-        return message
+        # Если это сокращенный формат или полный план, возвращаем без дополнительных деталей
+        if is_summary:
+            return f"{message_header}{message_description}{message_bju}{message_why_recommended}\n"
+
+        return f"{message_header}{message_description}{message_products}{message_nutrition}{message_why_recommended}{message_preparation}\n"

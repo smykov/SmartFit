@@ -159,7 +159,7 @@ class DietCommand(BaseCommand):
 
                     return {
                         "success": True,
-                        "message": formatted_plan_messages
+                        "messages": formatted_plan_messages
                     }
                 else:
                     return {

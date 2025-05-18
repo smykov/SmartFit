@@ -402,7 +402,7 @@ class DietUpdateCommand(BaseCommand):
                 diet_command = DietCommand(self.dependencies)
 
                 # Выполняем команду диеты для отображения обновленного плана
-                diet_result = await diet_command.execute(user_id)
+                diet_result = await diet_command.execute(user_id, params={'full': 'true'})
 
                 # Формируем итоговый результат в правильном порядке
                 # TOFIX TODO Сообщения идут не попорядку, сначала диета новая, а потом сообщения что диета была обновлена
