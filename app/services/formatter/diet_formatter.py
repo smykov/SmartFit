@@ -7,6 +7,7 @@ from app.services.formatter.base_formatter import BaseFormatter
 from app.services.localization.localization_interface import ILocalizationService
 from app.utils.date_helper import DateHelper
 from app.utils.format_helper import FormatHelper
+from config import settings
 
 
 class DietFormatter(BaseFormatter):
@@ -360,13 +361,13 @@ class DietFormatter(BaseFormatter):
             )
 
         # Информация о стоимости
+        localization_currency = self.get_localized_message(f"{LK.Common.Currency.CURRENCY}.{diet_plan.get('currency_code', settings.DEFAULT_CURRENCY).lower()}", lang)
         if "estimated_weekly_price" in diet_plan and diet_plan["estimated_weekly_price"]:
-            currency = diet_plan.get("currency", "рублей")
             message += self.get_localized_message(
                 LK.Diet.Full.Summary.PRICE,
                 lang,
                 price=diet_plan['estimated_weekly_price'],
-                currency=currency
+                currency=localization_currency
             )
 
         return message
@@ -491,6 +492,7 @@ class DietFormatter(BaseFormatter):
             day_name=day_name,
             date_formatted=date_formatted
         )
+        localization_currency = self.get_localized_message(f"{LK.Common.Currency.CURRENCY}.{diet_plan.get('currency_code', settings.DEFAULT_CURRENCY).lower()}", lang)
         # Добавляем информацию о калориях и макронутриентах
         nutritional_info = self._get_nutritional_summary(day_plan, lang, prefix)
         message_price = ''
@@ -499,7 +501,7 @@ class DietFormatter(BaseFormatter):
                 f"{prefix}.price",
                 lang,
                 price=day_plan['estimated_total_price'],
-                currency='' #TODO добавить валюту юзеру
+                currency=localization_currency,
             )
         messages = [header + nutritional_info + message_price]
         # Добавляем приемы пищи

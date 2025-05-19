@@ -52,7 +52,8 @@ class Settings(BaseSettings):
     # Временная зона для Гватемалы
     #TIMEZONE: str = "America/Guatemala"
     TIMEZONE: str = "Asia/Novosibirsk"
-
+    DEFAULT_CURRENCY = "RUB"
+    DEFAULT_LANGUAGE = "ru"
     # Настройки для тестирования и разработки
     USE_MOCK_SERVICES: bool = os.getenv("USE_MOCK_SERVICES", "False").lower() == "true"
 

@@ -276,23 +276,74 @@ class DietPlanManager(BaseDietService):
             if "daily_plans" not in diet_plan:
                 diet_plan["daily_plans"] = {}
 
-            #TODO не переписывать весь день, а только те данные которые были переданы
+            # Правильное обновление - только переданные данные
             for date_str, day_data in updated_days.items():
-                diet_plan["daily_plans"][date_str] = day_data
+                # Проверяем, существует ли день в текущем плане
+                if date_str not in diet_plan["daily_plans"]:
+                    # Если дня нет, создаем новую запись
+                    diet_plan["daily_plans"][date_str] = day_data
+                else:
+                    # Если день существует, обновляем только переданные данные
+                    existing_day_data = diet_plan["daily_plans"][date_str]
 
-                # Пересчитываем общие показатели для дня, если это необходимо
-                if "meals" in day_data and "total_calories" not in day_data:
-                    total_calories = sum(meal.get("calories", 0) for meal in day_data["meals"])
-                    total_proteins = sum(meal.get("proteins", 0) for meal in day_data["meals"])
-                    total_fats = sum(meal.get("fats", 0) for meal in day_data["meals"])
-                    total_carbs = sum(meal.get("carbs", 0) for meal in day_data["meals"])
-                    total_price = sum(meal.get("estimated_price", 0) for meal in day_data["meals"])
+                    # Обработка приемов пищи
+                    if "meals" in day_data:
+                        # Если приемы пищи еще не существуют, создаем список
+                        if "meals" not in existing_day_data:
+                            existing_day_data["meals"] = []
 
-                    diet_plan["daily_plans"][date_str]["total_calories"] = total_calories
-                    diet_plan["daily_plans"][date_str]["total_proteins"] = total_proteins
-                    diet_plan["daily_plans"][date_str]["total_fats"] = total_fats
-                    diet_plan["daily_plans"][date_str]["total_carbs"] = total_carbs
-                    diet_plan["daily_plans"][date_str]["estimated_total_price"] = total_price
+                        # Обновляем каждый прием пищи по его типу
+                        existing_meal_by_type = {meal.get("type"): meal for meal in existing_day_data["meals"] if
+                                                 "type" in meal}
+                        updated_meals = []
+
+                        # Проходим по обновленным приемам пищи
+                        for updated_meal in day_data["meals"]:
+                            meal_type = updated_meal.get("type")
+                            if not meal_type:
+                                # Если тип не указан, просто добавляем новый прием
+                                updated_meals.append(updated_meal)
+                                continue
+
+                            if meal_type in existing_meal_by_type:
+                                # Обновляем существующий прием пищи
+                                existing_meal = existing_meal_by_type[meal_type]
+                                for key, value in updated_meal.items():
+                                    existing_meal[key] = value
+                                updated_meals.append(existing_meal)
+                            else:
+                                # Добавляем новый прием пищи
+                                updated_meals.append(updated_meal)
+
+                        # Добавляем приемы пищи, которые не были в обновлении
+                        for existing_meal in existing_day_data["meals"]:
+                            meal_type = existing_meal.get("type")
+                            if meal_type and meal_type not in [meal.get("type") for meal in updated_meals if
+                                                               "type" in meal]:
+                                updated_meals.append(existing_meal)
+
+                        # Обновляем список приемов пищи
+                        existing_day_data["meals"] = updated_meals
+
+                    # Обновляем другие поля, только если они переданы
+                    for key, value in day_data.items():
+                        if key != "meals":  # Meals уже обработали
+                            existing_day_data[key] = value
+
+                    # Пересчитываем общие показатели, если были обновлены приемы пищи и не переданы total_* параметры
+                    if "meals" in day_data and all(key not in day_data for key in
+                                                   ["total_calories", "total_proteins", "total_fats", "total_carbs"]):
+                        total_calories = sum(meal.get("calories", 0) for meal in existing_day_data["meals"])
+                        total_proteins = sum(meal.get("proteins", 0) for meal in existing_day_data["meals"])
+                        total_fats = sum(meal.get("fats", 0) for meal in existing_day_data["meals"])
+                        total_carbs = sum(meal.get("carbs", 0) for meal in existing_day_data["meals"])
+                        total_price = sum(meal.get("estimated_price", 0) for meal in existing_day_data["meals"])
+
+                        existing_day_data["total_calories"] = total_calories
+                        existing_day_data["total_proteins"] = total_proteins
+                        existing_day_data["total_fats"] = total_fats
+                        existing_day_data["total_carbs"] = total_carbs
+                        existing_day_data["estimated_total_price"] = total_price
 
             # Сохраняем комментарий к изменению
             if comment:

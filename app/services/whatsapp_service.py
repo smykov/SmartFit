@@ -36,8 +36,6 @@ class MessageType(str, Enum):
 class WhatsAppService:
     """Сервис для работы с WhatsApp API"""
 
-    # TODO провести рефактор сервиса и отделить команды, уведомления и тп
-
     def __init__(self):
         self.from_phone_number = settings.TWILIO_PHONE_NUMBER
         self.messages = DietMessages()

@@ -54,7 +54,8 @@ def create_short_diet_system_prompt(product_list=None) -> str:
             ...
         },
         "general_recommendations": "общие рекомендации",
-        "caloric_deficit": количество_калорий
+        "caloric_deficit": количество_дефицита_калорий,
+        "caloric_proficit": количество_профицита_калорий
     }
     
     """
@@ -222,8 +223,10 @@ def create_full_diet_system_prompt() -> str:
             ...
         },
         "general_recommendations": "общие рекомендации",
-        "estimated_weekly_price": примерная_стоимость_за_неделю,
-        "caloric_deficit": количество_калорий
+        "estimated_weekly_price": примерная_стоимость_за_неделю_в_валюте_пользователя,
+        "currency_code": iso_код_валюты_estimated_price,
+        "caloric_deficit": количество_дефицита_калорий,
+        "caloric_proficit": количество_профицита_калорий
     }
     """
     return system_prompt
@@ -335,7 +338,7 @@ def create_single_day_user_prompt(day_of_week: str) -> str:
       "total_fats": общее_количество_жиров_за_день,
       "total_carbs": общее_количество_углеводов_за_день,
       "macros_ratio": "соотношение БЖУ в процентах",
-      "estimated_total_price": примерная_стоимость_за_день,
+      "estimated_total_price": примерная_стоимость_за_день_в_валюте_пользователя,
       "tips": "советы на день"
     }
     """
@@ -361,8 +364,9 @@ def create_shopping_list_system_prompt():
             "name": "название продукта",
             "quantity": числовое_значение,
             "unit": "единица_измерения",
-            "estimated_price": примерная_цена_если_известна,
-            "store_suggestions": ["магазин1", "магазин2"],
+            "estimated_price": примерная_цена_если_известна_в_валюте_пользователя,
+            "currency_code": iso_код_валюты_estimated_price,
+            "store_suggestions": ["Пятерочка", "Магнит", "Лента"],
             "category": "категория_продукта"  # фрукты/овощи, мясо, молочные продукты и т.д.
         },
         ...
@@ -647,6 +651,9 @@ def create_command_extraction_user_prompt(message: str, context: Dict[str, Any])
         if "language" in context:
             user_prompt_parts.append(f"- Язык пользователя: {context['language']}")
 
+        if "currency_code" in context:
+            user_prompt_parts.append(f"- Валюта пользователя: {context['currency_code']}")
+
         # Информация о диетическом плане
         if "diet_plan" in context:
             user_prompt_parts.append("- Информация о плане питания:")
@@ -831,7 +838,7 @@ def update_full_diet_system_prompt() -> str:
                 "total_fats": общее_количество_жиров_за_день,
                 "total_carbs": общее_количество_углеводов_за_день,
                 "macros_ratio": "соотношение БЖУ в процентах",
-                "estimated_total_price": примерная_стоимость_за_день,
+                "estimated_total_price": примерная_стоимость_за_день_в_валюте_пользователя,
                 "tips": "советы на день"
             },
             "tuesday": { ... },

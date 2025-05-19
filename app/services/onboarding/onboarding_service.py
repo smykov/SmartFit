@@ -9,6 +9,7 @@ from app.services.diet.diet_service_interface import IDietService
 from app.services.messaging.interfaces.message_interface import IMessengerService
 from app.services.onboarding.onboarding_service_interface import IOnboardingService
 from app.services.localization.localization_interface import ILocalizationService
+from config import settings
 
 
 class OnboardingService(IOnboardingService):
@@ -94,7 +95,8 @@ class OnboardingService(IOnboardingService):
                 "is_onboarding_completed": False,
                 "onboarding_step": self.STEP_WELCOME,
                 "registration_source": messenger_type,
-                "preferred_messenger": messenger_type
+                "preferred_messenger": messenger_type,
+                "currency_code": settings.DEFAULT_CURRENCY,
             }
 
             # Сохраняем в базу данных
@@ -556,7 +558,7 @@ class OnboardingService(IOnboardingService):
             return "maintain", self.localization_service.get_message(LK.Onboarding.WEIGHT_GOAL_DETERMINED_MAINTAIN,
                                                                      lang)
 
-    def _get_step_message(self, step: str, lang: str = 'en') -> str:
+    def _get_step_message(self, step: str, lang: str = 'en', currency_code: str = None) -> str:
         """
         Получает локализованное сообщение для шага онбординга
 
@@ -597,7 +599,6 @@ class OnboardingService(IOnboardingService):
             self.STEP_DIET_PREFERENCE: LK.Onboarding.DIET_PREFERENCE_REQUEST_EXAMPLE,
             self.STEP_ALLERGIES: LK.Onboarding.ALLERGIES_REQUEST_EXAMPLE,
             self.STEP_DISLIKED_PRODUCTS: LK.Onboarding.DISLIKED_PRODUCTS_REQUEST_EXAMPLE,
-            # TODO добавить сумму примера в валюте пользователя
             self.STEP_BUDGET: LK.Onboarding.BUDGET_REQUEST_EXAMPLE,
         }
         # Получаем ключ для шага
@@ -609,8 +610,10 @@ class OnboardingService(IOnboardingService):
         self.logger.debug(f"Getting localized message for key '{key}' with lang '{lang}'")
 
         # Получаем сообщение для шага
-        # TODO добавить параметры для бюджета и примера
-        message = self.localization_service.get_message(key, lang)
+        params = {}
+        if step == self.STEP_BUDGET:
+            params["currency"] = f"{LK.Common.Currency.CURRENCY}.{currency_code.lower()}"
+        message = self.localization_service.get_message(key, lang, **params)
 
         # Проверяем, не вернулся ли ключ вместо текста (признак ошибки)
         if message == key:

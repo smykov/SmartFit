@@ -110,7 +110,7 @@ strings = {
     },
 
     'budget': {
-        'request': LocalizationString('Какой у тебя недельный бюджет на продукты питания (в рублях)?'),
+        'request': LocalizationString('Какой у тебя недельный бюджет на продукты питания ({currency})?'),
         'example': LocalizationString('Например: 5000 или "неограниченный"'),
         'unlimited': LocalizationString('неограничен'),
         'no_limit': LocalizationString('без ограничений'),

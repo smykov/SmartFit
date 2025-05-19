@@ -17,6 +17,9 @@ class LocalizationKeys:
         DAY_FORMAT = "common.day_format"
         HELP_COMMANDS_LIST = "common.help_commands_list"
         USER = "common.user"
+        class Currency:
+            CURRENCY = "common.currency"
+            RUB = "common.currency.rub"
 
     class Diet:
         """Ключи локализации для диет"""

@@ -9,6 +9,9 @@ strings = {
     'cancel': LocalizationString('Отмена'),
     'error': LocalizationString('Ошибка'),
     'success': LocalizationString('Успешно'),
+    'currency': {
+        'rub': LocalizationString('руб.'),
+    },
     'weekday_names': {
         'monday': LocalizationString('Понедельник'),
         'tuesday': LocalizationString('Вторник'),

@@ -237,6 +237,7 @@ class LLMCommandExtractor(ICommandExtractor):
             enriched["diet_preference"] = user.get("diet_preference", "")
             enriched["is_onboarding_completed"] = user.get("is_onboarding_completed", "")
             enriched["language"] = user.get("language", "")
+            enriched["currency"] = user.get("currency_code", "")
             enriched["onboarding_step"] = user.get("onboarding_step", "")
             enriched["current_weight"] = user.get("current_weight", "")
             enriched["target_weight"] = user.get("target_weight", "")
