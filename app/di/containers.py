@@ -177,15 +177,77 @@ class Container(containers.DeclarativeContainer):
         postgres=postgres_client
     )
 
-    # LLM сервис
-    llm_service = providers.Singleton(
-        LLMFactory.get_default_llm_service
-    )
-
     # Сервис локализации
     localization_service = providers.Singleton(
         LocalizationService,
         user_repository=user_repository
+    )
+
+    messenger_registry = providers.Singleton(MessengerRegistry)
+
+    # Мессенджеры
+    whatsapp_messenger = providers.Singleton(
+        WhatsAppMessenger,
+        localization_service=localization_service
+    )
+
+    telegram_messenger = providers.Singleton(
+        TelegramMessenger,
+        localization_service=localization_service
+    )
+
+    # Клиенты мессенджеров
+    telegram_client = providers.Singleton(
+        TelegramClient,
+        token=settings.TELEGRAM_BOT_TOKEN,
+        localization_service=localization_service,
+        telegram_messenger=telegram_messenger
+    )
+    telegram_admin_client = providers.Singleton(
+        TelegramClient,
+        token=settings.TELEGRAM_ADMIN_BOT_TOKEN,
+        localization_service=localization_service,
+        telegram_messenger=telegram_messenger
+    )
+    telegram_debug_client = providers.Singleton(
+        TelegramClient,
+        token=settings.TELEGRAM_DEBUG_BOT_TOKEN,
+        localization_service=localization_service,
+        telegram_messenger=telegram_messenger
+    )
+
+    whatsapp_client = providers.Singleton(
+        TwilioWhatsAppClient,
+        account_sid=settings.TWILIO_ACCOUNT_SID,
+        auth_token=settings.TWILIO_AUTH_TOKEN,
+        from_phone=settings.TWILIO_PHONE_NUMBER,
+        localization_service=localization_service
+    )
+
+    # Единый сервис мессенджеров
+    messenger_service = providers.Singleton(
+        MessengerService,
+        messenger_registry=messenger_registry,
+        message_repository=message_repository,
+        reminder_repository=reminder_repository,
+        user_repository=user_repository,
+        localization_service=localization_service,
+        text_splitter=text_splitter,
+        whatsapp_client=whatsapp_client,
+        telegram_client=telegram_client,
+        telegram_admin_client=telegram_admin_client,
+        telegram_debug_client=telegram_debug_client,
+        whatsapp_phone=settings.TWILIO_PHONE_NUMBER,
+        retry_interval_seconds=getattr(settings, "MESSENGER_RETRY_INTERVAL_SECONDS", 300),
+        max_message_size_whatsapp=getattr(settings, "WHATSAPP_MAX_MESSAGE_SIZE", 1500),
+        max_message_size_telegram=getattr(settings, "TELEGRAM_MAX_MESSAGE_SIZE", 4000),
+        max_message_age_hours=getattr(settings, "MESSENGER_MAX_MESSAGE_AGE_HOURS", 72)
+    )
+
+    # LLM сервис
+    llm_service = providers.Singleton(
+        LLMFactory.get_default_llm_service,
+        messenger_service=messenger_service,
     )
 
     # Форматтеры
@@ -211,53 +273,6 @@ class Container(containers.DeclarativeContainer):
         user_repository=user_repository
     )
 
-    messenger_registry = providers.Singleton(MessengerRegistry)
-
-    # Мессенджеры
-    whatsapp_messenger = providers.Singleton(
-        WhatsAppMessenger,
-        localization_service=localization_service
-    )
-
-    telegram_messenger = providers.Singleton(
-        TelegramMessenger,
-        localization_service=localization_service
-    )
-
-    # Клиенты мессенджеров
-    telegram_client = providers.Singleton(
-        TelegramClient,
-        token=settings.TELEGRAM_BOT_TOKEN,
-        localization_service=localization_service,
-        telegram_messenger=telegram_messenger
-    )
-
-    whatsapp_client = providers.Singleton(
-        TwilioWhatsAppClient,
-        account_sid=settings.TWILIO_ACCOUNT_SID,
-        auth_token=settings.TWILIO_AUTH_TOKEN,
-        from_phone=settings.TWILIO_PHONE_NUMBER,
-        localization_service=localization_service
-    )
-
-    # Единый сервис мессенджеров
-    messenger_service = providers.Singleton(
-        MessengerService,
-        messenger_registry=messenger_registry,
-        message_repository=message_repository,
-        reminder_repository=reminder_repository,
-        user_repository=user_repository,
-        localization_service=localization_service,
-        text_splitter=text_splitter,
-        whatsapp_client=whatsapp_client,
-        telegram_client=telegram_client,
-        whatsapp_phone=settings.TWILIO_PHONE_NUMBER,
-        retry_interval_seconds=getattr(settings, "MESSENGER_RETRY_INTERVAL_SECONDS", 300),
-        max_message_size_whatsapp=getattr(settings, "WHATSAPP_MAX_MESSAGE_SIZE", 1500),
-        max_message_size_telegram=getattr(settings, "TELEGRAM_MAX_MESSAGE_SIZE", 4000),
-        max_message_age_hours=getattr(settings, "MESSENGER_MAX_MESSAGE_AGE_HOURS", 72)
-    )
-
     # Регистрация мессенджеров в реестре
     messenger_registry_init = providers.Resource(
         _register_messengers,
@@ -265,6 +280,7 @@ class Container(containers.DeclarativeContainer):
         whatsapp=whatsapp_messenger,
         telegram=telegram_messenger
     )
+
     # Сервис диет
     diet_service = providers.Singleton(
         DietService,

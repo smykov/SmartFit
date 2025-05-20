@@ -10,14 +10,15 @@ class IMessengerService(ABC):
     """
 
     @abstractmethod
-    async def send_message(self, recipient_id: str, message: str, context: Dict[str, Any] = None) -> bool:
+    async def send_message(self, recipient_id: str, message: str, context: Optional[Dict[str, Any]] = None, bot_type: Optional[str] = "assistant") -> bool:
         """
-        Отправляет текстовое сообщение
+        Отправляет текстовое сообщение через соответствующий мессенджер
 
         Args:
             recipient_id: Идентификатор получателя
             message: Текст сообщения
-            context: Контекст сообщения (шаг онбординга, тип мессенджера и т.д.)
+            context: Дополнительный контекст сообщения (шаг онбординга, тип мессенджера и т.д.)
+            bot_type: тип бота assistant - бот, который пишет простым пользователям, admin, debug
 
         Returns:
             bool: Результат отправки
@@ -25,7 +26,7 @@ class IMessengerService(ABC):
         pass
 
     @abstractmethod
-    async def send_messages(self, recipient_id: str, messages: List[str], context: Dict[str, Any] = None) -> bool:
+    async def send_messages(self, recipient_id: str, messages: List[str], context: Dict[str, Any] = None, bot_type: Optional[str] = "assistant") -> bool:
         """
         Отправляет несколько текстовых сообщений последовательно
 
@@ -33,6 +34,7 @@ class IMessengerService(ABC):
             recipient_id: Идентификатор получателя
             messages: Список текстовых сообщений
             context: Контекст сообщений
+            bot_type: тип бота assistant - бот, который пишет простым пользователям, admin, debug
 
         Returns:
             bool: Результат отправки
@@ -41,7 +43,7 @@ class IMessengerService(ABC):
 
     @abstractmethod
     async def send_template_message(self, recipient_id: str, template_name: str, user_id: Optional[str] = None,
-                                    params: Dict[str, Any] = None) -> bool:
+                                    params: Dict[str, Any] = None, bot_type: Optional[str] = "assistant") -> bool:
         """
         Отправляет шаблонное сообщение
 
@@ -50,6 +52,7 @@ class IMessengerService(ABC):
             template_name: Название шаблона
             user_id: ID пользователя для определения языка (если None, используется язык по умолчанию)
             params: Параметры для шаблона
+            bot_type: тип бота assistant - бот, который пишет простым пользователям, admin, debug
 
         Returns:
             bool: Результат отправки

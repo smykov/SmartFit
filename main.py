@@ -98,6 +98,8 @@ async def startup_event():
         container.message_repository()
         container.whatsapp_client()
         container.telegram_client()
+        container.telegram_admin_client()
+        container.telegram_debug_client()
         container.whatsapp_messenger()
         container.telegram_messenger()
         container.localization_service()

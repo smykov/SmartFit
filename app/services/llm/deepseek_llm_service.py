@@ -11,9 +11,11 @@ from app.services.llm.base_llm_service import (
     BaseLLMService, LLMServiceError, LLMTimeoutError,
     LLMParseError, LLMServerError
 )
+from app.services.messaging.interfaces.message_interface import IMessengerService
 from app.templates.formatting_helpers import clean_json_from_markdown
 from app.templates.prompts import create_nutrition_question_prompt, get_bot_commands_prompt, update_full_diet_user_prompt, \
     create_shopping_list_user_prompt, create_shopping_list_system_prompt, create_full_diet_system_prompt
+from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -21,8 +23,14 @@ logger = logging.getLogger(__name__)
 class DeepSeekLLMService(BaseLLMService):
     """Сервис для работы с DeepSeek API"""
 
-    def __init__(self, api_key: str, model: str = "deepseek-chat", api_base: str = "https://api.deepseek.com",
-                 timeout: int = 300, max_retries: int = 2):
+    def __init__(self,
+                 messenger_service: IMessengerService,
+                 api_key: str,
+                 model: str = "deepseek-chat",
+                 api_base: str = "https://api.deepseek.com",
+                 timeout: int = 300,
+                 max_retries: int = 2,
+                 ):
         """
         Инициализация сервиса DeepSeek
 
@@ -36,6 +44,7 @@ class DeepSeekLLMService(BaseLLMService):
         self.api_key = api_key
         self.timeout = timeout
         self.max_retries = max_retries
+        self.messenger_service = messenger_service
 
         # Проверка поддерживаемых моделей с их ограничениями
         self.MODEL_LIMITS = {
@@ -144,6 +153,28 @@ class DeepSeekLLMService(BaseLLMService):
                 log_payload["model"] = f"{self.model} (API base: {self.api_base})"
                 logger.info(f"DeepSeek request payload: {json.dumps(log_payload, ensure_ascii=False)}")
 
+                await self.messenger_service.send_message(
+                    settings.TELEGRAM_DEBUG_CHAT_ID,
+                    f"*model:* {self.model}\n #Prompts#",
+                    {
+                        "bot_type": "debug",
+                        "messenger_type": "telegram"
+                    },
+                    "debug"
+                )
+
+                for message in messages:
+                    role = message.get("role")
+                    content = message.get("content")
+                    await self.messenger_service.send_message(
+                        settings.TELEGRAM_DEBUG_CHAT_ID,
+                        f"*{role}*\n{content:500}",
+                        {
+                            "bot_type": "debug"
+                        },
+                        "debug"
+                    )
+
                 # Устанавливаем таймаут
                 timeout = aiohttp.ClientTimeout(total=self.timeout)
 
@@ -219,6 +250,37 @@ class DeepSeekLLMService(BaseLLMService):
 
                                 # Логируем начало ответа для отладки
                                 logger.info(f"DeepSeek response content (truncated): {content[:1500]}...")
+
+                                await self.messenger_service.send_message(
+                                    settings.TELEGRAM_DEBUG_CHAT_ID,
+                                    f"*content:*\n{content}",
+                                    {
+                                        "bot_type": "debug"
+                                    },
+                                    "debug"
+                                )
+
+                                if "reasoning_content" in response_json["choices"][0]["message"]:
+                                    reasoning_content = response_json["choices"][0]["message"]["reasoning_content"]
+                                    await self.messenger_service.send_message(
+                                        settings.TELEGRAM_DEBUG_CHAT_ID,
+                                        f"*reasoning_content:*\n{reasoning_content}",
+                                        {
+                                            "bot_type": "debug"
+                                        },
+                                        "debug"
+                                    )
+
+                                if "usage" in response_json:
+                                    usage = response_json["usage"]
+                                    await self.messenger_service.send_message(
+                                        settings.TELEGRAM_DEBUG_CHAT_ID,
+                                        f"*usage:*/n{json.dumps(usage)}",
+                                        {
+                                            "bot_type": "debug"
+                                        },
+                                        "debug"
+                                    )
 
                                 if self.model == "deepseek-reasoner":
                                     # Применить специальную обработку для DeepSeek Reasoner

@@ -4,6 +4,7 @@ from app.services.llm.base_llm_service import BaseLLMService
 from app.services.llm.deepseek_llm_service import DeepSeekLLMService
 from app.services.llm.hybrid_llm_service import HybridLLMService
 from app.services.llm.openai_llm_service import OpenAILLMService
+from app.services.messaging.interfaces.message_interface import IMessengerService
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -15,13 +16,13 @@ class LLMFactory:
     """
 
     @staticmethod
-    def create_llm_service(provider: str = None) -> BaseLLMService:
+    def create_llm_service(provider: str = None, messenger_service: IMessengerService = None) -> BaseLLMService:
         """
         Создает экземпляр LLM-сервиса на основе указанного провайдера
 
         Args:
             provider: Провайдер LLM ('openai', 'deepseek', 'hybrid' или None для значения из конфигурации)
-
+            messenger_service: IMessengerService
         Returns:
             BaseLLMService: Экземпляр LLM-сервиса
         """
@@ -43,7 +44,8 @@ class LLMFactory:
             return DeepSeekLLMService(
                 api_key=settings.DEEPSEEK_API_KEY,
                 model=settings.DEEPSEEK_MODEL,
-                api_base=settings.DEEPSEEK_API_BASE
+                api_base=settings.DEEPSEEK_API_BASE,
+                messenger_service=messenger_service,
             )
 
         elif provider == "hybrid":
@@ -90,11 +92,11 @@ class LLMFactory:
             )
 
     @staticmethod
-    def get_default_llm_service() -> BaseLLMService:
+    def get_default_llm_service(messenger_service: IMessengerService) -> BaseLLMService:
         """
         Возвращает LLM-сервис по умолчанию из настроек
 
         Returns:
             BaseLLMService: Экземпляр LLM-сервиса
         """
-        return LLMFactory.create_llm_service()
+        return LLMFactory.create_llm_service(messenger_service=messenger_service)

@@ -34,6 +34,8 @@ class MessengerService(IMessengerService):
             text_splitter: TextSplitter,
             whatsapp_client: IMessageClient,
             telegram_client: IMessageClient,
+            telegram_admin_client: IMessageClient,
+            telegram_debug_client: IMessageClient,
             whatsapp_phone: str,
             retry_interval_seconds: int = 300,
             max_message_size_whatsapp: int = 1500,
@@ -67,6 +69,8 @@ class MessengerService(IMessengerService):
 
         self.whatsapp_client = whatsapp_client
         self.telegram_client = telegram_client
+        self.telegram_admin_client = telegram_admin_client
+        self.telegram_debug_client = telegram_debug_client
         self.whatsapp_phone = whatsapp_phone
 
         self.retry_interval_seconds = retry_interval_seconds
@@ -135,18 +139,26 @@ class MessengerService(IMessengerService):
         # По умолчанию используем WhatsApp
         return "whatsapp"
 
-    async def _get_message_client(self, messenger_type: str) -> IMessageClient:
+    async def _get_message_client(self, messenger_type: str, bot_type: Optional[str] = "assistant") -> IMessageClient:
         """
         Возвращает клиент для отправки сообщений по типу мессенджера
 
         Args:
             messenger_type: Тип мессенджера
+            bot_type: тип бота assistant - бот который пишет простым пользователям, admin, debug
 
         Returns:
             IMessageClient: Клиент мессенджера
         """
         if messenger_type.lower() == "telegram":
+            if bot_type:
+                if bot_type == "admin":
+                    return self.telegram_admin_client
+                elif bot_type == "debug":
+                    return self.telegram_debug_client
+
             return self.telegram_client
+
         return self.whatsapp_client
 
     def _get_max_message_size(self, messenger_type: str) -> int:
@@ -161,7 +173,7 @@ class MessengerService(IMessengerService):
         """
         return self.max_message_size.get(messenger_type.lower(), 1500)  # По умолчанию 1500
 
-    async def send_message(self, recipient_id: str, message: str, context: Optional[Dict[str, Any]] = None) -> bool:
+    async def send_message(self, recipient_id: str, message: str, context: Optional[Dict[str, Any]] = None, bot_type: Optional[str] = "assistant") -> bool:
         """
         Отправляет текстовое сообщение через соответствующий мессенджер
 
@@ -169,6 +181,7 @@ class MessengerService(IMessengerService):
             recipient_id: Идентификатор получателя
             message: Текст сообщения
             context: Дополнительный контекст сообщения
+            bot_type: тип бота assistant - бот который пишет простым пользователям, admin, debug
 
         Returns:
             bool: Результат отправки
@@ -179,6 +192,8 @@ class MessengerService(IMessengerService):
             # Определяем тип мессенджера
             user_id = context.get('user_id')
             messenger_type = await self.get_preferred_messenger_type(user_id, context)
+            if "messenger_type" not in context:
+                messenger_type = context.get("messenger_type", "telegram")
 
             # Получаем мессенджер для форматирования
             messenger = self.messenger_registry.get_messenger(messenger_type)
@@ -192,10 +207,10 @@ class MessengerService(IMessengerService):
             # Проверяем размер сообщения
             max_size = self._get_max_message_size(messenger_type)
             if len(formatted_message) > max_size:
-                return await self._send_chunked_message(recipient_id, message, messenger_type, context)
+                return await self._send_chunked_message(recipient_id, message, messenger_type, context, bot_type)
 
             # Получаем клиент для отправки
-            client = await self._get_message_client(messenger_type)
+            client = await self._get_message_client(messenger_type, bot_type)
 
             # Отправляем сообщение
             message_id = await client.send_message(recipient_id, formatted_message)
@@ -226,7 +241,7 @@ class MessengerService(IMessengerService):
             return False
 
     async def _send_chunked_message(self, recipient_id: str, message: str, messenger_type: str,
-                                    context: Optional[Dict[str, Any]] = None) -> bool:
+                                    context: Optional[Dict[str, Any]] = None, bot_type: str = "assistant") -> bool:
         """
         Разбивает длинное сообщение на части и отправляет последовательно
 
@@ -235,6 +250,7 @@ class MessengerService(IMessengerService):
             message: Текст сообщения
             messenger_type: Тип мессенджера
             context: Дополнительный контекст сообщения
+            bot_type: тип бота assistant - бот который пишет простым пользователям, admin, debug
 
         Returns:
             bool: Результат отправки (True, если все части отправлены успешно)
@@ -268,7 +284,7 @@ class MessengerService(IMessengerService):
                 part_context["messenger_type"] = messenger_type
 
                 # Отправляем часть
-                part_success = await self.send_message(recipient_id, full_part, part_context)
+                part_success = await self.send_message(recipient_id, full_part, part_context, bot_type)
                 success = success and part_success
 
                 # Небольшая задержка между отправками
@@ -277,7 +293,7 @@ class MessengerService(IMessengerService):
             return success
 
         except Exception as e:
-            self.logger.error(f"Error sending chunked message: {str(e)}")
+            self.logger.error(f"Error sending chunked message: {str(e)}", exc_info=True)
 
             # Сохраняем сообщение для повторной отправки, но только первую часть
             first_part = message[:self._get_max_message_size(messenger_type) - 3] + "..."
@@ -294,7 +310,7 @@ class MessengerService(IMessengerService):
             return False
 
     async def send_messages(self, recipient_id: str, messages: List[str],
-                            context: Optional[Dict[str, Any]] = None) -> bool:
+                            context: Optional[Dict[str, Any]] = None, bot_type: str = "assistant") -> bool:
         """
         Отправляет несколько текстовых сообщений последовательно
 
@@ -302,6 +318,7 @@ class MessengerService(IMessengerService):
             recipient_id: Идентификатор получателя
             messages: Список текстовых сообщений
             context: Дополнительный контекст сообщений
+            bot_type: тип бота assistant - бот который пишет простым пользователям, admin, debug
 
         Returns:
             bool: Результат отправки (True, если все сообщения отправлены успешно)
@@ -316,7 +333,7 @@ class MessengerService(IMessengerService):
                 message_context["total_messages"] = len(messages)
 
                 # Отправляем сообщение
-                message_success = await self.send_message(recipient_id, message, message_context)
+                message_success = await self.send_message(recipient_id, message, message_context, bot_type)
                 success = success and message_success
 
                 # Небольшая задержка между сообщениями
@@ -329,7 +346,7 @@ class MessengerService(IMessengerService):
             return False
 
     async def send_template_message(self, recipient_id: str, template_name: str, user_id: Optional[str] = None,
-                                    params: Optional[Dict[str, Any]] = None) -> bool:
+                                    params: Optional[Dict[str, Any]] = None, bot_type: str = "assistant") -> bool:
         """
         Отправляет локализованное шаблонное сообщение
 
@@ -338,6 +355,7 @@ class MessengerService(IMessengerService):
             template_name: Ключ шаблона сообщения
             user_id: ID пользователя для определения языка
             params: Параметры для подстановки в шаблон
+            bot_type: тип бота assistant - бот который пишет простым пользователям, admin, debug
 
         Returns:
             bool: Результат отправки
@@ -355,7 +373,7 @@ class MessengerService(IMessengerService):
                 lang = await self.localization_service.get_user_language(user_id)
 
             # Получаем клиент для отправки
-            client = await self._get_message_client(messenger_type)
+            client = await self._get_message_client(messenger_type, bot_type)
 
             # Отправляем шаблонное сообщение через клиент
             message_id = await client.send_template_message(
@@ -501,8 +519,8 @@ class MessengerService(IMessengerService):
                                ["id", "phone_number", "message_text", "status", "attempts",
                                 "timestamp", "last_attempt", "error_type"]}
 
-                    # Определяем тип мессенджера
-                    messenger_type = context.get("messenger_type", "whatsapp")
+                    # Определяем тип Бота
+                    bot_type = context.get("bot_type")
 
                     # Добавляем префикс для старых сообщений
                     if (now - timestamp).total_seconds() > 3600:  # Старше 1 часа
@@ -515,11 +533,12 @@ class MessengerService(IMessengerService):
                             recipient_id,
                             context["template_name"],
                             context.get("user_id"),
-                            context.get("template_params")
+                            context.get("template_params"),
+                            bot_type=bot_type
                         )
                     else:
                         # Отправляем как обычное сообщение
-                        success = await self.send_message(recipient_id, message_text, context)
+                        success = await self.send_message(recipient_id, message_text, context, bot_type)
 
                     if success:
                         # Удаляем сообщение после успешной отправки

@@ -53,7 +53,7 @@ jobs:
       if: failure()
       uses: appleboy/telegram-action@master
       with:
-        to: ${{ secrets.TELEGRAM_ADMIN_ID }}
+        to: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
         token: ${{ secrets.TELEGRAM_ADMIN_BOT_TOKEN }}
         message: |
           ❌ *Тесты не прошли*
@@ -98,7 +98,7 @@ jobs:
       if: failure()
       uses: appleboy/telegram-action@master
       with:
-        to: ${{ secrets.TELEGRAM_ADMIN_ID }}
+        to: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
         token: ${{ secrets.TELEGRAM_ADMIN_BOT_TOKEN }}
         message: |
           ❌ *Ошибка сборки Docker образа*
@@ -166,6 +166,10 @@ jobs:
           grep -q "^TWILIO_AUTH_TOKEN=" .env || echo "TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }}" >> .env
           grep -q "^TWILIO_PHONE_NUMBER=" .env || echo "TWILIO_PHONE_NUMBER=${{ secrets.TWILIO_PHONE_NUMBER }}" >> .env
           grep -q "^TELEGRAM_BOT_TOKEN=" .env || echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> .env
+          grep -q "^TELEGRAM_ADMIN_BOT_TOKEN=" .env || echo "TELEGRAM_ADMIN_BOT_TOKEN=${{ secrets.TELEGRAM_ADMIN_BOT_TOKEN }}" >> .env
+          grep -q "^TELEGRAM_ADMIN_CHAT_ID=" .env || echo "TELEGRAM_ADMIN_CHAT_ID=${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}" >> .env
+          grep -q "^TELEGRAM_DEBUG_BOT_TOKEN=" .env || echo "TELEGRAM_DEBUG_BOT_TOKEN=${{ secrets.TELEGRAM_DEBUG_BOT_TOKEN }}" >> .env
+          grep -q "^TELEGRAM_DEBUG_CHAT_ID=" .env || echo "TELEGRAM_DEBUG_CHAT_ID=${{ secrets.TELEGRAM_DEBUG_CHAT_ID }}" >> .env
           grep -q "^OPENAI_API_KEY=" .env || echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> .env
           grep -q "^DEEPSEEK_API_KEY=" .env || echo "DEEPSEEK_API_KEY=${{ secrets.DEEPSEEK_API_KEY }}" >> .env
           grep -q "^DEEPSEEK_MODEL=" .env || echo "DEEPSEEK_MODEL=${{ secrets.DEEPSEEK_MODEL }}" >> .env
@@ -218,7 +222,7 @@ jobs:
       if: always()
       uses: appleboy/telegram-action@master
       with:
-        to: ${{ secrets.TELEGRAM_ADMIN_ID }}
+        to: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
         token: ${{ secrets.TELEGRAM_ADMIN_BOT_TOKEN }}
         message: |
           🚀 *Результат деплоя на Staging*
@@ -270,6 +274,10 @@ jobs:
           echo "TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }}" >> .env
           echo "TWILIO_PHONE_NUMBER=${{ secrets.TWILIO_PHONE_NUMBER }}" >> .env
           echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> .env
+          echo "TELEGRAM_ADMIN_BOT_TOKEN=${{ secrets.TELEGRAM_ADMIN_BOT_TOKEN }}" >> .env
+          echo "TELEGRAM_ADMIN_CHAT_ID=${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}" >> .env
+          echo "TELEGRAM_DEBUG_BOT_TOKEN=${{ secrets.TELEGRAM_DEBUG_BOT_TOKEN }}" >> .env
+          echo "TELEGRAM_DEBUG_CHAT_ID=${{ secrets.TELEGRAM_DEBUG_CHAT_ID }}" >> .env
           echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> .env
           echo "DEEPSEEK_API_KEY=${{ secrets.DEEPSEEK_API_KEY }}" >> .env
           echo "DEEPSEEK_MODEL=${{ secrets.DEEPSEEK_MODEL }}" >> .env
@@ -310,7 +318,7 @@ jobs:
       if: always()
       uses: appleboy/telegram-action@master
       with:
-        to: ${{ secrets.TELEGRAM_ADMIN_ID }}
+        to: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
         token: ${{ secrets.TELEGRAM_ADMIN_BOT_TOKEN }}
         message: |
           🚀 *Результат деплоя на Production*
@@ -328,7 +336,7 @@ jobs:
       if: failure()
       uses: appleboy/telegram-action@master
       with:
-        to: ${{ secrets.TELEGRAM_ADMIN_ID }}
+        to: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
         token: ${{ secrets.TELEGRAM_ADMIN_BOT_TOKEN }}
         message: |
           ❌ *Критическая ошибка деплоя в Production*

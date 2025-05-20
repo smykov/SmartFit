@@ -29,6 +29,6 @@ language.register_module('reminders', reminders.module)
 language.register_module('user', user.module)
 
 # Проверка структуры языка (для диагностики)
-print(f"Spanish language initialized with modules: {list(language.modules.keys())}")
-for module_name, module in language.modules.items():
-    print(f"Module '{module_name}' registered with keys: {list(module.strings.keys())}")
+# print(f"Spanish language initialized with modules: {list(language.modules.keys())}")
+# for module_name, module in language.modules.items():
+#     print(f"Module '{module_name}' registered with keys: {list(module.strings.keys())}")

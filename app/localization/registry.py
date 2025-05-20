@@ -98,12 +98,12 @@ class LocalizationRegistry:
                     if hasattr(lang_module, 'language'):
                         # Проверка структуры языка
                         modules = getattr(lang_module.language, 'modules', {})
-                        logger.info(f"Loaded language '{lang_code}' with modules: {list(modules.keys())}")
+                        logger.debug(f"Loaded language '{lang_code}' with modules: {list(modules.keys())}")
 
                         # Подробная диагностика
                         for module_name, module in modules.items():
                             if hasattr(module, 'strings'):
-                                logger.info(f"Module '{module_name}' has {len(module.strings)} strings")
+                                logger.debug(f"Module '{module_name}' has {len(module.strings)} strings")
                             else:
                                 logger.warning(f"Module '{module_name}' has no strings attribute!")
 
