@@ -8,6 +8,7 @@ import pytz
 from app.constants.localization_keys import LocalizationKeys as LK
 from app.services.commands.base_command import BaseCommand
 from app.services.commands.commands.diet_command import DietCommand
+from app.utils.date_helper import DateHelper
 from config import settings
 
 
@@ -64,35 +65,6 @@ class DietUpdateCommandBase(BaseCommand):
             # По умолчанию используем полную версию
             return FullDietUpdateCommand(dependencies)
 
-    def _is_today_updated(self, updated_days: Dict[str, Any]) -> bool:
-        """
-        Проверяет, обновлен ли план на сегодня
-
-        Args:
-            updated_days: Словарь обновленных дней
-
-        Returns:
-            bool: True, если обновлен план на сегодня
-        """
-        if not updated_days:
-            return False
-
-        # Получаем текущую дату
-        today = datetime.now(pytz.timezone(settings.TIMEZONE))
-
-        # Проверяем по ISO формату
-        today_iso = today.date().isoformat()
-        if today_iso in updated_days.keys():
-            return True
-
-        # Проверяем по дню недели
-        day_of_week = today.strftime("%A").lower()
-        if day_of_week in updated_days.keys():
-            return True
-
-        return False
-
-
 class ShortDietUpdateCommand(DietUpdateCommandBase):
     """
     Команда для обновления краткой версии плана диеты
@@ -130,6 +102,10 @@ class ShortDietUpdateCommand(DietUpdateCommandBase):
                     "success": False,
                     "message": self.get_localized_message(LK.User.NOT_FOUND, lang)
                 }
+
+            # Извлекаем параметры
+            update_request = None
+            original_ai_recommendation = None
 
             # Получаем текст запроса из параметров
             if not params or "update_request" not in params:
@@ -312,7 +288,7 @@ class FullDietUpdateCommand(DietUpdateCommandBase):
 
                 # Если был обновлен план на сегодня, отправляем его
                 # if self._is_today_updated(result.get("updated_days", {})):
-                #     today = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
+                #     today = DateHelper.get_tracking_date()
                 #     today_plan = self.diet_service.get_day_diet_plan(result["plan"], today, lang)
                 #     if today_plan:
                 #         messages.extend(today_plan)

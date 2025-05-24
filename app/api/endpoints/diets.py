@@ -9,6 +9,7 @@ from app.db.firebase import firebase_client
 from app.services.diet.diet_service import DietService as diet_service
 from app.services.messaging.whatsapp_service import WhatsAppService as whatsapp_service
 from app.services.localization import localization_service as localization_service
+from app.utils.date_helper import DateHelper
 from config import settings
 
 router = APIRouter()
@@ -126,14 +127,14 @@ async def get_diet_for_day(
     """Получает план диеты на конкретный день"""
     try:
         # Вместо проверки конкретной даты, используем новую логику
-        if date_str == "today" or date_str == datetime.now(pytz.timezone(settings.TIMEZONE)).date().isoformat():
+        if date_str == "today" or date_str == DateHelper.get_current_date().isoformat():
             # Получаем план на сегодня с учетом дня недели
             day_plan = await diet_service.get_today_diet(user_id)
         else:
             # Если нужна конкретная дата, преобразуем её в день недели
             try:
                 day_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-                weekday = diet_service.get_day_of_week(day_date)
+                weekday = DateHelper.get_day_of_week(day_date)
                 day_plan = await diet_service.get_diet_for_weekday(user_id, weekday)
             except ValueError:
                 raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")

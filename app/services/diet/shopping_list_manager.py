@@ -137,8 +137,8 @@ class ShoppingListManager(BaseDietService):
                 "user_id": diet_plan.get("user_id"),
                 "diet_plan_id": diet_plan_id,
                 "items": shopping_list,
-                "created_at": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat(),
-                "updated_at": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat(),
+                "created_at": DateHelper.get_current_datetime().isoformat(),
+                "updated_at": DateHelper.get_current_datetime().isoformat(),
                 "total_estimated_price": total_estimated_price
             }
 

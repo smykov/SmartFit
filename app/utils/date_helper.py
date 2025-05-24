@@ -1,27 +1,16 @@
 # app/utils/date_helper.py
 from datetime import datetime, date, timedelta
+from typing import Optional
 import pytz
-import logging
-
-from config import settings
 
 
 class DateHelper:
-    """Класс-помощник для работы с датами и днями недели"""
+    """Утилита для работы с датами с учетом часовых поясов пользователей"""
 
+    # Граница "нового дня" для трекинга (6:00 утра)
+    TRACKING_DAY_BOUNDARY_HOUR = 6
     # Словарь для преобразования названия дня недели в число (0 - понедельник, 6 - воскресенье)
     WEEKDAY_MAPPING = {
-        "monday": 0,
-        "tuesday": 1,
-        "wednesday": 2,
-        "thursday": 3,
-        "friday": 4,
-        "saturday": 5,
-        "sunday": 6
-    }
-
-    # Обратное отображение
-    WEEKDAY_REVERSE_MAPPING = {
         0: "monday",
         1: "tuesday",
         2: "wednesday",
@@ -32,138 +21,194 @@ class DateHelper:
     }
 
     @staticmethod
-    def get_current_date() -> date:
+    def get_user_timezone(user_timezone: Optional[str] = None) -> pytz.BaseTzInfo:
         """
-        Получает текущую дату с учетом временной зоны настроек
+        Получает часовой пояс пользователя
+
+        Args:
+            user_timezone: Часовой пояс пользователя (например, 'Europe/Moscow')
+
+        Returns:
+            pytz.BaseTzInfo: Объект часового пояса
+        """
+        if user_timezone:
+            try:
+                return pytz.timezone(user_timezone)
+            except pytz.UnknownTimeZoneError:
+                # Если часовой пояс неизвестен, используем системный
+                pass
+
+        # Fallback на системный часовой пояс из настроек
+        from config import settings
+        return pytz.timezone(settings.TIMEZONE)
+
+    @staticmethod
+    def get_current_date(user_timezone: Optional[str] = None) -> date:
+        """
+        Получает текущую дату в часовом поясе пользователя
+
+        Args:
+            user_timezone: Часовой пояс пользователя
 
         Returns:
             date: Текущая дата
         """
-        return datetime.now(pytz.timezone(settings.TIMEZONE)).date()
+        return DateHelper.get_current_datetime(user_timezone).date()
 
     @staticmethod
-    def get_current_datetime() -> datetime:
+    def get_current_datetime(user_timezone: Optional[str] = None) -> datetime:
         """
-        Получает текущее время с учетом временной зоны настроек
-
-        Returns:
-            datetime: Текущие дата и время
-        """
-        return datetime.now(pytz.timezone(settings.TIMEZONE))
-
-    @classmethod
-    def get_day_of_week(cls, date_val: date = None) -> str:
-        """
-        Возвращает день недели для указанной даты в формате 'monday', 'tuesday' и т.д.
+        Получает текущее время в часовом поясе пользователя
 
         Args:
-            date_val: Дата (по умолчанию сегодня)
+            user_timezone: Часовой пояс пользователя
 
         Returns:
-            str: День недели
+            datetime: Текущее время с часовым поясом
         """
-        if not date_val:
-            date_val = cls.get_current_date()
+        tz = DateHelper.get_user_timezone(user_timezone)
+        return datetime.now(tz)
 
-        # Получаем номер дня недели (0 - понедельник, 6 - воскресенье)
-        weekday = date_val.weekday()
-
-        # Преобразуем в строковое представление
-        return cls.WEEKDAY_REVERSE_MAPPING[weekday]
-
-    @classmethod
-    def get_nearest_date_for_weekday(cls, weekday_name: str) -> date:
+    @staticmethod
+    def get_day_of_week(target_date: date) -> str:
         """
-        Преобразует название дня недели в дату ближайшего такого дня недели
+        Получает день недели для указанной даты
 
         Args:
-            weekday_name: Название дня недели на английском (monday, tuesday и т.д.)
+            target_date: Дата
 
         Returns:
-            date: Дата ближайшего дня недели
+            str: День недели ('monday', 'tuesday', etc.)
         """
-        # Получаем текущую дату
-        today = cls.get_current_date()
+        weekday = target_date.weekday()
+        days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+        return days[weekday]
 
-        # Получаем номер текущего дня недели (0 - понедельник, 6 - воскресенье)
-        today_weekday = today.weekday()
+    @staticmethod
+    def get_nearest_date_for_weekday(weekday: str, user_timezone: Optional[str] = None) -> date:
+        """
+        Получает ближайшую дату для указанного дня недели
 
-        # Получаем номер целевого дня недели
-        target_weekday = cls.WEEKDAY_MAPPING.get(weekday_name.lower())
+        Args:
+            weekday: День недели ('monday', 'tuesday', etc.)
+            user_timezone: Часовой пояс пользователя
 
+        Returns:
+            date: Ближайшая дата для этого дня недели
+        """
+        current_date = DateHelper.get_current_date(user_timezone)
+
+        weekday_map = {
+            "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
+            "friday": 4, "saturday": 5, "sunday": 6
+        }
+
+        target_weekday = weekday_map.get(weekday.lower())
         if target_weekday is None:
-            # Если передано некорректное название дня недели, возвращаем текущую дату
-            return today
+            return current_date
 
-        # Вычисляем разницу в днях
-        days_diff = (target_weekday - today_weekday) % 7
+        current_weekday = current_date.weekday()
+        days_diff = target_weekday - current_weekday
 
-        # Если разница 0 (тот же день) и нужен следующий такой день, добавляем 7 дней
+        # Если это сегодня, возвращаем сегодня
         if days_diff == 0:
-            days_diff = 7
+            return current_date
 
-        # Вычисляем дату ближайшего дня недели
-        nearest_date = today + timedelta(days=days_diff)
+        # Если день уже прошел на этой неделе, берем следующую неделю
+        if days_diff < 0:
+            days_diff += 7
 
-        return nearest_date
+        return current_date + timedelta(days=days_diff)
 
     @staticmethod
-    def format_date(date_value: date, format_str: str) -> str:
+    def format_date(target_date: date, format_string: str = "%d.%m.%Y") -> str:
         """
-        Форматирует дату согласно заданному формату
+        Форматирует дату в строку
 
         Args:
-            date_value: Дата для форматирования
-            format_str: Строка формата даты
+            target_date: Дата для форматирования
+            format_string: Формат даты
 
         Returns:
             str: Отформатированная дата
         """
-        try:
-            # Добавить проверку и логирование формата
-            if not format_str or format_str == "common.day_format":
-                # Если получен ключ локализации вместо формата, используем стандартный формат
-                return date_value.strftime("%d.%m.%Y")
-            return date_value.strftime(format_str)
-        except Exception as e:
-            # В случае ошибки используем стандартный формат
-            logging.error(f"Error formatting date with format '{format_str}': {e}")
-            return date_value.strftime("%d.%m.%Y")
+        return target_date.strftime(format_string)
 
     @staticmethod
-    def parse_date_string(date_string: str, format_string: str = "%Y-%m-%d") -> date:
+    def parse_date_string(date_str: str) -> date:
         """
-        Преобразует строку даты в объект date
+        Парсит строку даты в объект date
 
         Args:
-            date_string: Строка с датой
-            format_string: Формат даты в строке (по умолчанию '%Y-%m-%d')
+            date_str: Строка даты в формате YYYY-MM-DD
 
         Returns:
-            date: Объект date, представляющий указанную дату
-
-        Raises:
-            ValueError: Если строка имеет неверный формат
+            date: Объект даты
         """
-        return datetime.strptime(date_string, format_string).date()
+        return datetime.strptime(date_str, "%Y-%m-%d").date()
 
     @staticmethod
-    def get_tracking_date(current_datetime=None):
+    def get_tracking_date(user_timezone: Optional[str] = None) -> date:
         """
-        Определяет дату для записи трекинга с учетом времени суток.
-        Если время от 00:00 до 5:00, возвращает предыдущий день.
+        Получает "трекинговую дату" - с учетом того, что до 6 утра
+        записи относятся к предыдущему дню
 
         Args:
-            current_datetime: Текущая дата и время (если None, используется текущее время)
+            user_timezone: Часовой пояс пользователя
 
         Returns:
-            date: Дата для записи трекинга
+            date: Дата для трекинга
         """
-        if current_datetime is None:
-            current_datetime = datetime.now(pytz.timezone(settings.TIMEZONE))
+        current_dt = DateHelper.get_current_datetime(user_timezone)
 
-        # Если время от 00:00 до 5:00, возвращаем предыдущий день
-        if current_datetime.hour < 5:
-            return (current_datetime - timedelta(days=1)).date()
-        else:
-            return current_datetime.date()
+        # Если время до 6 утра, считаем это предыдущим днем
+        if current_dt.hour < DateHelper.TRACKING_DAY_BOUNDARY_HOUR:
+            return (current_dt - timedelta(days=1)).date()
+
+        return current_dt.date()
+
+    @staticmethod
+    def get_day_name_localized(target_date: date, lang: str = 'ru') -> str:
+        """
+        Получает локализованное название дня недели
+
+        Args:
+            target_date: Дата
+            lang: Код языка
+
+        Returns:
+            str: Локализованное название дня
+        """
+        # TODO переделать на локализацию
+        day_names = {
+            'ru': ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"],
+            'en': ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+        }
+
+        weekday = target_date.weekday()
+        return day_names.get(lang, day_names['en'])[weekday]
+
+    @staticmethod
+    def get_context_for_llm(user_timezone: Optional[str] = None) -> dict:
+        """
+        Создает контекст с датой и временем для LLM
+
+        Args:
+            user_timezone: Часовой пояс пользователя
+
+        Returns:
+            dict: Контекст с временной информацией
+        """
+        current_dt = DateHelper.get_current_datetime(user_timezone)
+        current_date = current_dt.date()
+        tracking_date = DateHelper.get_tracking_date(user_timezone)
+
+        return {
+            "current_datetime": current_dt.isoformat(),
+            "current_date": current_date.isoformat(),
+            "current_day_of_week": DateHelper.get_day_of_week(current_date),
+            "tracking_date": tracking_date.isoformat(),
+            "tracking_day_of_week": DateHelper.get_day_of_week(tracking_date),
+            "current_time": current_dt.strftime("%H:%M"),
+            "timezone": str(current_dt.tzinfo)
+        }

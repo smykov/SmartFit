@@ -7,6 +7,7 @@ import pytz
 
 from app.db.interfaces.compliance_repository_interface import IComplianceRepository
 from app.models.tracking import MealComplianceStatus
+from app.utils.date_helper import DateHelper
 from config import settings
 
 
@@ -65,7 +66,7 @@ class FirebaseComplianceRepository(IComplianceRepository):
                 "status": status,
                 "notes": notes,
                 "alternative_meal": alternative_meal,
-                "created_at": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat(),
+                "created_at": DateHelper.get_current_datetime().isoformat(),
 
                 # Добавляем данные о фактическом потреблении
                 "calories_consumed": calories_consumed,
@@ -154,8 +155,8 @@ class FirebaseComplianceRepository(IComplianceRepository):
                     "date": date_str,
                     "meals": {},
                     "overall_score": 0,
-                    "created_at": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat(),
-                    "updated_at": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat(),
+                    "created_at": DateHelper.get_current_datetime().isoformat(),
+                    "updated_at": DateHelper.get_current_datetime().isoformat(),
                 }
                 return empty_compliance
 
@@ -310,7 +311,7 @@ class FirebaseComplianceRepository(IComplianceRepository):
             compliance_data["overall_score"] = round(overall_score, 1)
             compliance_data["status_score"] = round(status_percentage, 1)
             compliance_data["nutrients_score"] = round(nutrients_percentage, 1)
-            compliance_data["updated_at"] = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+            compliance_data["updated_at"] = DateHelper.get_current_datetime().isoformat()
 
             self.logger.info(
                 f"Status score: {status_percentage}, nutrients score: {nutrients_percentage}, overall score: {overall_score}")

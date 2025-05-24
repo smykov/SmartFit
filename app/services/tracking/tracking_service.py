@@ -18,7 +18,6 @@ from app.services.tracking.tracking_service_interface import ITrackingService
 from app.services.localization.localization_interface import ILocalizationService
 from app.constants.localization_keys import LocalizationKeys as LK
 from app.utils.date_helper import DateHelper
-from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -304,7 +303,7 @@ class TrackingService(ITrackingService):
 
             # Если дата не указана, используем сегодняшнюю
             if not target_date:
-                target_date = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
+                target_date = DateHelper.get_tracking_date(user.get("timezone"))
             # Преобразуем в строку
             # Проверяем, записан ли вес на указанную дату
             latest_weight = await self.weight_entry_repository.get_latest_entry(user_id)
@@ -368,9 +367,15 @@ class TrackingService(ITrackingService):
             Optional[Dict[str, Any]]: Статистика соблюдения или None
         """
         try:
+            # Получаем пользователя
+            user = await self.user_repository.get_by_id(user_id)
+            if not user:
+                logger.error(f"User {user_id} not found")
+                return None
+
             # Если дата не указана, используем текущую
             if date_value is None:
-                date_value = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
+                date_value = DateHelper.get_tracking_date(user.get("timezone"))
 
             # Получаем запись о соблюдении через репозиторий
             return await self.compliance_repository.get_daily_compliance(user_id, date_value)
@@ -476,7 +481,7 @@ class TrackingService(ITrackingService):
                 return None
 
             # Получаем текущую дату
-            today = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
+            today = DateHelper.get_tracking_date(user.get("timezone"))
 
             # Получаем дату неделю назад
             week_ago = today - timedelta(days=7)
@@ -670,7 +675,7 @@ class TrackingService(ITrackingService):
             self.logger.error(f"Error formatting weekly report: {str(e)}")
             return self.get_localized_message(LK.Tracking.Stats.REPORT_ERROR, lang)
 
-    async def get_recent_weight_entries(self, user_id: str, limit: int = 5) -> List[Dict[str, Any]]:
+    async def get_recent_weight_entries(self, user_id: str, limit: int = 5) -> None | List[Dict[str, Any]]:
         """
         Получает последние записи о весе пользователя
 
@@ -682,8 +687,13 @@ class TrackingService(ITrackingService):
             List[Dict[str, Any]]: Список записей о весе
         """
         try:
+            # Получаем пользователя
+            user = await self.user_repository.get_by_id(user_id)
+            if not user:
+                logger.error(f"User {user_id} not found")
+                return None
             # Получаем текущую дату
-            today = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
+            today = DateHelper.get_tracking_date(user.get("timezone"))
 
             # Получаем дату неделю назад
             days_ago = today - timedelta(days=limit)
@@ -706,7 +716,7 @@ class TrackingService(ITrackingService):
             return []
 
     async def get_compliance_by_period(self, user_id: str, start_date: date = None,
-                                       end_date: date = None) -> Dict[str, Any]:
+                                       end_date: date = None) -> None | Dict[str, Any]:
         """
         Получает статистику соблюдения плана питания за период
 
@@ -719,9 +729,14 @@ class TrackingService(ITrackingService):
             List[Dict[str, Any]]: Список статистик соблюдения по дням
         """
         try:
+            # Получаем пользователя
+            user = await self.user_repository.get_by_id(user_id)
+            if not user:
+                logger.error(f"User {user_id} not found")
+                return None
             # Если даты не указаны, используем текущую неделю
             if not start_date or not end_date:
-                end_date = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
+                end_date = DateHelper.get_tracking_date(user.get("timezone"))
                 start_date = end_date - timedelta(days=7)
 
             # Получаем текущий активный план диеты

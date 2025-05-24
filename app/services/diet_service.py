@@ -73,8 +73,8 @@ class DietService:
             short_plan["user_id"] = user_id
             short_plan["version"] = "short"
             short_plan["status"] = "pending"
-            short_plan["created_at"] = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
-            short_plan["updated_at"] = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+            short_plan["created_at"] = DateHelper.get_current_datetime().isoformat()
+            short_plan["updated_at"] = DateHelper.get_current_datetime().isoformat()
 
             # Проверяем структуру плана
             if "daily_plans" not in short_plan:
@@ -188,7 +188,7 @@ class DietService:
                 plan_id,
                 {
                     "status": "approved",
-                    "updated_at": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+                    "updated_at": DateHelper.get_current_datetime().isoformat()
                 }
             )
 
@@ -239,7 +239,7 @@ class DietService:
             # Сохраняем комментарий к изменению
             if comment:
                 last_modification = {
-                    "timestamp": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat(),
+                    "timestamp": DateHelper.get_current_datetime().isoformat(),
                     "comment": comment
                 }
 
@@ -249,7 +249,7 @@ class DietService:
                 diet_plan["modifications_history"].append(last_modification)
 
             # Обновляем дату обновления
-            diet_plan["updated_at"] = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+            diet_plan["updated_at"] = DateHelper.get_current_datetime().isoformat()
 
             # Обновляем план в базе данных
             success = firebase_client.update_document(
@@ -318,7 +318,7 @@ class DietService:
             # Сохраняем комментарий к изменению
             if comment:
                 last_modification = {
-                    "timestamp": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat(),
+                    "timestamp": DateHelper.get_current_datetime().isoformat(),
                     "comment": comment
                 }
 

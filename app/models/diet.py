@@ -10,7 +10,7 @@ from config import settings
 
 # Функция для получения текущего времени с учетом временной зоны
 def get_current_datetime():
-    return datetime.now(pytz.timezone(settings.TIMEZONE))
+    return DateHelper.get_current_datetime()
 
 
 class MealType(str, Enum):

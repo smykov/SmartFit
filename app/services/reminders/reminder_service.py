@@ -17,6 +17,7 @@ from app.services.localization.localization_interface import ILocalizationServic
 from app.services.reminders.reminder_service_interface import IReminderService
 from app.services.reminders.reminder_factory import ReminderFactory
 from app.services.reminders.reminder_strategies import ReminderStrategy, PlanApprovalReminderStrategy
+from app.utils.date_helper import DateHelper
 from config import settings
 
 
@@ -127,7 +128,7 @@ class ReminderService(IReminderService):
             users = await self.user_repository.find_with_incomplete_onboarding()
 
             # Текущее время
-            now = datetime.now(pytz.timezone(settings.TIMEZONE))
+            now = DateHelper.get_current_datetime()
 
             # Обрабатываем каждого пользователя
             for user in users:
@@ -193,7 +194,7 @@ class ReminderService(IReminderService):
                 return
 
             # Получаем текущее время
-            now = datetime.now(pytz.timezone(settings.TIMEZONE))
+            now = DateHelper.get_current_datetime()
 
             # Получаем планы со статусом pending
             pending_plans = await self.diet_service.get_pending_plans()
@@ -321,7 +322,7 @@ class ReminderService(IReminderService):
 
             # Проверяем, прошло ли минимальное время
             sent_time = datetime.fromisoformat(last_reminder.get("timestamp", ""))
-            now = datetime.now(pytz.timezone(settings.TIMEZONE))
+            now = DateHelper.get_current_datetime()
 
             time_elapsed = (now - sent_time).total_seconds()
 
@@ -474,7 +475,7 @@ class ReminderService(IReminderService):
             Dict[str, Any]: Контекст времени суток
         """
         if now is None:
-            now = datetime.now(pytz.timezone(settings.TIMEZONE))
+            now = DateHelper.get_current_datetime()
 
         current_hour = now.hour
         today = now.date()

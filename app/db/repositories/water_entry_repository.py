@@ -6,6 +6,7 @@ from datetime import datetime, date
 import pytz
 
 from app.db.interfaces.water_entry_repository_interface import IWaterEntryRepository
+from app.utils.date_helper import DateHelper
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -42,11 +43,11 @@ class FirebaseWaterEntryRepository(IWaterEntryRepository):
         try:
             # Если дата не указана, используем текущую
             if date_value is None:
-                date_value = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
+                date_value = DateHelper.get_current_date()
 
             # Если время не указано, используем текущее
             if time_value is None:
-                time_value = datetime.now(pytz.timezone(settings.TIMEZONE))
+                time_value = DateHelper.get_current_datetime()
 
             # Преобразуем дату в строку
             date_str = date_value.isoformat()
@@ -74,7 +75,7 @@ class FirebaseWaterEntryRepository(IWaterEntryRepository):
                 "amount": amount,
                 "date": date_str,
                 "time": time_value.isoformat(),
-                "created_at": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+                "created_at": DateHelper.get_current_datetime().isoformat()
             }
 
             entry_id = await self.firebase_client.add_document("water_entries", entry_data)
@@ -143,7 +144,7 @@ class FirebaseWaterEntryRepository(IWaterEntryRepository):
         try:
             # Если дата не указана, используем текущую
             if date_value is None:
-                date_value = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
+                date_value = DateHelper.get_current_date()
 
             date_str = date_value.isoformat()
 

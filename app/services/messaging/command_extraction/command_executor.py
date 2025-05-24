@@ -78,7 +78,8 @@ class CommandExecutor:
     async def execute_commands(self,
                                user_id: str,
                                commands: List[Command],
-                               messenger_type: str) -> Dict[str, Any]:
+                               messenger_type: str,
+                               original_response_message: Optional[str] = None) -> Dict[str, Any]:
         """
         Выполняет список команд для пользователя последовательно с учетом приоритета
 
@@ -86,6 +87,7 @@ class CommandExecutor:
             user_id: ID пользователя
             commands: Список команд для выполнения
             messenger_type: Тип мессенджера
+            original_response_message: Изначальное сообщение-рекомендация от LLM
 
         Returns:
             Dict[str, Any]: Результат выполнения команд
@@ -118,6 +120,12 @@ class CommandExecutor:
         # Последовательно выполняем команды по порядку приоритета
         for command in sorted_commands:
             self.logger.info(f"Выполнение команды {command.command_type} с приоритетом {command.priority}")
+
+            if command.command_type in ["diet_update"] and original_response_message:
+                # Добавляем изначальные рекомендации в параметры команды
+                if "params" not in command.params:
+                    command.params["params"] = {}
+                command.params["original_ai_recommendation"] = original_response_message
 
             # Если команда - это общее текстовое сообщение, отправляем его пользователю
             if command.command_type == "general_response" and "response_text" in command.params:
@@ -248,36 +256,6 @@ class CommandExecutor:
         except Exception as e:
             self.logger.error(f"Error executing command {command.command_type}: {str(e)}", exc_info=True)
             return {"success": False, "error": str(e), "command": command.command_type}
-
-    def _is_today_updated(self, updated_days: Dict[str, Any], today=None) -> bool:
-        """
-        Проверяет, был ли обновлен план на сегодня
-
-        Args:
-            updated_days: Словарь обновленных дней
-            today: Дата сегодня (если None, будет получена автоматически)
-
-        Returns:
-            bool: True, если был обновлен план на сегодня
-        """
-        if not updated_days:
-            return False
-
-        # Получаем текущую дату, если не передана
-        if today is None:
-            today = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
-
-        # Проверяем по ISO формату
-        today_iso = today.isoformat()
-        if today_iso in updated_days:
-            return True
-
-        # Проверяем по дню недели
-        day_of_week = today.strftime("%A").lower()
-        if day_of_week in updated_days:
-            return True
-
-        return False
 
     # Расширим CommandExecutor для лучшей обработки diet_update команд
 

@@ -13,6 +13,7 @@ from app.services.llm.base_llm_service import BaseLLMService
 from app.db.interfaces.user_repository_interface import IUserRepository
 from app.templates.prompts import create_command_extraction_system_prompt, create_command_extraction_user_prompt
 from app.templates.formatting_helpers import clean_json_from_markdown
+from app.utils.date_helper import DateHelper
 
 
 class LLMCommandExtractor(ICommandExtractor):
@@ -219,38 +220,53 @@ class LLMCommandExtractor(ICommandExtractor):
         Args:
             context: Исходный контекст
             user: Данные пользователя
+            current_diet: Текущий план диеты
 
         Returns:
             Dict[str, Any]: Обогащенный контекст
         """
         enriched = context.copy() if context else {}
+        # КРИТИЧЕСКИ ВАЖНАЯ временная информация (всегда включаем)
+        user_timezone = user.get("timezone") if user else None
+        time_context = DateHelper.get_context_for_llm(user_timezone)
+        enriched.update(time_context)
 
         if user:
-            simplified_plan = DietDataTransformer.transform_to_simplified(current_diet)
-            # Добавляем базовую информацию о пользователе
-            enriched["user_name"] = user.get("name", "")
-            enriched["user_gender"] = user.get("gender", "")
-            enriched["user_weight_goal"] = user.get("weight_goal", "")
-            enriched["budget_limit"] = user.get("budget_limit", "")
-            enriched["age"] = user.get("age", "")
-            enriched["activity_level"] = user.get("activity_level", "")
-            enriched["diet_preference"] = user.get("diet_preference", "")
-            enriched["is_onboarding_completed"] = user.get("is_onboarding_completed", "")
-            enriched["language"] = user.get("language", "")
-            enriched["currency"] = user.get("currency_code", "")
-            enriched["onboarding_step"] = user.get("onboarding_step", "")
-            enriched["current_weight"] = user.get("current_weight", "")
-            enriched["target_weight"] = user.get("target_weight", "")
+            # Основная информация о пользователе (минимум)
+            enriched.update({
+                "user_name": user.get("name", ""),
+                "user_gender": user.get("gender", ""),
+                "user_weight_goal": user.get("weight_goal", ""),
+                "current_weight": user.get("current_weight", ""),
+                "target_weight": user.get("target_weight", ""),
+                "budget_limit": user.get("budget_limit", ""),
+                "age": user.get("age", ""),
+                "activity_level": user.get("activity_level", ""),
+                "diet_preference": user.get("diet_preference", ""),
+                "is_onboarding_completed": user.get("is_onboarding_completed", False),
+                "language": user.get("language", ""),
+                "currency_code": user.get("currency_code", "")
+            })
+
+            # Информация о диете (только критично важная)
             if current_diet:
-                if "diet_plan" not in enriched:
-                    enriched["diet_plan"] = {}
-                enriched["diet_plan"]["status"] = current_diet.get('status')
-                enriched["diet_plan"]["version"] = current_diet.get('version')
-                enriched["diet_plan"]["updated_at"] = current_diet.get('updated_at')
-                enriched["diet_plan"]["modifications_history"] = current_diet.get('modifications_history')
-                enriched["diet_plan"]["daily_plans"] = simplified_plan
-            enriched["allergies"] = user.get("allergies", "")
-            enriched["disliked_products"] = user.get("disliked_products", "")
+                enriched["diet_plan"] = {
+                    "status": current_diet.get('status'),
+                    "version": current_diet.get('version'),
+                    "has_plan": True,
+                    "daily_plans": current_diet.get("daily_plans"),
+                    "modifications_history": current_diet.get('modifications_history'),
+                }
+
+            else:
+                enriched["diet_plan"] = {"has_plan": False}
+
+            if user.get("allergies"):
+                enriched["allergies"] = user.get("allergies", [])
+
+            if user.get("disliked_products"):
+                enriched["disliked_products"] = user.get("disliked_products", [])
+
             # добавить текущую информацию о трекинге воды, блюд
             # # Получаем последние данные о весе
             # weight_entries = await self.tracking_service.get_recent_weight_entries(user_id, 1)

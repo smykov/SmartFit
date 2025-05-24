@@ -33,7 +33,7 @@ class FirebaseUserRepository(IUserRepository):
             Optional[str]: ID созданного пользователя или None в случае ошибки
         """
         try:
-            now = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+            now = DateHelper.get_current_datetime().isoformat()
             if 'created_at' not in user_data:
                 user_data['created_at'] = now
             user_data['updated_at'] = now

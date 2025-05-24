@@ -7,6 +7,7 @@ import pytz
 
 from app.constants.localization_keys import LocalizationKeys as LK
 from app.services.commands.base_command import BaseCommand
+from app.utils.date_helper import DateHelper
 from config import settings
 
 
@@ -104,8 +105,8 @@ class DietCommand(BaseCommand):
 
             # Обработка параметров
             # Получаем текущую дату и время
-            current_datetime = datetime.now(pytz.timezone(settings.TIMEZONE))
-            target_date = current_datetime.date()
+            current_datetime = DateHelper.get_tracking_date()
+            target_date = current_datetime
 
             # Обработка параметра day
             if params and "day" in params:
@@ -121,11 +122,11 @@ class DietCommand(BaseCommand):
                     except ValueError:
                         self.logger.warning(f"Некорректный формат даты: {day_param}")
                         # В случае ошибки используем текущую дату
-                        target_date = current_datetime.date()
+                        target_date = current_datetime
                 elif day_param == "today":
-                    target_date = current_datetime.date()
+                    target_date = current_datetime
                 elif day_param == "tomorrow":
-                    target_date = (current_datetime + timedelta(days=1)).date()
+                    target_date = (current_datetime + timedelta(days=1))
                 elif day_param in ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]:
                     # Определяем день недели в виде числа (0 - понедельник, 6 - воскресенье)
                     weekday_map = {
@@ -140,7 +141,7 @@ class DietCommand(BaseCommand):
                     if days_ahead <= 0:  # Если это текущий день или прошедший день недели
                         days_ahead += 7
 
-                    target_date = (current_datetime + timedelta(days=days_ahead)).date()
+                    target_date = (current_datetime + timedelta(days=days_ahead))
 
             # Обработка параметра full
             show_full_plan = False

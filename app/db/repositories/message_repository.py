@@ -6,6 +6,7 @@ import pytz
 
 from app.db.interfaces.message_repository_interface import IMessageRepository
 from app.models.messaging import MessageStatus
+from app.utils.date_helper import DateHelper
 from config import settings
 
 
@@ -37,7 +38,7 @@ class FirebaseMessageRepository(IMessageRepository):
         try:
             # Добавляем временную метку, если её нет
             if "timestamp" not in message_data:
-                message_data["timestamp"] = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+                message_data["timestamp"] = DateHelper.get_current_datetime().isoformat()
 
             # Сохраняем в Firebase
             message_id = await self.firebase_client.add_document("messages", message_data)
@@ -86,7 +87,7 @@ class FirebaseMessageRepository(IMessageRepository):
                 "message_id": message_id,
                 "message_text": message_text,
                 "status": MessageStatus.SENT,
-                "timestamp": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+                "timestamp": DateHelper.get_current_datetime().isoformat()
             }
 
             # Добавляем контекст, если он предоставлен
@@ -117,7 +118,7 @@ class FirebaseMessageRepository(IMessageRepository):
             bool: Успешность операции
         """
         try:
-            now = datetime.now(pytz.timezone(settings.TIMEZONE))
+            now = DateHelper.get_current_datetime()
 
             message_data = {
                 "phone_number": phone_number,
@@ -187,7 +188,7 @@ class FirebaseMessageRepository(IMessageRepository):
 
             # Если указан максимальный возраст, фильтруем сообщения
             if max_age_hours is not None:
-                now = datetime.now(pytz.timezone(settings.TIMEZONE))
+                now = DateHelper.get_current_datetime()
                 max_age_delta = now - timedelta(hours=max_age_hours)
 
                 # Фильтруем сообщения по возрасту
@@ -227,7 +228,7 @@ class FirebaseMessageRepository(IMessageRepository):
                 "message_id": provider_message_id,
                 "message_text": message.get("message_text"),
                 "status": MessageStatus.SENT,
-                "timestamp": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat(),
+                "timestamp": DateHelper.get_current_datetime().isoformat(),
                 "original_timestamp": message.get("timestamp"),
                 "attempts": message.get("attempts", 1)
             }
@@ -264,7 +265,7 @@ class FirebaseMessageRepository(IMessageRepository):
                 message_id,
                 {
                     "status": MessageStatus.EXPIRED,
-                    "expired_at": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+                    "expired_at": DateHelper.get_current_datetime().isoformat()
                 }
             )
 
@@ -296,7 +297,7 @@ class FirebaseMessageRepository(IMessageRepository):
                 message_id,
                 {
                     "attempts": message.get("attempts", 1) + 1,
-                    "last_attempt": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+                    "last_attempt": DateHelper.get_current_datetime().isoformat()
                 }
             )
 

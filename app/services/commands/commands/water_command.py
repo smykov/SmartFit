@@ -6,6 +6,7 @@ import pytz
 
 from app.constants.localization_keys import LocalizationKeys as LK
 from app.services.commands.base_command import BaseCommand
+from app.utils.date_helper import DateHelper
 from config import settings
 
 
@@ -14,7 +15,7 @@ class WaterCommand(BaseCommand):
     Команда для записи потребления воды
     """
 
-    async def execute(self, user_id: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def execute(self, user_id: str, params: Optional[Dict[str, Any]] = None) -> None | Dict[str, Any]:
         """
         Выполнение команды записи потребления воды
 
@@ -63,9 +64,13 @@ class WaterCommand(BaseCommand):
 
             # Получаем текущий статус трекинга
             daily_status = await self.tracking_service.get_daily_status(user_id)
-
+            # Получаем пользователя
+            user = await self.user_repository.get_by_id(user_id)
+            if not user:
+                self.logger.error(f"User {user_id} not found")
+                return None
             # Получаем данные о потреблении воды за неделю
-            end_date = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
+            end_date = DateHelper.get_tracking_date()
             start_date = end_date - timedelta(days=7)
             weekly_water = await self.tracking_service.get_water_history(user_id, start_date, end_date)
 

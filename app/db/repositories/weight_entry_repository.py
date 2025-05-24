@@ -6,6 +6,7 @@ from datetime import datetime, date
 import pytz
 
 from app.db.interfaces.weight_entry_repository_interface import IWeightEntryRepository
+from app.utils.date_helper import DateHelper
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -41,7 +42,7 @@ class FirebaseWeightEntryRepository(IWeightEntryRepository):
         try:
             # Если дата не указана, используем текущую
             if date_value is None:
-                date_value = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
+                date_value = DateHelper.get_current_date()
 
             # Преобразуем дату в строку
             date_str = date_value.isoformat()
@@ -66,7 +67,7 @@ class FirebaseWeightEntryRepository(IWeightEntryRepository):
                 "weight": weight,
                 "date": date_str,
                 "notes": notes,
-                "created_at": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+                "created_at": DateHelper.get_current_datetime().isoformat()
             }
 
             entry_id = await self.firebase_client.add_document("weight_entries", entry_data)

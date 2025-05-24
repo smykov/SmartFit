@@ -6,6 +6,7 @@ from datetime import datetime
 import pytz
 
 from app.db.interfaces.shopping_list_repository_interface import IShoppingListRepository
+from app.utils.date_helper import DateHelper
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -36,7 +37,7 @@ class FirebaseShoppingListRepository(IShoppingListRepository):
             Optional[str]: ID созданного списка или None в случае ошибки
         """
         try:
-            now = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+            now = DateHelper.get_current_datetime().isoformat()
             if 'created_at' not in shopping_list_data:
                 shopping_list_data['created_at'] = now
             shopping_list_data['updated_at'] = now
@@ -81,7 +82,7 @@ class FirebaseShoppingListRepository(IShoppingListRepository):
             bool: Результат обновления
         """
         try:
-            update_data['updated_at'] = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+            update_data['updated_at'] = DateHelper.get_current_datetime().isoformat()
 
             result = await self.firebase_client.update_document("shopping_lists", list_id, update_data)
             return result

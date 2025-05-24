@@ -5,12 +5,13 @@ from typing import Optional, List, Dict, Any
 import pytz
 from pydantic import BaseModel, Field, EmailStr, validator
 
+from app.utils.date_helper import DateHelper
 from config import settings
 
 
 # Функция для получения текущего времени с учетом временной зоны
 def get_current_datetime():
-    return datetime.now(pytz.timezone(settings.TIMEZONE))
+    return DateHelper.get_current_datetime()
 
 
 class Gender(str, Enum):
@@ -47,6 +48,7 @@ class UserBase(BaseModel):
     phone_number: str
     name: str
     email: Optional[EmailStr] = None
+    timezone: Optional[str] = settings.TIMEZONE
 
     # Профиль для диеты
     gender: Optional[Gender] = None
@@ -86,6 +88,16 @@ class UserBase(BaseModel):
             raise ValueError('Вес должен быть в диапазоне от 30 до 300 кг')
         return v
 
+    @validator('timezone')
+    def validate_timezone(cls, v):
+        if v is not None:
+            try:
+                import pytz
+                pytz.timezone(v)
+            except pytz.UnknownTimeZoneError:
+                raise ValueError(f'Неизвестный часовой пояс: {v}')
+        return v
+
 
 class UserCreate(UserBase):
     """Модель для создания пользователя"""
@@ -108,6 +120,7 @@ class UserUpdate(BaseModel):
     allergies: Optional[List[str]] = None
     disliked_products: Optional[List[str]] = None
     local_cuisine_preference: Optional[bool] = None
+    timezone: Optional[str] = None
 
 
 class UserInDB(UserBase):

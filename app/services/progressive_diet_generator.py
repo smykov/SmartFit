@@ -9,6 +9,7 @@ import pytz
 from app.db.interfaces.diet_plan_repository_interface import IDietPlanRepository
 from app.templates.prompts import create_full_diet_system_prompt, create_full_diet_user_prompt, \
     create_single_day_user_prompt
+from app.utils.date_helper import DateHelper
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -122,7 +123,7 @@ class ProgressiveDietGenerator:
                 # Обновляем статус плана на "active"
                 await self.diet_plan_repository.update(
                     self.full_plan_id,
-                    {"status": "active", "updated_at": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()}
+                    {"status": "active", "updated_at": DateHelper.get_current_datetime().isoformat()}
                 )
                 logger.info(f"Full plan generation completed successfully")
             else:
@@ -209,8 +210,8 @@ class ProgressiveDietGenerator:
             "version": "full",
             "status": "in_progress",  # Промежуточный статус для отслеживания прогресса
             "daily_plans": {},  # Будет заполняться постепенно
-            "created_at": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat(),
-            "updated_at": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat(),
+            "created_at": DateHelper.get_current_datetime().isoformat(),
+            "updated_at": DateHelper.get_current_datetime().isoformat(),
         }
 
         return full_plan

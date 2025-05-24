@@ -448,7 +448,7 @@ class MessengerService(IMessengerService):
                 return True
 
             # Проверяем, прошло ли достаточное количество времени
-            current_time = datetime.now(pytz.timezone(settings.TIMEZONE))
+            current_time = DateHelper.get_current_datetime()
             reminder_time = datetime.fromisoformat(last_reminder.get("created_at", ""))
 
             seconds_since_last_reminder = (current_time - reminder_time).total_seconds()
@@ -502,7 +502,7 @@ class MessengerService(IMessengerService):
                 for message in sorted_messages[:5]:  # Не более 5 сообщений за раз
                     # Проверяем, не устарело ли сообщение
                     timestamp = datetime.fromisoformat(message.get("timestamp", ""))
-                    now = datetime.now(pytz.timezone(settings.TIMEZONE))
+                    now = DateHelper.get_current_datetime()
 
                     if (now - timestamp).total_seconds() > self.max_message_age_hours * 3600:
                         # Помечаем как устаревшее

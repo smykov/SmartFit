@@ -331,7 +331,7 @@ class WhatsAppService:
                 for message in sorted_messages[:5]:  # Не более 5 сообщений за раз
                     # Проверяем, не устарело ли сообщение
                     timestamp = datetime.fromisoformat(message.get("timestamp", ""))
-                    now = datetime.now(pytz.timezone(settings.TIMEZONE))
+                    now = DateHelper.get_current_datetime()
 
                     if (now - timestamp).total_seconds() > self.max_message_age_hours * 3600:
                         # Помечаем как устаревшее

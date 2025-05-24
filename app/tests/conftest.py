@@ -62,11 +62,12 @@ def reset_mocks(whatsapp_service_mock):
     # Выполняется после каждого теста
     pass
 
+
 @pytest.fixture
 def test_config():
     """Тестовая конфигурация с необходимыми параметрами."""
     return {
-        "TIMEZONE": "America/Guatemala",
+        "TIMEZONE": "Asia/Novosibirsk",
         "WHATSAPP_MAX_MESSAGE_SIZE": 1500,
         "TWILIO_PHONE_NUMBER": "+1234567890",
         "DEFAULT_LANGUAGE": "es"

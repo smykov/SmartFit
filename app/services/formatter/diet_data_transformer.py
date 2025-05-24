@@ -110,3 +110,82 @@ class DietDataTransformer:
                 }
 
         return simplified_plan
+
+    @classmethod
+    def transform_to_llm(cls, current_diet):
+        simplified_plan = {
+            'daily_plans': {}
+        }
+        # Обрабатываем каждый день недели
+        for day, day_data in current_diet.get('daily_plans', {}).items():
+
+            # Обрабатываем приемы пищи
+            simplified_meals = cls._get_simplified_day_meals(day_data)
+
+            # Добавляем день только если есть приемы пищи
+            if simplified_meals:
+                simplified_plan['daily_plans'][day] = simplified_meals
+
+        return simplified_plan
+
+    @classmethod
+    def _get_simplified_day_meals(cls, day_plan: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Получает упрощенный список блюд на день с КБЖУ
+
+        Args:
+            day_plan: План диеты
+
+        Returns:
+            Dict[str, Any]: Словарь с блюдами и суммарными КБЖУ
+        """
+        if not day_plan or "meals" not in day_plan:
+            return {"meals": [], "total_kbju": ""}
+
+        meals = day_plan.get("meals", [])
+
+        # Формируем список блюд с КБЖУ
+        meals_list = []
+        total_calories = 0
+        total_proteins = 0
+        total_fats = 0
+        total_carbs = 0
+
+        for meal in meals:
+            if not meal.get('title'):
+                continue
+
+            meal_type = meal.get('type', '')
+            title = meal.get('title', '')
+            calories = meal.get('calories', 0) or 0
+            proteins = meal.get('proteins', 0) or 0
+            fats = meal.get('fats', 0) or 0
+            carbs = meal.get('carbs', 0) or 0
+
+            # Суммируем для итога дня
+            total_calories += calories
+            total_proteins += proteins
+            total_fats += fats
+            total_carbs += carbs
+
+            # Форматируем строку блюда
+            # TODO добавить локализацию
+            meal_str = f"{meal_type}: {title}"
+            if calories > 0:
+                meal_str += f" ({int(calories)}ккал"
+                if proteins > 0 or fats > 0 or carbs > 0:
+                    meal_str += f", Б{int(proteins)}Ж{int(fats)}У{int(carbs)}"
+                meal_str += ")"
+
+            meals_list.append(meal_str)
+
+        # Формируем суммарные КБЖУ за день
+        # TODO добавить локализацию
+        total_kbju = ""
+        if total_calories > 0:
+            total_kbju = f"Итого: {int(total_calories)}ккал, Б{int(total_proteins)}Ж{int(total_fats)}У{int(total_carbs)}"
+
+        return {
+            "meals": meals_list,
+            "total_kbju": total_kbju
+        }

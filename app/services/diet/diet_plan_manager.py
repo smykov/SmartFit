@@ -20,6 +20,7 @@ from app.templates.prompts import (
     update_full_diet_system_prompt,
     update_full_diet_user_prompt
 )
+from app.utils.date_helper import DateHelper
 from config import settings
 
 
@@ -156,7 +157,7 @@ class DietPlanManager(BaseDietService):
                 plan_id,
                 {
                     "status": "approved",
-                    "updated_at": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+                    "updated_at": DateHelper.get_current_datetime().isoformat()
                 }
             )
 
@@ -213,7 +214,7 @@ class DietPlanManager(BaseDietService):
             # Сохраняем комментарий к изменению
             if comment:
                 last_modification = {
-                    "timestamp": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat(),
+                    "timestamp": DateHelper.get_current_datetime().isoformat(),
                     "comment": comment
                 }
 
@@ -223,7 +224,7 @@ class DietPlanManager(BaseDietService):
                 diet_plan["modifications_history"].append(last_modification)
 
             # Обновляем дату обновления
-            diet_plan["updated_at"] = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+            diet_plan["updated_at"] = DateHelper.get_current_datetime().isoformat()
 
             # Обновляем план в базе данных
             success = await self.diet_plan_repository.update(
@@ -348,7 +349,7 @@ class DietPlanManager(BaseDietService):
             # Сохраняем комментарий к изменению
             if comment:
                 last_modification = {
-                    "timestamp": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat(),
+                    "timestamp": DateHelper.get_current_datetime().isoformat(),
                     "comment": comment
                 }
 
@@ -458,14 +459,20 @@ class DietPlanManager(BaseDietService):
             Optional[Dict[str, Any]]: План на сегодня или None, если план не найден
         """
         try:
+            # Получаем пользователя
+            user = await self.user_repository.get_by_id(user_id)
+            if not user:
+                self.logger.error(f"User {user_id} not found")
+                return None
+
             # Определяем текущий день недели
-            today = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
+            today = DateHelper.get_tracking_date(user.get("timezone", settings.TIMEZONE))
 
             # Получаем план на текущий день
             return await self.get_diet_for_day(user_id, today)
 
         except Exception as e:
-            self.logger.error(f"Error getting today's diet: {str(e)}")
+            self.logger.error(f"Error getting today's diet: {str(e)}", exc_info=True)
             return None
 
     async def get_diet_for_weekday(self, user_id: str, weekday: str) -> Optional[Dict[str, Any]]:

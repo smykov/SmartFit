@@ -6,6 +6,7 @@ import pytz
 
 from app.constants.localization_keys import LocalizationKeys as LK
 from app.services.commands.base_command import BaseCommand
+from app.utils.date_helper import DateHelper
 from config import settings
 
 
@@ -14,7 +15,7 @@ class StatsCommand(BaseCommand):
     Команда для получения статистики прогресса
     """
 
-    async def execute(self, user_id: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def execute(self, user_id: str, params: Optional[Dict[str, Any]] = None) -> None | Dict[str, Any]:
         """
         Выполнение команды получения статистики
 
@@ -30,6 +31,12 @@ class StatsCommand(BaseCommand):
         if hasattr(self, 'localization_service') and self.localization_service:
             lang = await self.localization_service.get_user_language(user_id)
         try:
+            # Получаем пользователя
+            user = await self.user_repository.get_by_id(user_id)
+            if not user:
+                self.logger.error(f"User {user_id} not found")
+                return None
+
             # Получаем прогресс по весу
             weight_progress = await self.tracking_service.calculate_weight_progress(user_id)
 
@@ -37,7 +44,7 @@ class StatsCommand(BaseCommand):
             today_status = await self.tracking_service.get_daily_status(user_id)
 
             # Получаем данные о соблюдении плана за последние 7 дней
-            end_date = today = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
+            end_date = today = DateHelper.get_tracking_date(user.get("timezone"))
             start_date = end_date - timedelta(days=7)
             period_data = await self.tracking_service.get_compliance_by_period(user_id, start_date, end_date)
 

@@ -12,6 +12,7 @@ from app.models.tracking import (
     MealCompliance
 )
 from app.services.whatsapp_service import whatsapp_service
+from app.utils.date_helper import DateHelper
 from config import settings
 
 router = APIRouter()
@@ -228,11 +229,11 @@ async def record_meal_compliance(
 
         # Если дата не указана, используем текущую
         if not compliance_data.date:
-            compliance_data.date = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
+            compliance_data.date = DateHelper.get_current_date()
 
         # Если не указано время создания, используем текущее
         if not compliance_data.created_at:
-            compliance_data.created_at = datetime.now(pytz.timezone(settings.TIMEZONE))
+            compliance_data.created_at = DateHelper.get_current_datetime()
 
         # Записываем соблюдение
         result = await tracking_service.record_meal_compliance(
@@ -425,7 +426,7 @@ async def setup_reminders(
             "weight_reminder": weight_reminder,
             "water_reminder": water_reminder,
             "weekly_report": weekly_report,
-            "updated_at": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+            "updated_at": DateHelper.get_current_datetime().isoformat()
         }
 
         await firebase_client.update_document("users", user_id, {"reminders": reminders})

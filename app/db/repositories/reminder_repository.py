@@ -7,6 +7,7 @@ from typing import Dict, Any, List, Optional
 import pytz
 
 from app.db.interfaces.reminder_repository_interface import IReminderRepository
+from app.utils.date_helper import DateHelper
 from config import settings
 
 
@@ -40,7 +41,7 @@ class FirebaseReminderRepository(IReminderRepository):
             reminder_data = {
                 "phone_number": phone_number,
                 "reminder_type": reminder_type,
-                "timestamp": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat(),
+                "timestamp": DateHelper.get_current_datetime().isoformat(),
                 "status": "sent"
             }
 
@@ -114,7 +115,7 @@ class FirebaseReminderRepository(IReminderRepository):
         """
         try:
             # Вычисляем время начала периода
-            start_time = datetime.now(pytz.timezone(settings.TIMEZONE)) - timedelta(hours=hours)
+            start_time = DateHelper.get_current_datetime() - timedelta(hours=hours)
             start_time_str = start_time.isoformat()
 
             conditions = [
@@ -159,7 +160,7 @@ class FirebaseReminderRepository(IReminderRepository):
         """
         try:
             # Вычисляем время, старше которого напоминания будут удалены
-            cut_off_date = datetime.now(pytz.timezone(settings.TIMEZONE)) - timedelta(days=days)
+            cut_off_date = DateHelper.get_current_datetime() - timedelta(days=days)
             cut_off_date_str = cut_off_date.isoformat()
 
             # Получаем все старые напоминания
@@ -201,7 +202,7 @@ class FirebaseReminderRepository(IReminderRepository):
         """
         try:
             # Вычисляем время начала периода
-            start_time = datetime.now(pytz.timezone(settings.TIMEZONE)) - timedelta(hours=hours)
+            start_time = DateHelper.get_current_datetime() - timedelta(hours=hours)
             start_time_str = start_time.isoformat()
 
             # Получаем все напоминания данного типа

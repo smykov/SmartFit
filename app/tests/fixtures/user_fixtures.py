@@ -29,7 +29,8 @@ def test_user_data():
         "created_at": datetime.now(pytz.UTC).isoformat(),
         "updated_at": datetime.now(pytz.UTC).isoformat(),
         "is_onboarding_completed": True,
-        "is_active": True
+        "is_active": True,
+        "timezone": "Asia/Novosibirsk",
     }
 
 

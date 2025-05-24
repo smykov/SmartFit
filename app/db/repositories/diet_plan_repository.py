@@ -6,6 +6,7 @@ from datetime import datetime
 import pytz
 
 from app.db.interfaces.diet_plan_repository_interface import IDietPlanRepository
+from app.utils.date_helper import DateHelper
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -37,7 +38,7 @@ class FirebaseDietPlanRepository(IDietPlanRepository):
         """
         try:
             # Добавляем timestamp
-            now = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+            now = DateHelper.get_current_datetime().isoformat()
             if 'created_at' not in diet_plan_data:
                 diet_plan_data['created_at'] = now
             diet_plan_data['updated_at'] = now
@@ -83,7 +84,7 @@ class FirebaseDietPlanRepository(IDietPlanRepository):
         """
         try:
             # Добавляем timestamp обновления
-            update_data['updated_at'] = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+            update_data['updated_at'] = DateHelper.get_current_datetime().isoformat()
 
             result = await self.firebase_client.update_document("diet_plans", plan_id, update_data)
             return result
@@ -198,7 +199,7 @@ class FirebaseDietPlanRepository(IDietPlanRepository):
             plan["daily_plans"][day_key] = day_data
 
             # Обновляем timestamp
-            plan["updated_at"] = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+            plan["updated_at"] = DateHelper.get_current_datetime().isoformat()
 
             # Сохраняем обновленный план
             result = await self.firebase_client.update_document(

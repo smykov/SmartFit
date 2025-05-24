@@ -20,6 +20,7 @@ from app.services.tracking.tracking_service_interface import ITrackingService
 from app.services.diet.diet_service_interface import IDietService
 from app.services.messaging.command_extraction.command_extraction_interface import ICommandExtractor
 from app.services.messaging.command_extraction.command_executor import CommandExecutor
+from app.utils.date_helper import DateHelper
 from config import settings
 
 
@@ -175,7 +176,7 @@ class MessageProcessorService:
 
             # Сразу отмечаем сообщение как "в обработке"
             if message_id:
-                timestamp = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+                timestamp = DateHelper.get_current_datetime().isoformat()
                 await self.message_repository.mark_as_processing(message_id, sender_id, message_text, timestamp)
 
             if not sender_id or not message_text:
@@ -198,7 +199,7 @@ class MessageProcessorService:
 
             # Обновляем информацию о последнем взаимодействии
             await self.user_repository.update(user["id"], {
-                "last_interaction": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat(),
+                "last_interaction": DateHelper.get_current_datetime().isoformat(),
                 "last_interaction_messenger": messenger_type
             })
 
@@ -254,7 +255,8 @@ class MessageProcessorService:
                 execution_result = await self.command_executor.execute_commands(
                     user["id"],
                     extraction_result.commands,
-                    messenger_type
+                    messenger_type,
+                    extraction_result.response_message
                 )
 
                 # Отмечаем сообщение как обработанное
@@ -388,7 +390,7 @@ class MessageProcessorService:
                 message_id,
                 sender_id,
                 message_text,
-                datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+                DateHelper.get_current_datetime().isoformat()
             )
 
             if not result:
@@ -423,7 +425,7 @@ class MessageProcessorService:
         """
         context = {
             "last_action": action,
-            "last_action_time": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat(),
+            "last_action_time": DateHelper.get_current_datetime().isoformat(),
             "last_message": data.get("message_text", "") if data else "",
             "data": data
         }
@@ -431,7 +433,7 @@ class MessageProcessorService:
         # Сохраняем в репозитории пользователей
         await self.user_repository.update(user_id, {
             "last_conversation_context": context,
-            "updated_at": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+            "updated_at": DateHelper.get_current_datetime().isoformat()
         })
 
     async def _enrich_context_with_state(self, context: Dict[str, Any], user_id: str) -> Dict[str, Any]:

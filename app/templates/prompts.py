@@ -1,9 +1,12 @@
 import json
-from datetime import datetime
+from calendar import weekday
+from datetime import datetime, timedelta
 from typing import Dict, Any
 
 import pytz
 
+from app.services.formatter.diet_data_transformer import DietDataTransformer
+from app.utils.date_helper import DateHelper
 from config import settings
 
 
@@ -613,89 +616,96 @@ def create_command_extraction_user_prompt(message: str, context: Dict[str, Any])
     TODO добавлять информацию по трекингу за сегодня (вода и тп, тк сейчас он думает что в этом сообщении эта вся вода, и говорит что мало за день, но в команде статистика пишет что 8 стаконов и много.).
     """
     user_prompt_parts = []
+    today = DateHelper.get_tracking_date()
+    weekday = DateHelper.get_day_of_week(today)
+    tomorrow = DateHelper.get_day_of_week(today + timedelta(days=1))
 
     # Добавляем контекст, если он есть
     if context:
         user_prompt_parts.append("Контекст:")
+        user_prompt_parts.append("User information:")
 
         # Базовая информация о пользователе
         if "user_name" in context:
-            user_prompt_parts.append(f"- Имя пользователя: {context['user_name']}")
+            user_prompt_parts.append(f"- Name: {context['user_name']}")
 
         if "user_gender" in context:
-            user_prompt_parts.append(f"- Пол: {context['user_gender']}")
+            user_prompt_parts.append(f"- Gender: {context['user_gender']}")
 
         if "age" in context and context["age"]:
-            user_prompt_parts.append(f"- Возраст: {context['age']}")
+            user_prompt_parts.append(f"- Age: {context['age']}")
 
         if "current_weight" in context and context["current_weight"]:
-            user_prompt_parts.append(f"- Текущий вес: {context['current_weight']}")
+            user_prompt_parts.append(f"- Current weight: {context['current_weight']}")
 
         if "target_weight" in context and context["target_weight"]:
-            user_prompt_parts.append(f"- Целевой вес: {context['target_weight']}")
+            user_prompt_parts.append(f"- Target weight: {context['target_weight']}")
 
         if "activity_level" in context and context["activity_level"]:
-            user_prompt_parts.append(f"- Уровень активности: {context['activity_level']}")
+            user_prompt_parts.append(f"- Activity level: {context['activity_level']}")
 
         if "diet_preference" in context and context["diet_preference"]:
-            user_prompt_parts.append(f"- Предпочтения в питании: {context['diet_preference']}")
+            user_prompt_parts.append(f"- Diet preference: {context['diet_preference']}")
 
         if "budget_limit" in context and context["budget_limit"]:
-            user_prompt_parts.append(f"- Бюджет на питание в неделю: {context['budget_limit']}")
+            user_prompt_parts.append(f"- Budget limit for week: {context['budget_limit']}")
 
         if "allergies" in context and context["allergies"]:
-            user_prompt_parts.append(f"- Аллергии: {context['allergies']}")
+            user_prompt_parts.append(f"- Allergies: {context['allergies']}")
 
         if "disliked_products" in context and context["disliked_products"]:
-            user_prompt_parts.append(f"- Нелюбимые продукты: {context['disliked_products']}")
+            user_prompt_parts.append(f"- Disliked products: {context['disliked_products']}")
 
         if "language" in context:
-            user_prompt_parts.append(f"- Язык пользователя: {context['language']}")
+            user_prompt_parts.append(f"- Language: {context['language']}")
 
         if "currency_code" in context:
-            user_prompt_parts.append(f"- Валюта пользователя: {context['currency_code']}")
+            user_prompt_parts.append(f"- Currency: {context['currency_code']}")
 
         # Информация о диетическом плане
         if "diet_plan" in context:
-            user_prompt_parts.append("- Информация о плане питания:")
+            user_prompt_parts.append("Diet plan Information:")
             diet_plan = context["diet_plan"]
 
+            if "has_plan" not in diet_plan:
+                user_prompt_parts.append(f"- Has plan: false")
+
             if "status" in diet_plan:
-                user_prompt_parts.append(f"  • Статус: {diet_plan['status']}")
+                user_prompt_parts.append(f"- Status: {diet_plan['status']}")
 
             if "version" in diet_plan:
-                user_prompt_parts.append(f"  • Версия: {diet_plan['version']}")
-
-            if "updated_at" in diet_plan:
-                user_prompt_parts.append(f"  • Обновлен: {diet_plan['updated_at']}")
+                user_prompt_parts.append(f"- Version: {diet_plan['version']}")
 
             # Вывод структуры daily_plans в виде JSON
             if "daily_plans" in diet_plan and diet_plan["daily_plans"]:
                 try:
+                    simplified_diet_plan = _get_simplified_diet_plan(diet_plan)
                     # Преобразуем словарь в JSON-строку с отступами для лучшей читаемости
-                    plans_json = json.dumps(diet_plan['daily_plans'], ensure_ascii=False)
-                    user_prompt_parts.append(f"  • Детали плана питания (JSON):\n{plans_json}")
+                    plans_json = json.dumps(simplified_diet_plan, ensure_ascii=False)
+                    user_prompt_parts.append(f"  • Diet plan (JSON):\n{plans_json}")
                 except Exception as e:
                     user_prompt_parts.append(f"  • Не удалось сериализовать план в JSON: {str(e)}")
 
         # Информация о последних действиях
         if "last_action" in context:
-            user_prompt_parts.append(f"- Последнее действие: {context['last_action']}")
+            user_prompt_parts.append(f"- Last action: {context['last_action']}")
 
         if "last_message" in context:
-            user_prompt_parts.append(f"- Последнее сообщение: {context['last_message']}")
+            user_prompt_parts.append(f"- Last message: {context['last_message']}")
 
         if "is_onboarding_completed" in context:
-            status = "завершен" if context["is_onboarding_completed"] else "не завершен"
-            user_prompt_parts.append(f"- Статус онбординга: {status}")
+            status = "completed" if context["is_onboarding_completed"] else "not completed"
+            user_prompt_parts.append(f"- User onboarding was {status}")
 
-        if  not context["is_onboarding_completed"] and "onboarding_step" in context and context["onboarding_step"]:
-            user_prompt_parts.append(f"- Текущий шаг онбординга: {context['onboarding_step']}")
+        if not context["is_onboarding_completed"] and "onboarding_step" in context and context["onboarding_step"]:
+                    user_prompt_parts.append(f"- Onboarding step: {context['onboarding_step']}")
 
         user_prompt_parts.append("")  # Пустая строка для разделения
 
     # Добавляем сообщение пользователя
-    user_prompt_parts.append(f"Сообщение пользователя: \"{message}\"")
+    user_prompt_parts.append(f"User request: \"{message}\"\n")
+    user_prompt_parts.append(f"Today: {today} ({weekday})")
+    user_prompt_parts.append(f"Tomorrow: {tomorrow}")
 
     return "\n".join(user_prompt_parts)
 
@@ -877,7 +887,8 @@ def update_full_diet_user_prompt(user_data: Dict[Any, str], update_request: str,
         str: Пользовательский промпт
     """
     # TODO нужно добавить историю изменения диеты + историю изменения короткой диеты если уже полный план
-    today = datetime.now(pytz.timezone(settings.TIMEZONE)).date()
+    today = DateHelper.get_tracking_date()
+    weekday = DateHelper.get_day_of_week(today)
 
     user_prompt = f"""Пользователь просит: "{update_request}"
     """
@@ -892,6 +903,8 @@ def update_full_diet_user_prompt(user_data: Dict[Any, str], update_request: str,
     weight_goal = user_data.get("weight_goal", "не указан")
     diet_preference = user_data.get("diet_preference", "regular")
     budget_limit = user_data.get("budget_limit", "не указан")
+    currency = user_data.get("currency_code", settings.DEFAULT_CURRENCY)
+    language = user_data.get("currency_code", settings.DEFAULT_LANGUAGE)
     allergies = user_data.get("allergies", [])
     disliked_products = user_data.get("disliked_products", [])
 
@@ -902,27 +915,41 @@ def update_full_diet_user_prompt(user_data: Dict[Any, str], update_request: str,
     - Пол: {gender}
     - Возраст: {age}
     - Рост: {height} см
+    - Язык: {language}
     - Текущий вес: {current_weight} кг
     - Целевой вес: {target_weight} кг
     - Уровень активности: {activity_level}
     - Цель по весу: {weight_goal}
     - Пищевые предпочтения: {diet_preference}
-    - Бюджет на продукты: {budget_limit} в валюте пользователя в неделю
+    - Бюджет на продукты: {budget_limit} {currency}
     - Аллергии: {', '.join(allergies) if allergies else 'нет'}
     - Нелюбимые продукты: {', '.join(disliked_products) if disliked_products else 'нет'}
     """
 
+    last_context = user_data.get("last_conversation_context", {})
+    if last_context and ("last_action" in last_context or "last_message" in last_context):
+        user_prompt += f"""
+        Информация о последних действиях
+        """
+        if "last_action" in last_context and last_context["last_action"]:
+            last_action = last_context.get("last_action", "")
+            user_prompt += f"- Last action: {last_action}\n"
+        if "last_message" in last_context and last_context["last_message"]:
+            last_message = last_context.get("last_message", "")
+            user_prompt += f"- Last message: {last_message}\n"
+
 
     # Добавляем краткий план к промпту
-    simplified_diet_plan = create_simplified_diet_plan(diet_plan)
+    simplified_diet_plan = _get_simplified_diet_plan(diet_plan)
     plans_json = json.dumps(simplified_diet_plan["daily_plans"], ensure_ascii=False)
-    user_prompt += f"Текущий согласованный плана питания в упрощенном виде (JSON):\n{plans_json}"
+    user_prompt += f"Текущий согласованный план питания в упрощенном виде (JSON):\n{plans_json}"
 
     user_prompt += """/nПожалуйста, обнови или предложи альтернативный план питания в соответствии с запросом пользователя, и дай краткий комментарий о внесенных изменениях. 
     ОБЯЗАТЕЛЬНО: при анализе плана питания для изменения учитывай весь согласованный план, а не только те блюда которые просит изменить. Весь план должен соответствовал данным пользователя и его целям, а также следовать важным принципам создания плана питания.
     """
     user_prompt += f"""Если нужно обновить план на конкретную дату, используй ДЕНЬ НЕДЕЛИ (monday, tuesday, wednesday, thursday, friday, saturday, sunday) этой даты
-    Сегодня: {today}
+    Сегодня: {today} ({weekday})
+
     """
 
     return user_prompt
@@ -943,7 +970,7 @@ def update_short_diet_user_prompt(update_request: str, diet_plan: Dict[str, Any]
     message = f"""Пользователь просит: "{update_request}"
         
         Текущий план питания:
-        {json.dumps(create_simplified_diet_plan(diet_plan), ensure_ascii=False)}
+        {json.dumps(_get_simplified_diet_plan(diet_plan), ensure_ascii=False)}
     """
     message += """Пожалуйста, обнови или предложи альтернативный КРАТКИЙ план питания по дням недели в соответствии с запросом пользователя, и дай краткий комментарий о внесенных изменениях.
     Важные принципы:
@@ -984,7 +1011,7 @@ def update_short_diet_user_prompt(update_request: str, diet_plan: Dict[str, Any]
     return message
 
 
-def create_simplified_diet_plan(full_diet_plan: Dict[str, Any]):
+def _get_simplified_diet_plan(full_diet_plan: Dict[str, Any]):
     """
     Создает упрощенную версию плана диеты для уменьшения количества токенов.
 
@@ -1000,21 +1027,6 @@ def create_simplified_diet_plan(full_diet_plan: Dict[str, Any]):
         "end_date": full_diet_plan.get("end_date", ""),
         "daily_plans": {}
     }
-
-    # Обрабатываем планы по дням
-    for date, day_plan in full_diet_plan.get("daily_plans", {}).items():
-        simplified_day = {
-            "meals": []
-        }
-
-        # Добавляем только тип и название для каждого приема пищи
-        for meal in day_plan.get("meals", []):
-            simplified_meal = {
-                "type": meal.get("type", ""),
-                "title": meal.get("title", "")
-            }
-            simplified_day["meals"].append(simplified_meal)
-
-        simplified_plan["daily_plans"][date] = simplified_day
+    simplified_plan.update(DietDataTransformer.transform_to_llm(full_diet_plan))
 
     return simplified_plan

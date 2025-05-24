@@ -14,6 +14,7 @@ from twilio.rest import Client
 from app.db.firebase import firebase_client
 from app.localization.messages import DietMessages
 from app.services.diet import diet_service
+from app.utils.date_helper import DateHelper
 
 from config import settings
 
@@ -60,7 +61,7 @@ class WhatsAppService:
                 "message_id": message_id,
                 "message_text": message_text,
                 "status": "sent",
-                "timestamp": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+                "timestamp": DateHelper.get_current_datetime().isoformat()
             })
         except Exception as e:
             logger.error(f"Ошибка при записи отправленного сообщения: {str(e)}")
@@ -94,7 +95,7 @@ class WhatsAppService:
             ]
 
             # Текущие дата и время
-            now = datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+            now = DateHelper.get_current_datetime().isoformat()
 
             if duplicate_messages:
                 # Если нашли дубликат, просто обновляем его, увеличивая счетчик попыток
@@ -169,7 +170,7 @@ class WhatsAppService:
         else:
             # Если у пользователя был активный диалог
             last_text = last_message.get("message_text", "")
-            time_diff = datetime.now(pytz.timezone(settings.TIMEZONE)) - datetime.fromisoformat(
+            time_diff = DateHelper.get_current_datetime() - datetime.fromisoformat(
                 last_message["timestamp"])
 
             if time_diff > timedelta(hours=6):
@@ -253,7 +254,7 @@ class WhatsAppService:
         """Расширенное логирование ошибок с контекстом"""
         error_details = {
             "message": message,
-            "timestamp": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat(),
+            "timestamp": DateHelper.get_current_datetime().isoformat(),
             "context": context or {}
         }
 
@@ -268,7 +269,7 @@ class WhatsAppService:
         request_info = {
             "method": method,
             "url": url,
-            "timestamp": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat()
+            "timestamp": DateHelper.get_current_datetime().isoformat()
         }
 
         if headers:

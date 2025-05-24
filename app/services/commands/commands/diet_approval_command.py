@@ -129,7 +129,7 @@ class DietApprovalCommand(BaseCommand):
                     await self.user_repository.update(user_id, {
                         "last_conversation_context": {
                             "last_action": "plan_approved",
-                            "timestamp": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat(),
+                            "timestamp": DateHelper.get_current_datetime().isoformat(),
                             "plan_id": pending_plan["id"]
                         }
                     })
@@ -167,7 +167,7 @@ class DietApprovalCommand(BaseCommand):
                 await self.user_repository.update(user_id, {
                     "last_conversation_context": {
                         "last_action": "plan_disapproved",
-                        "timestamp": datetime.now(pytz.timezone(settings.TIMEZONE)).isoformat(),
+                        "timestamp": DateHelper.get_current_datetime().isoformat(),
                         "plan_id": pending_plan["id"]
                     }
                 })
