@@ -7,6 +7,7 @@ import json
 from app.services.diet.diet_plan_manager import DietPlanManager
 from app.models.diet import DietPlan, DietPlanVersion, DietPlanStatus, DailyDiet, Meal, MealType, Product
 from app.constants.localization_keys import LocalizationKeys as LK
+from app.utils.date_helper import DateHelper
 
 
 class TestDietPlanManager:
@@ -620,7 +621,7 @@ class TestDietPlanManager:
 
         # Настраиваем мок для метода get_diet_for_day
         diet_plan_manager.get_diet_for_day = AsyncMock(return_value=today_plan)
-
+        DateHelper.get_tracking_date = MagicMock(return_value=datetime.now().date())
         # Act
         result = await diet_plan_manager.get_today_diet(user_id)
 
