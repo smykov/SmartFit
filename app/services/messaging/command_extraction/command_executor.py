@@ -257,8 +257,6 @@ class CommandExecutor:
             self.logger.error(f"Error executing command {command.command_type}: {str(e)}", exc_info=True)
             return {"success": False, "error": str(e), "command": command.command_type}
 
-    # Расширим CommandExecutor для лучшей обработки diet_update команд
-
     def _transform_params(self, command_type: str, cmd_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Преобразует параметры из формата LLM в формат команд системы

@@ -164,7 +164,8 @@ class ShortDietUpdateCommand(DietUpdateCommandBase):
 
                 return {
                     "success": True,
-                    "message": update_message
+                    "message": update_message,
+                    "updated_days": updated_days_keys
                 }
             else:
                 return {
@@ -286,16 +287,10 @@ class FullDietUpdateCommand(DietUpdateCommandBase):
 
                 messages = [update_message]
 
-                # Если был обновлен план на сегодня, отправляем его
-                # if self._is_today_updated(result.get("updated_days", {})):
-                #     today = DateHelper.get_tracking_date()
-                #     today_plan = self.diet_service.get_day_diet_plan(result["plan"], today, lang)
-                #     if today_plan:
-                #         messages.extend(today_plan)
-
                 return {
                     "success": True,
-                    "messages": messages
+                    "messages": messages,
+                    "updated_days": updated_days_keys
                 }
             else:
                 return {
@@ -369,30 +364,33 @@ class DietUpdateCommand(BaseCommand):
             else:
                 command = FullDietUpdateCommand(self.dependencies)
 
+
+            # Формируем итоговый результат в правильном порядке
+            final_result = {
+                "success": True,
+            }
+
             # Выполняем команду обновления
             update_result = await command.execute(user_id, params)
 
             # Если обновление было успешным, вызываем команду диеты для отображения обновленного плана
             if update_result.get("success", False):
-                # Создаем экземпляр команды диеты
-                diet_command = DietCommand(self.dependencies)
 
-                # Выполняем команду диеты для отображения обновленного плана
-                diet_result = await diet_command.execute(user_id, params={'full': 'true'})
+                if "updated_days" in update_result:
+                    # Создаем экземпляр команды диеты
+                    diet_command = DietCommand(self.dependencies)
 
-                # Формируем итоговый результат в правильном порядке
-                # TOFIX TODO Сообщения идут не попорядку, сначала диета новая, а потом сообщения что диета была обновлена
-                final_result = {
-                    "success": True,
-                }
+                    for day_name in update_result["updated_days"]:
+                        # Выполняем команду диеты для отображения обновленного плана
+                        diet_result = await diet_command.execute(user_id, params={'day': day_name})
 
-                # Если в diet_result есть сообщения, копируем их в итоговый результат
-                if "messages" in diet_result:
-                    final_result["messages"] = diet_result.get("messages", []).copy()
-                elif "message" in diet_result:
-                    final_result["messages"] = [diet_result["message"]]
-                else:
-                    final_result["messages"] = []
+                        # Если в diet_result есть сообщения, копируем их в итоговый результат
+                        if "messages" in diet_result:
+                            final_result["messages"] = diet_result.get("messages", []).copy()
+                        elif "message" in diet_result:
+                            final_result["messages"] = [diet_result["message"]]
+                        else:
+                            final_result["messages"] = {}
 
                 # Теперь добавляем сообщение об обновлении в конец списка сообщений
                 if "message" in update_result:
