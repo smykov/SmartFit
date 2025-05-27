@@ -297,7 +297,6 @@ class ComplianceCommand(BaseCommand):
                 # Получаем локализованное отображение типа приема пищи
                 meal_type_display = self._get_localized_meal_type_display(meal_type, lang)
 
-
                 message = self.tracking_formatter_service.format_compliance_message(
                     meal_type_display,
                     status_enum.value,
@@ -309,10 +308,48 @@ class ComplianceCommand(BaseCommand):
 
                 # Добавляем рекомендации на основе соответствия плану
                 if planned_meal and 'calories' in nutrients_consumed:
+                    # Получаем дополнительную информацию для контекста
+                    daily_tracking_context = {}
+
+                    # Получаем историю трекинга за день для контекста
+                    try:
+                        tracking_history = await self.tracking_service.get_daily_tracking_history(user_id, today)
+                        if tracking_history:
+                            daily_tracking_context["tracking_summary"] = {
+                                "total_calories_consumed": tracking_history.get("cumulative_nutrients", {}).get(
+                                    "calories", 0),
+                                "total_proteins_consumed": tracking_history.get("cumulative_nutrients", {}).get(
+                                    "proteins", 0),
+                                "total_fats_consumed": tracking_history.get("cumulative_nutrients", {}).get("fats", 0),
+                                "total_carbs_consumed": tracking_history.get("cumulative_nutrients", {}).get("carbs",
+                                                                                                             0),
+                                "completed_meals": [
+                                    meal_type for meal_type, meal_data in
+                                    tracking_history.get("meals_tracking", {}).items()
+                                    if meal_data.get("status") in ["followed", "partially", "substituted"]
+                                ]
+                            }
+                    except Exception as e:
+                        self.logger.error(f"Error getting tracking context: {str(e)}")
+
+                    # Получаем план на сегодня
+                    try:
+                        day_plan = await self.diet_service.get_diet_for_day(user_id, today)
+                        if day_plan:
+                            daily_tracking_context["today_diet_plan"] = {
+                                "total_calories": day_plan.get("total_calories", 0),
+                                "total_proteins": day_plan.get("total_proteins", 0),
+                                "total_fats": day_plan.get("total_fats", 0),
+                                "total_carbs": day_plan.get("total_carbs", 0)
+                            }
+                    except Exception as e:
+                        self.logger.error(f"Error getting today's plan: {str(e)}")
+
                     recommendations = self._generate_recommendations(
                         nutrients_consumed,
                         planned_meal,
-                        lang
+                        lang,
+                        daily_tracking_context
                     )
 
                     if recommendations:
@@ -340,14 +377,16 @@ class ComplianceCommand(BaseCommand):
     def _generate_recommendations(self,
                                   nutrients_consumed: Dict[str, float],
                                   planned_meal: Dict[str, Any],
-                                  lang: Optional[str] = None) -> str:
+                                  lang: Optional[str] = None,
+                                  daily_tracking_context: Dict[str, Any] = None) -> str:
         """
-        Генерирует рекомендации на основе соответствия плану
+        Генерирует рекомендации на основе соответствия плану И истории трекинга за день
 
         Args:
             nutrients_consumed: Словарь с данными о потреблённых нутриентах
             planned_meal: Запланированный приём пищи
             lang: Код языка
+            daily_tracking_context: Контекст трекинга за день (НОВЫЙ параметр)
 
         Returns:
             str: Текст рекомендаций
@@ -355,7 +394,70 @@ class ComplianceCommand(BaseCommand):
         try:
             recommendations = []
 
-            # Анализ калорийности
+            # Анализ прогресса за день
+            if daily_tracking_context:
+                tracking_summary = daily_tracking_context.get("tracking_summary", {})
+                today_plan = daily_tracking_context.get("today_diet_plan", {})
+
+                # Получаем накопленные данные за день
+                total_calories_today = tracking_summary.get("total_calories_consumed", 0)
+                total_proteins_today = tracking_summary.get("total_proteins_consumed", 0)
+                total_fats_today = tracking_summary.get("total_fats_consumed", 0)
+                total_carbs_today = tracking_summary.get("total_carbs_consumed", 0)
+
+                # Получаем плановые показатели на день
+                planned_calories_day = today_plan.get("total_calories", 0)
+                planned_proteins_day = today_plan.get("total_proteins", 0)
+                planned_fats_day = today_plan.get("total_fats", 0)
+                planned_carbs_day = today_plan.get("total_carbs", 0)
+
+                # Рассчитываем оставшиеся показатели
+                if planned_calories_day > 0:
+                    remaining_calories = planned_calories_day - total_calories_today
+                    remaining_proteins = max(0, planned_proteins_day - total_proteins_today)
+                    remaining_fats = max(0, planned_fats_day - total_fats_today)
+                    remaining_carbs = max(0, planned_carbs_day - total_carbs_today)
+
+                    # Добавляем сводку прогресса за день
+                    progress_percentage = min(100, (total_calories_today / planned_calories_day) * 100)
+
+                    recommendations.append(self.get_localized_message(
+                        LK.Tracking.Compliance.DAILY_PROGRESS,
+                        lang,
+                        consumed_calories=total_calories_today,
+                        planned_calories=planned_calories_day,
+                        progress_percentage=round(progress_percentage),
+                        remaining_calories=max(0, remaining_calories)
+                    ))
+
+                    # Рекомендации на основе оставшихся нутриентов
+                    if remaining_calories < 0:
+                        recommendations.append(self.get_localized_message(
+                            LK.Tracking.Compliance.CALORIES_EXCEEDED_TODAY,
+                            lang,
+                            excess_calories=abs(remaining_calories)
+                        ))
+                    elif remaining_calories > 0:
+                        recommendations.append(self.get_localized_message(
+                            LK.Tracking.Compliance.CALORIES_REMAINING_TODAY,
+                            lang,
+                            remaining_calories=remaining_calories,
+                            remaining_proteins=remaining_proteins,
+                            remaining_fats=remaining_fats,
+                            remaining_carbs=remaining_carbs
+                        ))
+
+                # Анализ завершенных приемов пищи
+                # TODO добавить перевод типов приемов пищи
+                completed_meals = tracking_summary.get("completed_meals", [])
+                if completed_meals:
+                    recommendations.append(self.get_localized_message(
+                        LK.Tracking.Compliance.COMPLETED_MEALS_TODAY,
+                        lang,
+                        completed_meals=", ".join(completed_meals)
+                    ))
+
+            # Анализ текущего приема пищи
             if 'calories' in nutrients_consumed and 'calories' in planned_meal:
                 planned_calories = planned_meal['calories']
                 actual_calories = nutrients_consumed['calories']
@@ -397,7 +499,54 @@ class ComplianceCommand(BaseCommand):
                         percent=round((1 - calorie_ratio) * 100)
                     ))
 
-            # Анализ БЖУ, если информация доступна
+            # Рекомендации по корректировке следующих приемов
+            if daily_tracking_context and remaining_calories is not None:
+                # Определяем оставшиеся приемы пищи
+                all_meal_types = ["breakfast", "lunch", "dinner", "snack"]
+                completed_meals = tracking_summary.get("completed_meals", [])
+                remaining_meal_types = [meal for meal in all_meal_types if meal not in completed_meals]
+
+                if remaining_meal_types and remaining_calories != 0:
+                    if remaining_calories < -200:  # Значительное превышение
+                        recommendations.append(self.get_localized_message(
+                            LK.Tracking.Compliance.REDUCE_NEXT_MEALS,
+                            lang,
+                            next_meals=", ".join(remaining_meal_types),
+                            reduction_percent=20
+                        ))
+                    elif remaining_calories < -100:  # Небольшое превышение
+                        recommendations.append(self.get_localized_message(
+                            LK.Tracking.Compliance.SLIGHTLY_REDUCE_NEXT_MEALS,
+                            lang,
+                            next_meals=", ".join(remaining_meal_types),
+                            reduction_percent=10
+                        ))
+                    elif remaining_calories > 300:  # Большой недобор
+                        recommendations.append(self.get_localized_message(
+                            LK.Tracking.Compliance.INCREASE_NEXT_MEALS,
+                            lang,
+                            next_meals=", ".join(remaining_meal_types),
+                            additional_calories=remaining_calories
+                        ))
+
+                    # Предлагаем конкретные команды для корректировки
+                    if remaining_meal_types:
+                        next_meal = remaining_meal_types[0]
+                        if remaining_calories < -150:
+                            recommendations.append(self.get_localized_message(
+                                LK.Tracking.Compliance.SUGGEST_DIET_UPDATE_REDUCE,
+                                lang,
+                                meal_type=next_meal
+                            ))
+                        elif remaining_calories > 250:
+                            recommendations.append(self.get_localized_message(
+                                LK.Tracking.Compliance.SUGGEST_DIET_UPDATE_INCREASE,
+                                lang,
+                                meal_type=next_meal
+                            ))
+            # ================================================================
+
+            # Анализ БЖУ текущего приема
             nutrient_names = {
                 'proteins': self.get_localized_message(LK.Tracking.Compliance.PROTEINS, lang),
                 'fats': self.get_localized_message(LK.Tracking.Compliance.FATS, lang),
@@ -405,7 +554,6 @@ class ComplianceCommand(BaseCommand):
             }
 
             bju_imbalance = []
-
             for nutrient, name in nutrient_names.items():
                 if nutrient in nutrients_consumed and nutrient in planned_meal:
                     planned = planned_meal[nutrient]

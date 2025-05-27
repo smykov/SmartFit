@@ -28,7 +28,8 @@ strings = {
     'compliance.skipped': LocalizationString('❌ Noted! {meal_type} was skipped.'),
     'compliance.generic_status': LocalizationString('Status recorded for meal: {meal_type}.'),
     'compliance.overall_score': LocalizationString('\n\nOverall plan compliance for today: {score:.1f}%'),
-    'compliance.score_components': LocalizationString('Score components: status {status_score}%, nutrients {nutrients_score}%'),
+    'compliance.score_components': LocalizationString(
+        'Score components: status {status_score}%, nutrients {nutrients_score}%'),
     'compliance.excellent': LocalizationString('\n\n👍 Great work! Keep it up.'),
     'compliance.good': LocalizationString('\n\n👍 Good result! Try to follow the plan.'),
     'compliance.keep_trying': LocalizationString('\n\n💪 Don\'t give up! Every day is a new opportunity.'),
@@ -48,6 +49,21 @@ strings = {
         '✅ Great job! Your calorie intake is on target ({actual} out of {planned} calories).'),
     'compliance.calories_under': LocalizationString(
         'ℹ️ You consumed {percent}% fewer calories than recommended ({actual} instead of {planned} calories). To reach your goals, it\'s important to consume adequate amounts of food.'),
+
+    "compliance.daily_progress": LocalizationString(
+        "📊Daily progress: {consumed_calories}/{planned_calories} kcal ({progress_percentage}%). Remaining: {remaining_calories} kcal"),
+    "compliance.calories_exceeded_today": LocalizationString(
+        "⚠️ Daily calorie excess: +{excess_calories} kcal. Recommend reducing remaining meals"),
+    "compliance.calories_remaining_today": LocalizationString(
+        "✅ Remaining to goal: {remaining_calories} kcal, {remaining_proteins}g protein, {remaining_fats}g fat, {remaining_carbs}g carbs"),
+    "compliance.completed_meals_today": LocalizationString("✅ Completed meals: {completed_meals}"),
+    "compliance.reduce_next_meals": LocalizationString("💡 Recommend reducing portions for: {next_meals} by {reduction_percent}%"),
+    "compliance.slightly_reduce_next_meals": LocalizationString(
+        "💡 Slightly reduce portions in: {next_meals} (by {reduction_percent}%)"),
+    "compliance.increase_next_meals": LocalizationString(
+        "💡 You can increase portions in: {next_meals} (+{additional_calories} kcal)"),
+    "compliance.suggest_diet_update_reduce": LocalizationString("💬 To adjust, write: 'change {meal_type} - less calories'"),
+    "compliance.suggest_diet_update_increase": LocalizationString("💬 To adjust, write: 'change {meal_type} - more calories'"),
 
     # Keys for macronutrients
     'compliance.proteins': LocalizationString('Protein'),
@@ -73,7 +89,8 @@ strings = {
     'stats.water_percentage': LocalizationString('• Completed: {percentage:.1f}%\n\n'),
     'stats.compliance_section': LocalizationString('*🍽️ Meal plan compliance:*\n'),
     'stats.compliance_overall': LocalizationString('\nOverall compliance: {score:.1f}%\n\n'),
-    'stats.score_components_average': LocalizationString('Average components: status {status_score}%, nutrients {nutrients_score}%'),
+    'stats.score_components_average': LocalizationString(
+        'Average components: status {status_score}%, nutrients {nutrients_score}%'),
     'stats.motivation': LocalizationString('💪 *Keep it up!* You are on your way to your goal.'),
     'stats.weekly_report_header': LocalizationString('📊 *Weekly Progress Report for {user_name}*\n\n'),
     'stats.weight_no_data': LocalizationString('⚖️ *Weight:* No data for the last week\n'),

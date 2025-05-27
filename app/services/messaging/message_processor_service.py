@@ -1,11 +1,8 @@
 # app/services/messaging/message_processor_service.py
 import logging
 import re
-from datetime import datetime
 from enum import Enum
 from typing import Dict, Any, Optional
-
-import pytz
 
 from app.constants.localization_keys import LocalizationKeys as LK
 from app.services.messaging.messenger_registry import MessengerRegistry
@@ -21,7 +18,6 @@ from app.services.diet.diet_service_interface import IDietService
 from app.services.messaging.command_extraction.command_extraction_interface import ICommandExtractor
 from app.services.messaging.command_extraction.command_executor import CommandExecutor
 from app.utils.date_helper import DateHelper
-from config import settings
 
 
 class MessageType(str, Enum):
@@ -450,6 +446,14 @@ class MessageProcessorService:
         enriched = context.copy() if context else {}
 
         try:
+            # Получаем пользователя для определения часового пояса
+            user = await self.user_repository.get_by_id(user_id)
+            if not user:
+                return enriched
+
+            # Получаем трекинговую дату
+            tracking_date = DateHelper.get_tracking_date(user.get("timezone"))
+
             # Проверяем наличие плана диеты
             current_diet = await self.diet_service.get_current_diet(user_id)
             if current_diet:
@@ -459,6 +463,41 @@ class MessageProcessorService:
                 # Добавляем информацию о днях плана питания
                 if "daily_plans" in current_diet:
                     enriched["current_diet_days"] = list(current_diet["daily_plans"].keys())
+
+                # Получаем план на сегодня для детального контекста
+                today_plan = await self.diet_service.get_diet_for_day(user_id, tracking_date)
+                if today_plan:
+                    enriched["today_diet_plan"] = {
+                        "date": tracking_date.isoformat(),
+                        "day_of_week": DateHelper.get_day_of_week(tracking_date),
+                        "meals": today_plan.get("meals", []),
+                        "total_calories": today_plan.get("total_calories", 0),
+                        "total_proteins": today_plan.get("total_proteins", 0),
+                        "total_fats": today_plan.get("total_fats", 0),
+                        "total_carbs": today_plan.get("total_carbs", 0)
+                    }
+
+            daily_tracking = await self.tracking_service.get_daily_tracking_history(user_id, tracking_date)
+            if daily_tracking:
+                enriched["daily_tracking_history"] = daily_tracking
+
+                # Добавляем краткую сводку для удобства LLM
+                enriched["tracking_summary"] = {
+                    "completed_meals": [
+                        meal_type for meal_type, meal_data in daily_tracking.get("meals_tracking", {}).items()
+                        if meal_data.get("status") in ["followed", "partially", "substituted"]
+                    ],
+                    "skipped_meals": [
+                        meal_type for meal_type, meal_data in daily_tracking.get("meals_tracking", {}).items()
+                        if meal_data.get("status") == "skipped"
+                    ],
+                    "total_calories_consumed": daily_tracking.get("cumulative_nutrients", {}).get("calories", 0),
+                    "total_proteins_consumed": daily_tracking.get("cumulative_nutrients", {}).get("proteins", 0),
+                    "total_fats_consumed": daily_tracking.get("cumulative_nutrients", {}).get("fats", 0),
+                    "total_carbs_consumed": daily_tracking.get("cumulative_nutrients", {}).get("carbs", 0),
+                    "water_consumed": daily_tracking.get("daily_totals", {}).get("water_consumed", 0),
+                    "compliance_score": daily_tracking.get("overall_compliance_score", 0)
+                }
 
             # Получаем последние данные о весе
             weight_entries = await self.tracking_service.get_recent_weight_entries(user_id, 1)

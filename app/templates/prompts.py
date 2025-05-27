@@ -536,12 +536,47 @@ def create_command_extraction_system_prompt() -> str:
     4. Для команды meal_compliance необходимо анализировать описание еды от пользователя:
        - Если пользователь пишет "Позавтракал яичницей с тостом и кофе", определи тип приема пищи (breakfast), статус (substituted) если в его плане питания на сегодня и в этот прием пиши другое блюдо, если блюдо отличается не значительно (Например "Омлет с тостом"), то статус (partially), 
          и точно рассчитывай калории и макронутриенты в соответствии с целями пользователя для каждого блюда
-       - Для ужина "Поужинал куриной грудкой с салатом" нужно определить тип (dinner), статус (substituted) если в его плане питания на сегодня и в этот прием пиши дргое блюдо, если блюдо отличается не значительно (Например "Курица с пастой"), то статус (partially) и точно рассчитывать калории и макронутриенты
+       - Для ужина "Поужинал куриной грудкой с салатом" нужно определить тип (dinner), статус (substituted) если в его плане питания на сегодня и в этот прием пиши другое блюдо, если блюдо отличается не значительно (Например "Курица с пастой"), то статус (partially) и точно рассчитывать калории и макронутриенты
        - Если пользователь пишет "Пропустил обед", определи тип (lunch) и статус (skipped)
        - Если пользователь пишет "На обед съел по плану", определи тип (lunch) и статус (followed)
        - Статус partially следует указывать когда его прием пищи отличается менее чем на 50% или основное блюдо/продукт от приема пищи из его плана питания на сегодня.
-       - Также дай совет как дополнить, сократить порцию или заменить следующие приемы пищи в плане на сегодня обязательно учитывай его текущий план на сегодня, чтобы следовать целям калорий и БЖУ на день.
-       
+
+    5. При обработке команды meal_compliance ОБЯЗАТЕЛЬНО учитывай:
+        5.1. **Анализ прогресса за день**: 
+           - Сколько калорий и БЖУ уже потреблено за день
+           - Какие приемы пищи уже выполнены, пропущены или заменены
+           - Текущий процент соблюдения плана
+        5.2. **Контекстные рекомендации**:
+           - Если пользователь превысил калории в предыдущих приемах пищи, рекомендуй уменьшить порции в следующих
+           - Если недобрал белков/жиров/углеводов, предложи компенсацию в оставшихся приемах
+           - Учитывай общий баланс БЖУ за весь день, а не только текущий прием пищи
+        5.3. **Согласованность с планом**:
+           - Сравнивай фактическое потребление с запланированным на день
+           - Предлагай корректировки оставшихся приемов пищи на основе уже съеденного
+           - Сохраняй общую калорийность дня в рамках цели пользователя
+        5.4. **Формирование response_message для трекинга**:
+           В response_message ОБЯЗАТЕЛЬНО включай:
+           - Оценку текущего приема пищи относительно плана
+           - Анализ прогресса за день (сколько осталось калорий/БЖУ)
+           - Конкретные рекомендации по корректировке следующих приемов пищи
+           - Предложения команд для обновления плана, если необходимо
+        
+        Пример хорошего response_message для трекинга:
+        "Отлично! Обед выполнен с превышением калорий на 15% (520 ккал вместо 450). 
+        За день уже потреблено: 1200 ккал из 1800 запланированных. 
+        Рекомендую уменьшить порцию ужина на 20% или заменить гарнир на овощи. 
+        Осталось: 600 ккал, 25г белков, 15г жиров.
+        Можете написать 'измени ужин - меньше углеводов' для корректировки плана."
+        
+        5.5. **Накопительный эффект**:
+           - Каждая новая рекомендация должна учитывать ВСЕ предыдущие приемы пищи за день
+           - Не давай одинаковые советы, если ситуация изменилась
+           - Корректируй рекомендации на основе кумулятивного потребления
+        5.6. **Использование детального плана на день**:
+           - Используй информацию из "Today's Diet Plan" для точных сравнений
+           - Ссылайся на конкретные блюда из плана при рекомендациях
+           - Предлагай реалистичные замены из того же типа продуктов       
+
     5. Правила определения нутриентов в продуктах:
        - Оценивай белки, жиры и углеводы на основе стандартного состава продуктов
        - Мясо и птица: много белков (20-30г на 100г), средне жиров, мало углеводов
@@ -664,7 +699,73 @@ def create_command_extraction_user_prompt(message: str, context: Dict[str, Any])
         if "currency_code" in context:
             user_prompt_parts.append(f"- Currency: {context['currency_code']}")
 
-        # Информация о диетическом плане
+        if "today_diet_plan" in context:
+            today_plan = context["today_diet_plan"]
+            user_prompt_parts.append("Today's Diet Plan:")
+            user_prompt_parts.append(f"- Date: {today_plan['date']} ({today_plan['day_of_week']})")
+            user_prompt_parts.append(f"- Planned calories: {today_plan['total_calories']} kcal")
+            user_prompt_parts.append(f"- Planned proteins: {today_plan['total_proteins']}g")
+            user_prompt_parts.append(f"- Planned fats: {today_plan['total_fats']}g")
+            user_prompt_parts.append(f"- Planned carbs: {today_plan['total_carbs']}g")
+
+            if today_plan.get("meals"):
+                user_prompt_parts.append("  Planned meals:")
+                for meal in today_plan["meals"]:
+                    meal_info = f"    • {meal.get('type', 'unknown')}: {meal.get('title', 'No title')} ({meal.get('calories', 0)} kcal"
+                    if meal.get('proteins'):
+                        meal_info += f", {meal.get('proteins')}g protein"
+                    if meal.get('fats'):
+                        meal_info += f", {meal.get('fats')}g fat"
+                    if meal.get('carbs'):
+                        meal_info += f", {meal.get('carbs')}g carbs"
+                    meal_info += ")"
+                    user_prompt_parts.append(meal_info)
+
+        if "daily_tracking_history" in context:
+            tracking = context["daily_tracking_history"]
+            user_prompt_parts.append("Today's Tracking History:")
+            user_prompt_parts.append(f"- Overall compliance score: {tracking.get('overall_compliance_score', 0)}%")
+
+            if "tracking_summary" in context:
+                summary = context["tracking_summary"]
+                user_prompt_parts.append(f"- Calories consumed so far: {summary['total_calories_consumed']} kcal")
+                user_prompt_parts.append(f"- Proteins consumed: {summary['total_proteins_consumed']}g")
+                user_prompt_parts.append(f"- Fats consumed: {summary['total_fats_consumed']}g")
+                user_prompt_parts.append(f"- Carbs consumed: {summary['total_carbs_consumed']}g")
+                user_prompt_parts.append(f"- Water consumed: {summary['water_consumed']} ml")
+
+                if summary["completed_meals"]:
+                    user_prompt_parts.append(f"- Completed meals: {', '.join(summary['completed_meals'])}")
+                if summary["skipped_meals"]:
+                    user_prompt_parts.append(f"- Skipped meals: {', '.join(summary['skipped_meals'])}")
+
+            # Детальная информация по каждому приему пищи
+            meals_tracking = tracking.get("meals_tracking", {})
+            if meals_tracking:
+                user_prompt_parts.append("  Detailed meal tracking:")
+                for meal_type, meal_data in meals_tracking.items():
+                    status = meal_data.get("status", "not_recorded")
+                    notes = meal_data.get("notes", "")
+                    calories = meal_data.get("calories_consumed", 0)
+
+                    meal_info = f"    • {meal_type}: {status}"
+                    if calories > 0:
+                        meal_info += f" ({calories} kcal consumed)"
+                    if notes:
+                        meal_info += f" - Notes: {notes}"
+                    user_prompt_parts.append(meal_info)
+
+                    # Добавляем информацию о соответствии плану
+                    adherence = meal_data.get("adherence_percentages", {})
+                    if any(adherence.values()):
+                        adherence_info = []
+                        for nutrient, percentage in adherence.items():
+                            if percentage is not None:
+                                adherence_info.append(f"{nutrient}: {percentage:.0f}%")
+                        if adherence_info:
+                            user_prompt_parts.append(f"      Plan adherence: {', '.join(adherence_info)}")
+
+        # Информация о диетическом плане (общая)
         if "diet_plan" in context:
             user_prompt_parts.append("Diet plan Information:")
             diet_plan = context["diet_plan"]
@@ -678,11 +779,13 @@ def create_command_extraction_user_prompt(message: str, context: Dict[str, Any])
             if "version" in diet_plan:
                 user_prompt_parts.append(f"- Version: {diet_plan['version']}")
 
-            # Вывод структуры daily_plans в виде JSON
-            if "daily_plans" in diet_plan and diet_plan["daily_plans"]:
+            # Вывод структуры daily_plans в виде JSON (только если нет детального плана на сегодня)
+            if ("daily_plans" in diet_plan and diet_plan["daily_plans"]
+                    # TODO проверить нужно ли это условие
+                    #        and "today_diet_plan" not in context
+            ):
                 try:
                     simplified_diet_plan = _get_simplified_diet_plan(diet_plan)
-                    # Преобразуем словарь в JSON-строку с отступами для лучшей читаемости
                     plans_json = json.dumps(simplified_diet_plan, ensure_ascii=False)
                     user_prompt_parts.append(f"  • Diet plan (JSON):\n{plans_json}")
                 except Exception as e:
@@ -700,7 +803,7 @@ def create_command_extraction_user_prompt(message: str, context: Dict[str, Any])
             user_prompt_parts.append(f"- User onboarding was {status}")
 
         if not context["is_onboarding_completed"] and "onboarding_step" in context and context["onboarding_step"]:
-                    user_prompt_parts.append(f"- Onboarding step: {context['onboarding_step']}")
+            user_prompt_parts.append(f"- Onboarding step: {context['onboarding_step']}")
 
         user_prompt_parts.append("")  # Пустая строка для разделения
 
@@ -940,7 +1043,6 @@ def update_full_diet_user_prompt(user_data: Dict[Any, str], update_request: str,
         if "last_message" in last_context and last_context["last_message"]:
             last_message = last_context.get("last_message", "")
             user_prompt += f"- Last message: {last_message}\n"
-
 
     # Добавляем краткий план к промпту
     simplified_diet_plan = _get_simplified_diet_plan(diet_plan)

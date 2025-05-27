@@ -17,6 +17,7 @@ class LocalizationKeys:
         DAY_FORMAT = "common.day_format"
         HELP_COMMANDS_LIST = "common.help_commands_list"
         USER = "common.user"
+
         class Currency:
             CURRENCY = "common.currency"
             RUB = "common.currency.rub"
@@ -370,6 +371,19 @@ class LocalizationKeys:
             CALORIES_EXCEEDED_SLIGHTLY = "tracking.compliance.calories_exceeded_slightly"
             CALORIES_ON_TARGET = "tracking.compliance.calories_on_target"
             CALORIES_UNDER = "tracking.compliance.calories_under"
+
+            # КЛЮЧИ ДЛЯ ИСТОРИИ ТРЕКИНГА
+            DAILY_PROGRESS = "tracking.compliance.daily_progress"
+            CALORIES_EXCEEDED_TODAY = "tracking.compliance.calories_exceeded_today"
+            CALORIES_REMAINING_TODAY = "tracking.compliance.calories_remaining_today"
+            COMPLETED_MEALS_TODAY = "tracking.compliance.completed_meals_today"
+
+            REDUCE_NEXT_MEALS = "tracking.compliance.reduce_next_meals"
+            SLIGHTLY_REDUCE_NEXT_MEALS = "tracking.compliance.slightly_reduce_next_meals"
+            INCREASE_NEXT_MEALS = "tracking.compliance.increase_next_meals"
+
+            SUGGEST_DIET_UPDATE_REDUCE = "tracking.compliance.suggest_diet_update_reduce"
+            SUGGEST_DIET_UPDATE_INCREASE = "tracking.compliance.suggest_diet_update_increase"
 
             # Ключи для макронутриентов
             PROTEINS = "tracking.compliance.proteins"

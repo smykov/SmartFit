@@ -826,3 +826,94 @@ class TrackingService(ITrackingService):
                     "end_date": end_date.isoformat() if end_date else None
                 }
             }
+
+    async def get_daily_tracking_history(self, user_id: str, target_date: date = None) -> Dict[str, Any]:
+        """
+        Получает полную историю трекинга за конкретный день
+
+        Args:
+            user_id: ID пользователя
+            target_date: Дата для получения истории (по умолчанию сегодня)
+
+        Returns:
+            Dict[str, Any]: История трекинга за день
+        """
+        try:
+            # Получаем пользователя для определения часового пояса
+            user = await self.user_repository.get_by_id(user_id)
+            if not user:
+                self.logger.error(f"User {user_id} not found")
+                return {}
+
+            # Если дата не указана, используем трекинговую дату
+            if not target_date:
+                target_date = DateHelper.get_tracking_date(user.get("timezone"))
+
+            # Получаем данные о соблюдении плана питания за день
+            daily_compliance = await self.compliance_repository.get_daily_compliance(user_id, target_date)
+
+            # Получаем записи веса за день
+            weight_entries = await self.weight_entry_repository.get_entries_by_user(
+                user_id, target_date, target_date
+            )
+
+            # Получаем записи воды за день
+            water_total = await self.water_entry_repository.get_daily_total(user_id, target_date)
+
+            # Формируем структурированную историю
+            tracking_history = {
+                "date": target_date.isoformat(),
+                "day_of_week": DateHelper.get_day_of_week(target_date),
+                "meals_tracking": {},
+                "daily_totals": {
+                    "water_consumed": water_total,
+                    "weight_recorded": len(weight_entries) > 0,
+                    "latest_weight": weight_entries[0].get("weight") if weight_entries else None
+                },
+                "overall_compliance_score": 0,
+                "cumulative_nutrients": {
+                    "calories": 0,
+                    "proteins": 0,
+                    "fats": 0,
+                    "carbs": 0
+                }
+            }
+
+            if daily_compliance and daily_compliance.get("meals"):
+                tracking_history["overall_compliance_score"] = daily_compliance.get("overall_score", 0)
+
+                # Обрабатываем каждый прием пищи
+                for meal_type, meal_data in daily_compliance["meals"].items():
+                    if isinstance(meal_data, dict):
+                        meal_info = {
+                            "status": meal_data.get("status", "not_recorded"),
+                            "notes": meal_data.get("notes"),
+                            "calories_consumed": meal_data.get("calories_consumed", 0),
+                            "proteins_consumed": meal_data.get("proteins_consumed", 0),
+                            "fats_consumed": meal_data.get("fats_consumed", 0),
+                            "carbs_consumed": meal_data.get("carbs_consumed", 0),
+                            "adherence_percentages": {
+                                "calories": meal_data.get("calories_adherence"),
+                                "proteins": meal_data.get("proteins_adherence"),
+                                "fats": meal_data.get("fats_adherence"),
+                                "carbs": meal_data.get("carbs_adherence")
+                            }
+                        }
+
+                        tracking_history["meals_tracking"][meal_type] = meal_info
+
+                        # Суммируем нутриенты
+                        if meal_info["calories_consumed"]:
+                            tracking_history["cumulative_nutrients"]["calories"] += meal_info["calories_consumed"]
+                        if meal_info["proteins_consumed"]:
+                            tracking_history["cumulative_nutrients"]["proteins"] += meal_info["proteins_consumed"]
+                        if meal_info["fats_consumed"]:
+                            tracking_history["cumulative_nutrients"]["fats"] += meal_info["fats_consumed"]
+                        if meal_info["carbs_consumed"]:
+                            tracking_history["cumulative_nutrients"]["carbs"] += meal_info["carbs_consumed"]
+
+            return tracking_history
+
+        except Exception as e:
+            self.logger.error(f"Error getting daily tracking history: {str(e)}")
+            return {}

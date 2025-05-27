@@ -62,6 +62,24 @@ strings = {
             '✅ Отличная работа! Калорийность соответствует плану ({actual} из {planned} ккал).'),
         'calories_under': LocalizationString(
             'ℹ️ Вы употребили на {percent}% меньше калорий, чем рекомендовано ({actual} вместо {planned} ккал). Для достижения ваших целей важно потреблять достаточное количество пищи.'),
+        # Ключи для истории трекинга
+        "daily_progress": LocalizationString(
+            "📊 Прогресс за день: {consumed_calories}/{planned_calories} ккал ({progress_percentage}%). Осталось: {remaining_calories} ккал"),
+        "calories_exceeded_today": LocalizationString(
+            "⚠️ Превышение калорий за день: +{excess_calories} ккал. Рекомендую облегчить оставшиеся приемы пищи"),
+        "calories_remaining_today": LocalizationString(
+            "✅ Осталось до цели: {remaining_calories} ккал, {remaining_proteins}г белков, {remaining_fats}г жиров, {remaining_carbs}г углеводов"),
+        "completed_meals_today": LocalizationString("✅ Выполненные приемы пищи: {completed_meals}"),
+        "reduce_next_meals": LocalizationString(
+            "💡 Рекомендую уменьшить порции следующих приемов ({next_meals}) на {reduction_percent}%"),
+        "slightly_reduce_next_meals": LocalizationString(
+            "💡 Слегка уменьшите порции в: {next_meals} (на {reduction_percent}%)"),
+        "increase_next_meals": LocalizationString(
+            "💡 Можете увеличить порции в: {next_meals} (+{additional_calories} ккал)"),
+        "suggest_diet_update_reduce": LocalizationString(
+            "💬 Для корректировки напишите: 'измени {meal_type} - меньше калорий'"),
+        "suggest_diet_update_increase": LocalizationString(
+            "💬 Для корректировки напишите: 'измени {meal_type} - больше калорий'"),
 
         # Ключи для макронутриентов
         'proteins': LocalizationString('Белки'),
