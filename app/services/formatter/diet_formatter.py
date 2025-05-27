@@ -714,6 +714,6 @@ class DietFormatter(BaseFormatter):
 
         # Если это сокращенный формат или полный план, возвращаем без дополнительных деталей
         if is_summary:
-            return f"{message_header}{message_description}{message_bju}{message_why_recommended}\n"
+            return f"{message_header}{message_bju}\n"
 
         return f"{message_header}{message_description}{message_products}{message_nutrition}{message_why_recommended}{message_preparation}\n"
