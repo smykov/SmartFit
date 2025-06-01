@@ -76,6 +76,7 @@ def services(firebase_repositories, llm_service_mock, whatsapp_service_mock, loc
         llm_service=llm_service_mock,
         user_repository=firebase_repositories["user_repository"],
         diet_plan_repository=firebase_repositories["diet_plan_repository"],
+        localization_service=localization_service_mock,
         min_confidence=0.7
     )
     command_extractor = LoggingCommandExtractor(

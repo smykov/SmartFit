@@ -345,6 +345,7 @@ class Container(containers.DeclarativeContainer):
         llm_service=llm_service,
         user_repository=user_repository,
         diet_plan_repository=diet_plan_repository,
+        localization_service=localization_service,
         min_confidence=0.7
     )
 
