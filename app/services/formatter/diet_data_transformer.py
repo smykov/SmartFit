@@ -140,7 +140,7 @@ class DietDataTransformer:
             Dict[str, Any]: Словарь с блюдами и суммарными КБЖУ
         """
         if not day_plan or "meals" not in day_plan:
-            return {"meals": [], "total_kbju": ""}
+            return {"meals": [], "total": ""}
 
         meals = day_plan.get("meals", [])
 
@@ -150,6 +150,7 @@ class DietDataTransformer:
         total_proteins = 0
         total_fats = 0
         total_carbs = 0
+        total_estimated_price = 0
 
         for meal in meals:
             if not meal.get('title'):
@@ -161,13 +162,14 @@ class DietDataTransformer:
             proteins = meal.get('proteins', 0) or 0
             fats = meal.get('fats', 0) or 0
             carbs = meal.get('carbs', 0) or 0
+            estimated_price = meal.get('estimated_price', 0) or 0
 
             # Суммируем для итога дня
             total_calories += calories
             total_proteins += proteins
             total_fats += fats
             total_carbs += carbs
-
+            total_estimated_price += estimated_price
             # Форматируем строку блюда
             # TODO добавить локализацию
             meal_str = f"{meal_type}: {title}"
@@ -177,15 +179,22 @@ class DietDataTransformer:
                     meal_str += f", Б{int(proteins)}Ж{int(fats)}У{int(carbs)}"
                 meal_str += ")"
 
+            if estimated_price > 0:
+                meal_str += f", {estimated_price} руб."
+
             meals_list.append(meal_str)
 
         # Формируем суммарные КБЖУ за день
         # TODO добавить локализацию
         total_kbju = ""
         if total_calories > 0:
-            total_kbju = f"Итого: {int(total_calories)}ккал, Б{int(total_proteins)}Ж{int(total_fats)}У{int(total_carbs)}"
+            total_kbju += f"Итого: {int(total_calories)}ккал, Б{int(total_proteins)}Ж{int(total_fats)}У{int(total_carbs)}"
+
+        total_price = ""
+        if total_estimated_price > 0:
+            total_price += f", {total_estimated_price} руб."
 
         return {
             "meals": meals_list,
-            "total_kbju": total_kbju
+            "total": total_kbju + total_price,
         }
