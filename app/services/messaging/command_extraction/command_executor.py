@@ -5,7 +5,7 @@ from typing import Dict, Any, List, Optional
 
 import pytz
 
-from app.models.command import Command
+from app.models.command import Command, CommandSource
 from app.constants.localization_keys import LocalizationKeys as LK
 from app.services.commands.command_factory import CommandFactory
 from app.services.diet.diet_service_interface import IDietService
@@ -79,7 +79,8 @@ class CommandExecutor:
                                user_id: str,
                                commands: List[Command],
                                messenger_type: str,
-                               original_response_message: Optional[str] = None) -> Dict[str, Any]:
+                               original_response_message: Optional[str] = None,
+                               extraction_source: Optional[CommandSource] = None) -> Dict[str, Any]:
         """
         Выполняет список команд для пользователя последовательно с учетом приоритета
 
@@ -88,6 +89,7 @@ class CommandExecutor:
             commands: Список команд для выполнения
             messenger_type: Тип мессенджера
             original_response_message: Изначальное сообщение-рекомендация от LLM
+            extraction_source: CommandSource тип источника определения (парсеры или LLM)
 
         Returns:
             Dict[str, Any]: Результат выполнения команд
@@ -144,7 +146,7 @@ class CommandExecutor:
                     continue
 
             # Выполняем команду
-            result = await self._execute_single_command(user_id, command, messenger_type)
+            result = await self._execute_single_command(user_id, command, messenger_type, extraction_source)
             results.append(result)
 
             # Если команда завершилась с ошибкой, логируем это, но продолжаем выполнение остальных команд
@@ -164,7 +166,8 @@ class CommandExecutor:
     async def _execute_single_command(self,
                                       user_id: str,
                                       command: Command,
-                                      messenger_type: str) -> Dict[str, Any]:
+                                      messenger_type: str,
+                                      extraction_source: Optional[CommandSource] = None) -> Dict[str, Any]:
         """
         Выполняет одиночную команду
 
@@ -237,11 +240,13 @@ class CommandExecutor:
 
             # Если команда вернула сообщение, отправляем его пользователю
             if "message" in result and result["message"]:
-                await self.messenger_service.send_message(
-                    user.get("phone_number"),
-                    result["message"],
-                    {"user_id": user_id, "messenger_type": messenger_type}
-                )
+                # Отправлять во всех случаях, кроме diet_update от LLM
+                if not (command.command_type == "meal_compliance" and extraction_source == CommandSource.LLM_EXTRACTION):
+                    await self.messenger_service.send_message(
+                        user.get("phone_number"),
+                        result["message"],
+                        {"user_id": user_id, "messenger_type": messenger_type}
+                    )
 
             # Если команда вернула несколько сообщений, отправляем их пользователю
             if "messages" in result and result["messages"]:

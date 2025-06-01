@@ -252,7 +252,8 @@ class MessageProcessorService:
                     user["id"],
                     extraction_result.commands,
                     messenger_type,
-                    extraction_result.response_message
+                    extraction_result.response_message,
+                    extraction_result.source
                 )
 
                 # Отмечаем сообщение как обработанное
