@@ -929,7 +929,7 @@ def update_full_diet_system_prompt() -> str:
              "day_name": {
                  "meals": [
                      {
-                         "type": "breakfast/lunch/dinner/snack",
+                         "type": "возможные значения: breakfast/lunch/dinner/snack, но заполняем только те, что меняли остальные пропускаем",
                          "title": "название блюда",
                          "description": "краткое описание",
                          "why_recommended": "объяснение связи с данными и целями пользователя",
@@ -969,6 +969,7 @@ def update_full_diet_system_prompt() -> str:
      2. Все поля заполнены полностью
      3. Никаких сокращений, комментариев или заполнителей
      4. Никаких фраз типа "остальное без изменений"
+     5. Если дни или приемы пищи в днях не менялись, то эти приемы пищи можно не добавлять в json. 
     """
 
     return system_prompt
