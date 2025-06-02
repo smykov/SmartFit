@@ -28,7 +28,7 @@ class DeepSeekLLMService(BaseLLMService):
                  api_key: str,
                  model: str = "deepseek-chat",
                  api_base: str = "https://api.deepseek.com",
-                 timeout: int = 300,
+                 timeout: int = 900,
                  max_retries: int = 2,
                  ):
         """
