@@ -171,6 +171,7 @@ class DietDataTransformer:
             total_carbs += carbs
             total_estimated_price += estimated_price
             # Форматируем строку блюда
+            # "breakfast: Овсяноблин с сыром и индейкой (400ккал, Б35Ж18У30), 180 руб."
             # TODO добавить локализацию
             meal_str = f"{meal_type}: {title}"
             if calories > 0:

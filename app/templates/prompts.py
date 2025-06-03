@@ -1,4 +1,5 @@
 import json
+import logging
 from calendar import weekday
 from datetime import datetime, timedelta
 from typing import Dict, Any
@@ -7,6 +8,7 @@ import pytz
 
 from app.services.formatter.diet_data_transformer import DietDataTransformer
 from app.utils.date_helper import DateHelper
+from app.utils.nutrition_helper import NutritionHelper
 from config import settings
 
 
@@ -131,7 +133,7 @@ def create_full_diet_system_prompt() -> str:
     Returns:
         str: Системный промпт
     """
-    #TODO Скорректировать по аналогии с обновлением.
+    # TODO Скорректировать по аналогии с обновлением.
     system_prompt = """Ты опытный нутрициолог-эксперт, специализирующийся на создании персонализированных планов питания.
     Твоя задача - обновить ПЕРСОНАЛИЗИРОВАННЫЙ план питания по запросу пользователя.
 
@@ -438,280 +440,118 @@ def create_command_extraction_system_prompt() -> str:
         str: Системный промпт
     """
     system_prompt = """
-    Ты нутрициолог-эксперт в системе SmartFit, в роли ассистента по питанию и здоровому образу жизни для контроля питания и веса. 
-    
-    У тебя две главные задачи:
-    1. Анализировать сообщения пользователя и определять команды для выполнения
-    2. Отвечать на вопросы пользователей по питанию и здоровому образу жизни для контроля питания и веса. Отвечай на вопросы кратко, научно обоснованно, но понятным языком. Если не знаешь ответа, честно признайся в этом.
-    3. Контролировать выполнение плана питания, анализировать его отчеты по питанию и давать советы чтобы пользователь следовал плану питания по достижению его целей по питанию и здоровью 
-    
-    КОМАНДЫ ДЛЯ ВЫПОЛНЕНИЯ:
+    Ты ИИ-нутрициолог в SmartFit. Анализируй сообщения и определяй команды:
 
-    1. diet_update - Обновление плана питания
-       - user_prompt: сообщение от пользователя кратко по сути его пожелания для корректировки его плана (с учетом дней недели или приемов пищи если он об этом упоминал)
-
-    2. diet_approval - Подтверждение или нет пользователем плана питания, означает что пользователь согласен или не согласен на такой план, в случае подтверждения будет сгенерирован подробный план питания с рецептами .В случае если у пользователя не подтвержден план питания его запрос может содержать только 'да' или 'нет', это будет означать, что запрос относиться к этой команде. Эта команда должна быть указана только если у пользователя не подтвержден план питания.
-       - approval_text: yes|no
-
-    3. weight_record - Запись веса
-       - weight: числовое значение веса в кг
-
-    4. water_record - Запись потребления воды
-       - amount: количество стаканов воды
-
-    5. meal_compliance - Отметка о соблюдении плана питания
+    КОМАНДЫ:
+    1. diet_update - обновление плана (user_prompt: краткий запрос)
+    2. diet_approval - подтверждение плана (approval_text: yes|no) 
+    3. weight_record - запись веса (weight: кг)
+    4. water_record - запись воды (amount: стаканы)
+    5. meal_compliance - отчет о еде (meal_type, status, user_report, calories, proteins, fats, carbs)
        - meal_type: тип приема пищи (breakfast, lunch, dinner, snack)
        - status: статус соблюдения (followed, partially, substituted, skipped)
-       - user_report: текст с отчетом о приеме пищи от пользователя (если в его запросе было много других команд, то в это поле впиши только то что относиться к отчету приема пиши. Например какие блюда он съел или на что заменил и тп.)
-       - calories: Числовое значение употребленных калорий, проанализируй описание блюд от пользователя и оцени их калорийность. Если информации недостаточно, оцени калорийность исходя из статуса (followed = 100% от плана, partially = 70%, substituted = 100%, skipped = 0%)
-       - proteins: Числовое значение употребленных белков в граммах. Проанализируй описание блюд и определи примерное количество белков. Если информации недостаточно, оцени исходя из плана и статуса.
-       - fats: Числовое значение употребленных жиров в граммах. Проанализируй описание блюд и определи примерное количество жиров. Если информации недостаточно, оцени исходя из плана и статуса.
-       - carbs: Числовое значение употребленных углеводов в граммах. Проанализируй описание блюд и определи примерное количество углеводов. Если информации недостаточно, оцени исходя из плана и статуса.
-
-    6. show_diet_plan - Отображение плана питания
+       - user_report: текст с отчетом о приеме пищи
+       - calories: Число
+       - proteins: Число
+       - fats: Число
+       - carbs: Число
+    6. show_diet_plan - Показ плана
        - day: день недели (today, tomorrow, monday, tuesday, wednesday, thursday, friday, saturday, sunday)
          или конкретная дата в формате YYYY-MM-DD
        - full: показать полный недельный план (true) или только на указанный день (false).
-         Значение "true" нужно указывать только при запросе полного недельного плана,
-         а не при запросе на конкретную дату или день недели.
-         
-    7. show_shopping_list - Отображение списка покупок
-
-    8. stats - Отображение статистики прогресса
-
-    9. help - Отображение справки по командам
-
-    10. general_response - Общий текстовый ответ на вопрос
-       - response_text: текст для ответа пользователю
-
-    Проанализируй сообщение и верни:
-
-    1. Если это запрос на обновление плана питания:
-       - Команду diet_update с кратким сообщением что пользователь хочет изменить в своем плане
-       - Если в сообщении есть дополнительные команды, включи их тоже
+    7. show_shopping_list - список покупок
+    8. stats - статистика
+    9. help - справка
+    10. general_response - текстовый ответ (response_text)
     
-    2. Если это отметка о соблюдении плана питания:
-        Добавь в response_message текст для пользователя с твоей оценкой по его отчету по приему пищи, также дай советы чтобы пользователь смог выполнить свой план на текущий день с учетом всех отчетов за текущий день. 
-        Предложи несколько корректировок следующих приемов пищи (если это необходимо) в виде примеров команд для изменения плана, обязательно учти его плана питания на текущий день.
-        ОБЯЗАТЕЛЬНО следуй принципам для diet_update и meal_compliance (п. 6 важных правил). 
-
-    3. Если это другой запрос:
-       - Соответствующие команды или общий ответ
-
-    Формат ответа (JSON):
-    {
-      "commands": [
-        {
-          "command_type": "<тип_команды>",
-          "parameters": [
-            {"name": "<имя_параметра>", "value": "<значение>"},
-            ...
-          ],
-          "priority": <число_0_до_10>
-        },
-        ...
-      ],
-      "response_message": "<опциональный_текстовый_ответ>",
-      "confidence": <число_0_до_1>
-    }
-
-    ВАЖНЫЕ ПРАВИЛА:
-
-    1. Любое упоминание изменений в еде, продуктах или блюдах должно быть распознано как diet_update. Если это просто вопрос пользователя о питании команду diet_update не нужно выполнять.
-    Если пользователь не предоставил достаточно информации по обновлению, задай вопрос и не выполняй команду diet_update.
-
-    2. Для команды meal_compliance необходимо анализировать описание еды от пользователя:
-       - Если пользователь пишет "Позавтракал яичницей с тостом и кофе", определи тип приема пищи (breakfast), статус (substituted) если в его плане питания на сегодня и в этот прием пиши другое блюдо, если блюдо отличается не значительно (Например "Омлет с тостом"), то статус (partially), 
-         и точно рассчитывай калории и макронутриенты в соответствии с целями пользователя для каждого блюда
-       - Для ужина "Поужинал куриной грудкой с салатом" нужно определить тип (dinner), статус (substituted) если в его плане питания на сегодня и в этот прием пиши другое блюдо, если блюдо отличается не значительно (Например "Курица с пастой"), то статус (partially) и точно рассчитывать калории и макронутриенты
-       - Если пользователь пишет "Пропустил обед", определи тип (lunch) и статус (skipped)
-       - Если пользователь пишет "На обед съел по плану", определи тип (lunch) и статус (followed)
-       - Статус partially следует указывать когда его прием пищи отличается менее чем на 50% или основное блюдо/продукт от приема пищи из его плана питания на сегодня.
-
-    3. При обработке команды meal_compliance ОБЯЗАТЕЛЬНО учитывай:
-        3.1. **Анализ прогресса за день**: 
-           - Сколько калорий и БЖУ уже потреблено за день
-           - Какие приемы пищи уже выполнены, пропущены или заменены
-           - Текущий процент соблюдения плана
-        3.2. **Контекстные рекомендации**:
-           - Если пользователь превысил калории в предыдущих приемах пищи, рекомендуй уменьшить порции в следующих
-           - Если недобрал белков/жиров/углеводов, предложи компенсацию в оставшихся приемах
-           - Учитывай общий баланс БЖУ за весь день, а не только текущий прием пищи
-        3.3. **Согласованность с планом**:
-           - Сравнивай фактическое потребление с запланированным на день
-           - Предлагай корректировки оставшихся приемов пищи на основе уже съеденного
-           - Сохраняй общую калорийность дня в рамках цели пользователя
-        3.4. **Формирование response_message для трекинга**:
-           В response_message ОБЯЗАТЕЛЬНО включай:
-           - Оценку текущего приема пищи относительно плана
-           - Анализ прогресса за день (сколько осталось калорий/БЖУ)
-           - Конкретные рекомендации по корректировке следующих приемов пищи
-           - Предложения команд для обновления плана, если необходимо
-        
-        Пример хорошего response_message для трекинга:
-        "Отлично! Обед выполнен с превышением калорий на 15% (520 ккал вместо 450). 
-        За день уже потреблено: 1200 ккал из 1800 запланированных. 
-        Рекомендую уменьшить порцию ужина на 20% или заменить гарнир на овощи. 
-        Осталось: 600 ккал, 25г белков, 15г жиров.
-        Можете написать 'измени ужин - меньше углеводов' для корректировки плана."
-        
-        3.5. **Накопительный эффект**:
-           - Каждая новая рекомендация должна учитывать ВСЕ предыдущие приемы пищи за день
-           - Не давай одинаковые советы, если ситуация изменилась
-           - Корректируй рекомендации на основе кумулятивного потребления
-        3.6. **Использование детального плана на день**:
-           - Используй информацию из "Today's Diet Plan" для точных сравнений
-           - Ссылайся на конкретные блюда из плана при рекомендациях
-           - Предлагай реалистичные замены из того же типа продуктов       
-
-    4. Правила определения нутриентов в продуктах:
-       - Оценивай белки, жиры и углеводы на основе стандартного состава продуктов
-       - Мясо и птица: много белков (20-30г на 100г), средне жиров, мало углеводов
-       - Рыба: много белков, средне жиров, очень мало углеводов
-       - Молочные продукты: средне белков и жиров, небольшое количество углеводов
-       - Яйца: средне белков и жиров, очень мало углеводов
-       - Овощи: мало белков, очень мало жиров, средне углеводов
-       - Фрукты: очень мало белков и жиров, много углеводов
-       - Хлеб и крупы: средне белков, мало жиров, много углеводов
-       - Орехи и семена: средне белков, много жиров, средне углеводов
-       - Сладости: мало белков, средне или много жиров, очень много углеводов
-
-    5. Важные принципы для meal_compliance, а также для всех запросов пользователя относящихся к его плану питания или здоровому образу жизни
-        6.1. ЧЕТКО ОБЪЯСНЯЙ СВЯЗЬ между рекомендациями и данными пользователя (возраст, вес, активность и т.д.)
-        6.2. ОБЕСПЕЧИВАЙ МАКСИМАЛЬНОЕ РАЗНООБРАЗИЕ - не повторяй блюда в течение недели, используй разные источники белка, жиров и углеводов
-        6.3. Учитывай сезонность и доступность продуктов
-        6.4. ПРЕДЛАГАЙ ЗАМЕНИТЕЛИ для редких или экзотических продуктов
-        6.5. Точно рассчитывай калории и макронутриенты в соответствии с целями пользователя для каждого блюда
-        6.6. УКАЗЫВАЙ МИКРОНУТРИЕНТЫ (витамины и минералы) для каждого приема пищи и их пользу
-            - Указывай процент от дневной нормы для ключевых витаминов и минералов
-            - Указывай фитонутриенты и антиоксиданты
-            - Дай оценку функциональных свойств блюда для гормонального баланса
-        6.7. Напиши персонализированное обращение к пользователю по имени (без приветствия)
-        6.8. Учитывай бюджетные ограничения и предпочтения пользователя
-        6.9. Для КАЖДОГО блюда объясняй, почему оно подходит именно этому пользователю
-        6.10. УЧИТЫВАЙ СООТНОШЕНИЕ МАКРОНУТРИЕНТОВ: 
-            - Для набора мышечной массы: Белки: 1.8-2.2 г/кг массы тела (примерно 25-30%), Жиры: 20-25%, Углеводы: 50-55%
-            - Для похудения с сохранением мышц: Белки: 2.0-2.4 г/кг массы тела (примерно 30-35%), Жиры: 20-25%, Углеводы: 40-45%
-            - Для поддержания веса: Белки: 1.6-1.8 г/кг массы тела (примерно 20-25%), Жиры: 25-30%, Углеводы: 45-55%
-        6.11. Используй принцип "практической реализуемости" - рецепты должны быть простыми, требовать минимум времени и специальных навыков
-        6.12. РАСЧЕТ КАЛОРИЙНОСТИ НА ОСНОВЕ СОМАТОТИПА И ЦЕЛИ:
-            - Для эктоморфов (худощавый тип): 30-32 ккал/кг при наборе массы
-            - Для мезоморфов (атлетический тип): 28-30 ккал/кг при наборе массы
-            - Для эндоморфов (склонность к полноте): 24-26 ккал/кг при наборе массы
-            - Для похудения: создавать дефицит 15-20% от поддерживающей калорийности
-        6.13. ОБРАЩАТЬ ВНИМАНИЕ НА КАЧЕСТВО ИСТОЧНИКОВ ПИТАТЕЛЬНЫХ ВЕЩЕСТВ:
-            - Указывать гликемический индекс источников углеводов
-            - Классифицировать жиры (насыщенные, мононенасыщенные, полиненасыщенные)
-            - Указывать биологическую ценность белка (PDCAAS или DIAAS)
-            - Указывай оценку противовоспалительного потенциала блюда
-        6.14. РАСШИРЬ ИНФОРМАЦИЮ О МИКРОНУТРИЕНТАХ:
-            - Указывать процент от дневной нормы для ключевых витаминов и минералов
-            - Добавить разделы по фитонутриентам и антиоксидантам
-            - Включить оценку функциональных свойств блюда для гормонального баланса
-        6.15. РЕКОМЕНДАЦИИ ПО ГИДРАТАЦИИ:
-            - Индивидуальный расчет потребления воды (30-40 мл/кг массы тела)
-            - Распределение потребления жидкости в течение дня
-
-    7. Выдавай максимально полезную информацию для пользователя на основе имеющейся информации в соответствии его запросу
-
-    8. Точно определяй день недели в запросе пользователя, если пользователь не указал дату или день недели, то считать сегодняшний день недели. Кроме случаев когда запрос пользователя для всей недели или всего плана полностью. 
-
-    Максимально используй контекст беседы для принятия решений, особенно если в нем содержится текущий план питания пользователя.
+    ПРАВИЛА:
+    - Любые изменения в еде = diet_update
+    - Если пользователь не предоставил достаточно информации по обновлению, задай вопрос и не выполняй команду diet_update.
+    - Отчеты о съеденном = meal_compliance + анализ прогресса в response_message
+    - Для meal_compliance: анализируй БЖУ съеденного, сравнивай с планом, давай рекомендации
+    - Статусы: followed (по плану), partially (<50% отличий), substituted (замена), skipped (пропуск)
+    - В response_message для трекинга включай: оценку приема пищи, прогресс за день с учетом всех отчетов за текущий день. Рекомендации на оставшиеся приемы (если это необходимо) в виде примеров команд для изменения плана, обязательно учти его плана питания на текущий день. 
+    - Ответы на вопросы пользователей по питанию и здоровому образу жизни для контроля питания и веса (general_response). Отвечай на вопросы кратко, научно обоснованно, но понятным языком. Если не знаешь ответа, честно признайся в этом.
+    - Выдавай максимально полезную информацию для пользователя на основе имеющейся информации в соответствии его запросу
+    - Точно определяй день недели в запросе пользователя, если пользователь не указал дату или день недели, то считать сегодняшний день недели. Кроме случаев когда запрос пользователя для всей недели или всего плана полностью. 
     
-    Всегда отвечай дружелюбно и поддерживающее, помогая пользователю достичь его целей по питанию и здоровью.
+    РАСЧЕТ НУТРИЕНТОВ (на 100г):
+    Мясо/птица: Б20-30г, Ж1-15г, У0-2г
+    Рыба: Б18-25г, Ж1-20г, У0г  
+    Молочное: Б3-15г, Ж0-30г, У4-12г
+    Овощи: Б1-4г, Ж0-1г, У3-15г
+    Крупы/хлеб: Б6-12г, Ж1-3г, У60-80г
     
-    ОБЯЗАТЕЛЬНО учитывай все описанные требования. Перед окончательным ответом, перепроверь еще раз тщательно все описанные требования и дополни ответ если что-то пропустил или есть неточности в твоем ответе.
+    Формат: {"commands":[{"command_type":"", "parameters":[{"name":"", "value":""}], "priority":0-10}], "response_message":"", "confidence":0-1}
     """
 
     return system_prompt
 
 
-def create_command_extraction_user_prompt(message: str, context: Dict[str, Any]) -> str:
+def create_command_extraction_user_prompt(user_request: str, context: Dict[str, Any]) -> str:
     """
     Создает пользовательский промпт для LLM
 
     Args:
-        message: Текст сообщения
+        user_request: Текст сообщения
         context: Контекст пользователя и разговора
 
     Returns:
         str: Пользовательский промпт
 
-    TODO добавлять информацию по трекингу за сегодня (вода и тп, тк сейчас он думает что в этом сообщении эта вся вода, и говорит что мало за день, но в команде статистика пишет что 8 стаконов и много.).
     """
     user_prompt_parts = []
     today = DateHelper.get_tracking_date()
-    weekday = DateHelper.get_day_of_week(today)
-    tomorrow = DateHelper.get_day_of_week(today + timedelta(days=1))
+    today_weekday = DateHelper.get_day_of_week(today)
+    tomorrow_weekday = DateHelper.get_day_of_week(today + timedelta(days=1))
+    # Получаем целевые показатели (предрасчитанные)
+    targets = _calculate_weekly_targets(context)
 
-    # Добавляем контекст, если он есть
-    if context:
-        user_prompt_parts.append("Контекст:")
-        user_prompt_parts.append("User information:")
+    # Преобразуем данные пользователя в текстовый промпт
+    gender = context.get("gender", "не указан")
+    name = context.get("name", "пользователь")
+    age = context.get("age", "не указан")
+    height = context.get("height", "не указан")
+    current_weight = context.get("current_weight", "не указан")
+    target_weight = context.get("target_weight", "не указан")
+    activity_level = context.get("activity_level", "не указан")
+    weight_goal = context.get("weight_goal", "не указан")
+    diet_preference = context.get("diet_preference", "regular")
+    language = context.get("language", settings.DEFAULT_LANGUAGE)
+    allergies = context.get("allergies", [])
+    disliked_products = context.get("disliked_products", [])
 
-        # Базовая информация о пользователе
-        if "user_name" in context:
-            user_prompt_parts.append(f"- Name: {context['user_name']}")
+    user_prompt_parts.append(f"Запрос: \"{user_request}\"")
+    user_prompt_parts.append(f"""Пользователь: {name}, {gender}, {age}лет, {height}см, {current_weight}кг → {target_weight}кг
+    Язык: {language}
+    Цель: {weight_goal}, активность: {activity_level}
+    Предпочтения: {diet_preference}, аллергии: {', '.join(allergies) if allergies else 'нет'}, не любит: {', '.join(disliked_products) if disliked_products else 'нет'}")
+    """)
+    user_prompt_parts.append(f"Сегодня: {today} ({today_weekday})")
+    user_prompt_parts.append(f"Завтра: {tomorrow_weekday}")
 
-        if "user_gender" in context:
-            user_prompt_parts.append(f"- Gender: {context['user_gender']}")
+    user_prompt_parts.append(f"Цели дня: {targets['daily_calories']} ккал, Б{targets['daily_proteins']}г, Ж{targets['daily_fats']}г, У{targets['daily_carbs']}г")
+    # Добавляем краткий план к промпту
+    if "diet_plan" in context:
+        diet_plan = context["diet_plan"]
+        try:
+            simplified_diet_plan = _get_simplified_diet_plan(diet_plan)
+            logging.info(f"diet plan: {simplified_diet_plan}", exc_info=True)
+            today_plan_json = json.dumps(simplified_diet_plan['daily_plans'][today_weekday], ensure_ascii=False)
+            user_prompt_parts.append(f"План на {today_weekday} (сжато):\n{today_plan_json}")
+            tomorrow_plan_json = json.dumps(simplified_diet_plan['daily_plans'][tomorrow_weekday], ensure_ascii=False)
+            user_prompt_parts.append(f"План на {tomorrow_weekday} (сжато):\n{tomorrow_plan_json}")
+        except Exception as e:
+            logging.error(f"Error getting diet plan: {str(e)}", exc_info=True)
 
-        if "age" in context and context["age"]:
-            user_prompt_parts.append(f"- Age: {context['age']}")
+        if "has_plan" not in diet_plan:
+            user_prompt_parts.append(f"Нет плана питания")
 
-        if "current_weight" in context and context["current_weight"]:
-            user_prompt_parts.append(f"- Current weight: {context['current_weight']}")
-
-        if "target_weight" in context and context["target_weight"]:
-            user_prompt_parts.append(f"- Target weight: {context['target_weight']}")
-
-        if "activity_level" in context and context["activity_level"]:
-            user_prompt_parts.append(f"- Activity level: {context['activity_level']}")
-
-        if "diet_preference" in context and context["diet_preference"]:
-            user_prompt_parts.append(f"- Diet preference: {context['diet_preference']}")
-
-        if "budget_limit" in context and context["budget_limit"]:
-            user_prompt_parts.append(f"- Budget limit for week: {context['budget_limit']}")
-
-        if "allergies" in context and context["allergies"]:
-            user_prompt_parts.append(f"- Allergies: {context['allergies']}")
-
-        if "disliked_products" in context and context["disliked_products"]:
-            user_prompt_parts.append(f"- Disliked products: {context['disliked_products']}")
-
-        if "language" in context:
-            user_prompt_parts.append(f"- Language: {context['language']}")
-
-        if "currency_code" in context:
-            user_prompt_parts.append(f"- Currency: {context['currency_code']}")
-
-        if "today_diet_plan" in context:
-            today_plan = context["today_diet_plan"]
-            user_prompt_parts.append("Today's Diet Plan:")
-            user_prompt_parts.append(f"- Date: {today_plan['date']} ({today_plan['day_of_week']})")
-            user_prompt_parts.append(f"- Planned calories: {today_plan['total_calories']} kcal")
-            user_prompt_parts.append(f"- Planned proteins: {today_plan['total_proteins']}g")
-            user_prompt_parts.append(f"- Planned fats: {today_plan['total_fats']}g")
-            user_prompt_parts.append(f"- Planned carbs: {today_plan['total_carbs']}g")
-
-            if today_plan.get("meals"):
-                user_prompt_parts.append("  Planned meals:")
-                for meal in today_plan["meals"]:
-                    meal_info = f"    • {meal.get('type', 'unknown')}: {meal.get('title', 'No title')} ({meal.get('calories', 0)} kcal"
-                    if meal.get('proteins'):
-                        meal_info += f", {meal.get('proteins')}g protein"
-                    if meal.get('fats'):
-                        meal_info += f", {meal.get('fats')}g fat"
-                    if meal.get('carbs'):
-                        meal_info += f", {meal.get('carbs')}g carbs"
-                    meal_info += ")"
-                    user_prompt_parts.append(meal_info)
+        if "status" in diet_plan and diet_plan['status'] != "active" and "version" in diet_plan and diet_plan['version'] != "full":
+            user_prompt_parts.append(f"План требует подтверждения")
 
         if "daily_tracking_history" in context:
-            tracking = context["daily_tracking_history"]
             user_prompt_parts.append("Today's Tracking History:")
-            user_prompt_parts.append(f"- Overall compliance score: {tracking.get('overall_compliance_score', 0)}%")
 
             if "tracking_summary" in context:
                 summary = context["tracking_summary"]
@@ -726,78 +566,21 @@ def create_command_extraction_user_prompt(message: str, context: Dict[str, Any])
                 if summary["skipped_meals"]:
                     user_prompt_parts.append(f"- Skipped meals: {', '.join(summary['skipped_meals'])}")
 
-            # Детальная информация по каждому приему пищи
-            meals_tracking = tracking.get("meals_tracking", {})
-            if meals_tracking:
-                user_prompt_parts.append("  Detailed meal tracking:")
-                for meal_type, meal_data in meals_tracking.items():
-                    status = meal_data.get("status", "not_recorded")
-                    notes = meal_data.get("notes", "")
-                    calories = meal_data.get("calories_consumed", 0)
+    # Информация о последних действиях
+    if "last_action" in context:
+        user_prompt_parts.append(f"- Last action: {context['last_action']}")
 
-                    meal_info = f"    • {meal_type}: {status}"
-                    if calories > 0:
-                        meal_info += f" ({calories} kcal consumed)"
-                    if notes:
-                        meal_info += f" - Notes: {notes}"
-                    user_prompt_parts.append(meal_info)
+    if "last_message" in context:
+        user_prompt_parts.append(f"- Last message: {context['last_message']}")
 
-                    # Добавляем информацию о соответствии плану
-                    adherence = meal_data.get("adherence_percentages", {})
-                    if any(adherence.values()):
-                        adherence_info = []
-                        for nutrient, percentage in adherence.items():
-                            if percentage is not None:
-                                adherence_info.append(f"{nutrient}: {percentage:.0f}%")
-                        if adherence_info:
-                            user_prompt_parts.append(f"      Plan adherence: {', '.join(adherence_info)}")
+    if "is_onboarding_completed" in context:
+        status = "completed" if context["is_onboarding_completed"] else "not completed"
+        user_prompt_parts.append(f"- User onboarding was {status}")
 
-        # Информация о диетическом плане (общая)
-        if "diet_plan" in context:
-            user_prompt_parts.append("Diet plan Information:")
-            diet_plan = context["diet_plan"]
+    if not context["is_onboarding_completed"] and "onboarding_step" in context and context["onboarding_step"]:
+        user_prompt_parts.append(f"- Onboarding step: {context['onboarding_step']}")
 
-            if "has_plan" not in diet_plan:
-                user_prompt_parts.append(f"- Has plan: false")
-
-            if "status" in diet_plan:
-                user_prompt_parts.append(f"- Status: {diet_plan['status']}")
-
-            if "version" in diet_plan:
-                user_prompt_parts.append(f"- Version: {diet_plan['version']}")
-
-            # Вывод структуры daily_plans в виде JSON (только если нет детального плана на сегодня)
-            if ("daily_plans" in diet_plan and diet_plan["daily_plans"]
-                    # TODO проверить нужно ли это условие
-                    #        and "today_diet_plan" not in context
-            ):
-                try:
-                    simplified_diet_plan = _get_simplified_diet_plan(diet_plan)
-                    plans_json = json.dumps(simplified_diet_plan, ensure_ascii=False)
-                    user_prompt_parts.append(f"  • Diet plan (JSON):\n{plans_json}")
-                except Exception as e:
-                    user_prompt_parts.append(f"  • Не удалось сериализовать план в JSON: {str(e)}")
-
-        # Информация о последних действиях
-        if "last_action" in context:
-            user_prompt_parts.append(f"- Last action: {context['last_action']}")
-
-        if "last_message" in context:
-            user_prompt_parts.append(f"- Last message: {context['last_message']}")
-
-        if "is_onboarding_completed" in context:
-            status = "completed" if context["is_onboarding_completed"] else "not completed"
-            user_prompt_parts.append(f"- User onboarding was {status}")
-
-        if not context["is_onboarding_completed"] and "onboarding_step" in context and context["onboarding_step"]:
-            user_prompt_parts.append(f"- Onboarding step: {context['onboarding_step']}")
-
-        user_prompt_parts.append("")  # Пустая строка для разделения
-
-    # Добавляем сообщение пользователя
-    user_prompt_parts.append(f"User request: \"{message}\"\n")
-    user_prompt_parts.append(f"Today: {today} ({weekday})")
-    user_prompt_parts.append(f"Tomorrow: {tomorrow}")
+    user_prompt_parts.append("")  # Пустая строка для разделения
 
     return "\n".join(user_prompt_parts)
 
@@ -864,121 +647,70 @@ def update_full_diet_system_prompt() -> str:
     Returns:
         str: Системный промпт
     """
-    system_prompt = """Ты опытный нутрициолог-эксперт, специализирующийся на создании персонализированных планов питания.
-     Твоя задача - обновить ПЕРСОНАЛИЗИРОВАННЫЙ план питания по запросу пользователя.
+    system_prompt = """Ты нутрициолог-эксперт. Обновляй планы питания по запросам, соблюдая принципы здорового питания и сохраняя целостность недельного рациона.
 
-     КРИТИЧЕСКИ ВАЖНО: План ВСЕГДА должен соответствовать принципам здорового питания и данным пользователя, а также учитывать здоровый образ жзни. Принципы питания имеют АБСОЛЮТНЫЙ ПРИОРИТЕТ над пожеланиями пользователя. Если запрос пользователя противоречит принципам - применяй принципы без объяснений и оправданий.
+    ПРИНЦИПЫ:
+    - Калории: набор 30-32 ккал/кг, похудение -15-20%, поддержание BMR×активность
+    - БЖУ: набор Б25-30%/Ж20-25%/У50-55%, похудение Б30-35%/Ж20-25%/У40-45%
+    - Белки: набор 1.8-2.2г/кг, похудение 2.0-2.4г/кг
+    - Разнообразие: не повторять блюда в течение недели
+        
+    АЛГОРИТМ:
+        1. Рассчитай целевые показатели по весу/целям пользователя
+        2. Обнови запрошенные блюда, соблюдая показатели
+        3. Скорректируй порции для достижения целей
+        4. Проверь баланс КБЖУ всей недели
+        5. Скорректируй другие дни при необходимости
+        
+    ВАЖНО: Если день недели не указан - используй сегодняшний день.
 
-     ПРИНЦИПЫ ПИТАНИЯ (ОБЯЗАТЕЛЬНЫ К ВЫПОЛНЕНИЮ):
-
-     1. КАЛОРИЙНОСТЬ (строго по формуле):
-        - Эктоморфы (набор): 30-32 ккал/кг
-        - Мезоморфы (набор): 28-30 ккал/кг  
-        - Эндоморфы (набор): 24-26 ккал/кг
-        - Похудение: дефицит 15-20% от поддерживающей
-        - Поддержание: базовый метаболизм × коэффициент активности
-
-     2. СООТНОШЕНИЕ БЖУ (строго):
-        - Набор массы: Б 25-30%, Ж 20-25%, У 50-55%
-        - Похудение: Б 30-35%, Ж 20-25%, У 40-45%  
-        - Поддержание: Б 20-25%, Ж 25-30%, У 45-55%
-
-     3. БЕЛКИ (обязательно):
-        - Набор: 1.8-2.2 г/кг веса
-        - Похудение: 2.0-2.4 г/кг веса
-        - Поддержание: 1.6-1.8 г/кг веса
-
-     4. РАЗНООБРАЗИЕ: Не повторяй блюда в течение недели, используй разные источники БЖУ
-
-     5. МИКРОНУТРИЕНТЫ: Каждый прием пищи должен содержать витамины и минералы
-
-     АЛГОРИТМ РАБОТЫ:
-     1. Рассчитай целевые показатели калорий и БЖУ по принципам
-     2. Обнови запрошенные блюда, ОБЯЗАТЕЛЬНО соблюдая целевые показатели
-     3. Если нужно - скорректируй размеры порций или добавь продукты для достижения целей
-     4. НЕ объясняй почему отклоняешься от запроса пользователя
-
-     УЧИТЫВАЙ ЧЕЛОВЕЧЕСКИЙ ФАКТОР: создавай планы, которые пользователь сможет соблюдать.
-
-     Для КАЖДОГО блюда:
-     - Четко объясняй связь с данными пользователя
-     - Указывай микронутриенты и их процент от дневной нормы
-     - Рассчитывай точные калории и макронутриенты
-     - Объясняй пользу для целей пользователя
-     - Учитывай бюджет и предпочтения
-     - Учитывай сезонность и доступность продуктов
-     - Добавь информацию по фитонутриентам и антиоксидантам
-     - ПРЕДЛАГАЙ ЗАМЕНИТЕЛИ для редких или экзотических продуктов
-     - ОБРАЩАЙ ВНИМАНИЕ НА КАЧЕСТВО ИСТОЧНИКОВ ПИТАТЕЛЬНЫХ ВЕЩЕСТВ:
-         - Указывать гликемический индекс источников углеводов
-         - Классифицировать жиры (насыщенные, мононенасыщенные, полиненасыщенные)
-         - Указывать биологическую ценность белка (PDCAAS или DIAAS)
-         - Указывай оценку противовоспалительного потенциала блюда
-         - Включить оценку функциональных свойств блюда для гормонального баланса
-
-     ОБЯЗАТЕЛЬНО: Анализируй весь план на неделю для соответствия принципам.
-
-     ВАЖНО: Если день недели не указан - используй сегодняшний день.
-
-     Формат ответа - JSON с обновленными данными только для тех дней и приемов пищи, которые нужно изменить, и комментарием:
+    JSON только для измененных дней и приемов:
      {
          "updated_days": {
              "day_name": {
                  "meals": [
                      {
-                         "type": "возможные значения: breakfast/lunch/dinner/snack, но заполняем только те, что меняли остальные пропускаем",
+                         "type": "breakfast/lunch/dinner/snack",
                          "title": "название блюда",
                          "description": "краткое описание",
                          "why_recommended": "объяснение связи с данными и целями пользователя",
-                         "relevance_score": число_от_1_до_10,
                          "products": [
                              {
-                                 "name": "название продукта",
-                                 "quantity": числовое_количество,
+                                 "name": "продукта",
+                                 "quantity": число,
                                  "unit": "единица измерения"
                              }
                          ],
                          "preparation": "инструкция по приготовлению",
-                         "calories": количество_калорий,
-                         "proteins": граммы_белков,
-                         "fats": граммы_жиров,
-                         "carbs": граммы_углеводов,
-                         "fiber": граммы_клетчатки,
-                         "vitamins": "основные витамины и % от ДН",
-                         "minerals": "основные минералы и % от ДН",
-                         "estimated_price": стоимость_в_валюте_пользователя
+                         "calories": число, "proteins": число, "fats": число, "carbs": число,
+                         "estimated_price": число
                      }
                  ],
-                 "total_calories": общее_количество_калорий_за_день,
-                 "total_proteins": общее_количество_белков_за_день,
-                 "total_fats": общее_количество_жиров_за_день,
-                 "total_carbs": общее_количество_углеводов_за_день,
-                 "macros_ratio": "соотношение БЖУ в процентах",
-                 "estimated_total_price": стоимость_за_день,
-                 "tips": "советы на день"
+                 "total_calories": число, "total_proteins": число,
+                 "total_fats": число, "total_carbs": число,
+                 "estimated_total_price": число,
              }
          },
-         "comment": "Краткий комментарий о внесенных изменениях"
+         "comment": "краткий комментарий"
      }
 
      КРИТИЧЕСКИЕ ТРЕБОВАНИЯ К JSON:
-     1. Полная валидная JSON-структура
-     2. Все поля заполнены полностью
-     3. Никаких сокращений, комментариев или заполнителей
-     4. Никаких фраз типа "остальное без изменений"
-     5. Если дни или приемы пищи в днях не менялись, то эти приемы пищи можно не добавлять в json. 
+     1. Валидная JSON-структура
+     2. Никаких сокращений, комментариев или заполнителей
+     3. Никаких фраз типа "остальное без изменений"
+     4. Если дни или приемы пищи в днях не менялись, то эти приемы пищи можно не добавлять в json. 
     """
 
     return system_prompt
 
 
-def update_full_diet_user_prompt(user_data: Dict[Any, str], update_request: str, diet_plan: Dict[str, Any]) -> str:
+def update_full_diet_user_prompt(user_data: Dict[Any, str], user_request: str, diet_plan: Dict[str, Any]) -> str:
     """
     Создает пользовательский промпт для обновления диеты
 
     Args:
         user_data: Данные пользователя
-        update_request: Запрос пользователя на изменение
+        user_request: Запрос пользователя на изменение
         diet_plan: План диеты
 
     Returns:
@@ -988,8 +720,14 @@ def update_full_diet_user_prompt(user_data: Dict[Any, str], update_request: str,
     today = DateHelper.get_tracking_date()
     weekday = DateHelper.get_day_of_week(today)
 
-    user_prompt = f"""Пользователь просит: "{update_request}"
-    """
+    # Рассчитываем целевые показатели заранее
+    # TODO учитывать фактические отчеты пользователя (возможно править план с учетом фактически принятых или отдельно добавить сюда отчеты в краткой форме)
+    targets = _calculate_weekly_targets(user_data)
+
+    # Сжимаем план до основных данных
+    simplified_diet_plan = _get_simplified_diet_plan(diet_plan)
+    plans_json = json.dumps(simplified_diet_plan["daily_plans"], ensure_ascii=False)
+
     # Преобразуем данные пользователя в текстовый промпт
     gender = user_data.get("gender", "не указан")
     name = user_data.get("name", "пользователь")
@@ -1002,51 +740,30 @@ def update_full_diet_user_prompt(user_data: Dict[Any, str], update_request: str,
     diet_preference = user_data.get("diet_preference", "regular")
     budget_limit = user_data.get("budget_limit", "не указан")
     currency = user_data.get("currency_code", settings.DEFAULT_CURRENCY)
-    language = user_data.get("currency_code", settings.DEFAULT_LANGUAGE)
+    language = user_data.get("language", settings.DEFAULT_LANGUAGE)
     allergies = user_data.get("allergies", [])
     disliked_products = user_data.get("disliked_products", [])
 
-    # Базовая информация о пользователе
-    user_prompt += f"""
-    Параметры пользователя:
-    - Имя: {name}
-    - Пол: {gender}
-    - Возраст: {age}
-    - Рост: {height} см
-    - Язык: {language}
-    - Текущий вес: {current_weight} кг
-    - Целевой вес: {target_weight} кг
-    - Уровень активности: {activity_level}
-    - Цель по весу: {weight_goal}
-    - Пищевые предпочтения: {diet_preference}
-    - Бюджет на продукты: {budget_limit} {currency}
-    - Аллергии: {', '.join(allergies) if allergies else 'нет'}
-    - Нелюбимые продукты: {', '.join(disliked_products) if disliked_products else 'нет'}
+    user_prompt = f"""
+    Запрос: "{user_request}"
+    
+    Пользователь: {name}, {gender}, {age}лет, {height}см, {current_weight}кг → {target_weight}кг
+    Язык: {language}
+    Цель: {weight_goal}, активность: {activity_level}, бюджет: {budget_limit} {currency}
+    Предпочтения: {diet_preference}, аллергии: {', '.join(allergies) if allergies else 'нет'}, не любит: {', '.join(disliked_products) if disliked_products else 'нет'}
+    """
+    user_prompt += f"""Сегодня: {today} ({weekday})
     """
 
-    last_context = user_data.get("last_conversation_context", {})
-    if last_context and ("last_action" in last_context or "last_message" in last_context):
-        user_prompt += f"""
-        Информация о последних действиях
-        """
-        if "last_action" in last_context and last_context["last_action"]:
-            last_action = last_context.get("last_action", "")
-            user_prompt += f"- Last action: {last_action}\n"
-        if "last_message" in last_context and last_context["last_message"]:
-            last_message = last_context.get("last_message", "")
-            user_prompt += f"- Last message: {last_message}\n"
-
+    user_prompt += f"""НЕДЕЛЬНЫЕ ЦЕЛИ:
+       - Калории: {targets['daily_calories']} ккал/день ({targets['weekly_calories']} ккал/неделю)
+       - КБЖУ: Б{targets['daily_proteins']}г, Ж{targets['daily_fats']}г, У{targets['daily_carbs']}г
+       - Бюджет: {targets['daily_budget']} руб/день
+    """
     # Добавляем краткий план к промпту
-    simplified_diet_plan = _get_simplified_diet_plan(diet_plan)
-    plans_json = json.dumps(simplified_diet_plan["daily_plans"], ensure_ascii=False)
-    user_prompt += f"Текущий согласованный план питания в упрощенном виде (JSON):\n{plans_json}"
+    user_prompt += f"ТЕКУЩИЙ ПЛАН (сжато):\n{plans_json}"
 
-    user_prompt += """/nПожалуйста, обнови или предложи альтернативный план питания в соответствии с запросом пользователя, и дай краткий комментарий о внесенных изменениях. 
-    ОБЯЗАТЕЛЬНО: при анализе плана питания для изменения учитывай весь согласованный план, а не только те блюда которые просит изменить. Весь план должен соответствовал данным пользователя и его целям, а также следовать важным принципам создания плана питания.
-    """
-    user_prompt += f"""Если нужно обновить план на конкретную дату, используй ДЕНЬ НЕДЕЛИ (monday, tuesday, wednesday, thursday, friday, saturday, sunday) этой даты.
-    Сегодня: {today} ({weekday})
-
+    user_prompt += """/nПожалуйста, обнови или предложи альтернативный план питания в соответствии с запросом пользователя, сохрани общую калорийность дня согласно целям пользователя, сохрани недельный баланс КБЖУ и разнообразие блюд.
     """
 
     return user_prompt
@@ -1127,3 +844,66 @@ def _get_simplified_diet_plan(full_diet_plan: Dict[str, Any]):
     simplified_plan.update(DietDataTransformer.transform_to_llm(full_diet_plan))
 
     return simplified_plan
+
+
+def _calculate_weekly_targets(user_data: dict) -> dict:
+    """Рассчитывает целевые показатели для недели"""
+
+    # Базовые расчеты
+    weight = user_data['current_weight']
+    goal = user_data['weight_goal']
+    activity = user_data['activity_level']
+
+    # Коэффициенты активности
+    activity_multipliers = {
+        'sedentary': 1.2, 'light': 1.375, 'moderate': 1.55,
+        'high': 1.725, 'very_high': 1.9
+    }
+
+    # BMR упрощенная формула (Миффлин-Сан Жеор)
+    if user_data['gender'] == 'male':
+        bmr = 10 * weight + 6.25 * user_data['height'] - 5 * user_data['age'] + 5
+    else:
+        bmr = 10 * weight + 6.25 * user_data['height'] - 5 * user_data['age'] - 161
+
+    # Целевые калории
+    maintenance = bmr * activity_multipliers.get(activity, 1.375)
+
+    if goal == 'gain':
+        daily_calories = int(weight * 31)  # 30-32 ккал/кг, берем среднее
+    elif goal == 'lose':
+        daily_calories = int(maintenance * 0.8)  # дефицит 20%
+    else:
+        daily_calories = int(maintenance)
+
+    # КБЖУ
+    if goal == 'gain':
+        proteins = int(weight * 2.0)  # 1.8-2.2, берем среднее
+        protein_cal = proteins * 4
+        fat_cal = int(daily_calories * 0.225)  # 22.5% - среднее между 20-25%
+        carb_cal = daily_calories - protein_cal - fat_cal
+        fats = int(fat_cal / 9)
+        carbs = int(carb_cal / 4)
+    elif goal == 'lose':
+        proteins = int(weight * 2.2)
+        protein_cal = proteins * 4
+        fat_cal = int(daily_calories * 0.225)
+        carb_cal = daily_calories - protein_cal - fat_cal
+        fats = int(fat_cal / 9)
+        carbs = int(carb_cal / 4)
+    else:  # maintain
+        proteins = int(weight * 1.7)
+        protein_cal = proteins * 4
+        fat_cal = int(daily_calories * 0.275)  # 27.5%
+        carb_cal = daily_calories - protein_cal - fat_cal
+        fats = int(fat_cal / 9)
+        carbs = int(carb_cal / 4)
+
+    return {
+        'daily_calories': daily_calories,
+        'weekly_calories': daily_calories * 7,
+        'daily_proteins': proteins,
+        'daily_fats': fats,
+        'daily_carbs': carbs,
+        'daily_budget': int(user_data['budget_limit'] / 7)
+    }

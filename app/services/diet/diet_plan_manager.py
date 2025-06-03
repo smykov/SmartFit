@@ -21,6 +21,7 @@ from app.templates.prompts import (
     update_full_diet_user_prompt
 )
 from app.utils.date_helper import DateHelper
+from app.utils.nutrition_helper import NutritionHelper
 from config import settings
 
 
@@ -116,15 +117,18 @@ class DietPlanManager(BaseDietService):
             if "daily_plans" not in short_plan:
                 short_plan["daily_plans"] = {}
 
+            # Обогащаем ответ
+            enriched_result = self._enrich_diet_plan_response(short_plan, user_data)
+
             # Сохраняем план в базу данных
-            plan_id = await self.diet_plan_repository.create(short_plan)
+            plan_id = await self.diet_plan_repository.create(enriched_result)
             if not plan_id:
                 self.logger.error("Failed to save short diet plan to database")
                 return None
 
-            short_plan["id"] = plan_id
+            enriched_result["id"] = plan_id
 
-            return short_plan
+            return enriched_result
 
         except Exception as e:
             self.logger.error(f"Error generating short diet plan: {str(e)}")
@@ -567,19 +571,22 @@ class DietPlanManager(BaseDietService):
                 self.logger.error(f"updated_days not found in response LLM: {response}")
                 return {"error": self.get_localized_message(LK.Diet.Update.INVALID_FORMAT, lang)}
 
+            # Обогащаем данными план питания
+            enriched_result = self._enrich_diet_plan_response(updates, user_data)
+
             # Обновляем план
             success, updated_plan = await self.update_diet_plan_partially(
                 plan_id,
-                updates["updated_days"],
-                updates.get("comment", self.get_localized_message(LK.Diet.Update.DEFAULT_COMMENT, lang))
+                enriched_result["updated_days"],
+                enriched_result.get("comment", self.get_localized_message(LK.Diet.Update.DEFAULT_COMMENT, lang))
             )
 
             if success:
                 return {
                     "success": True,
                     "plan": updated_plan,
-                    "comment": updates.get("comment", self.get_localized_message(LK.Diet.Update.DEFAULT_COMMENT, lang)),
-                    "updated_days": updates.get("updated_days", {})
+                    "comment": enriched_result.get("comment", self.get_localized_message(LK.Diet.Update.DEFAULT_COMMENT, lang)),
+                    "updated_days": enriched_result.get("updated_days", {})
                 }
             else:
                 return {"error": self.get_localized_message(LK.Diet.Update.UPDATE_FAILED, lang)}
@@ -587,6 +594,51 @@ class DietPlanManager(BaseDietService):
         except Exception as e:
             self.logger.error(f"Ошибка при обновлении плана диеты: {str(e)}", exc_info=True)
             return {"error": str(e)}
+
+    def _enrich_diet_plan_response(self, llm_response: Dict[str, Any], user_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Обогащает ответ от LLM дополнительными расчетами
+
+        Args:
+            llm_response: Ответ от LLM
+            user_data: Данные пользователя
+
+        Returns:
+            Dict: Обогащенный ответ
+        """
+        enriched_response = llm_response.copy()
+
+        # Добавляем macros_ratio для каждого дня
+        updated_days = enriched_response.get('updated_days', {})
+
+        for day_name, day_data in updated_days.items():
+            # Рассчитываем соотношение БЖУ
+            macros_ratio = NutritionHelper.calculate_macros_ratio_from_day_data(day_data)
+            day_data['macros_ratio'] = macros_ratio
+
+            # Опционально: проверяем соответствие целям пользователя
+            calories = day_data.get('total_calories', 0)
+            proteins = day_data.get('total_proteins', 0)
+            fats = day_data.get('total_fats', 0)
+            carbs = day_data.get('total_carbs', 0)
+
+            if calories > 0:
+                # Извлекаем проценты для валидации
+                protein_percent = (proteins * 4 / calories) * 100
+                fat_percent = (fats * 9 / calories) * 100
+                carb_percent = (carbs * 4 / calories) * 100
+
+                goal = user_data.get('weight_goal', 'maintain')
+                is_valid, validation_message = NutritionHelper.validate_macros_ratio(
+                    protein_percent, fat_percent, carb_percent, goal
+                )
+
+                # Добавляем информацию о валидации в комментарий (опционально)
+                if not is_valid:
+                    current_comment = enriched_response.get('comment', '')
+                    enriched_response['comment'] = f"{current_comment}\nВнимание: {validation_message}"
+
+        return enriched_response
 
     async def update_short_diet_plan_by_request(self, plan_id: str, update_request: str) -> Dict[str, Any]:
         """

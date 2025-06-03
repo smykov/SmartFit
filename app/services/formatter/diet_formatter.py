@@ -7,6 +7,7 @@ from app.services.formatter.base_formatter import BaseFormatter
 from app.services.localization.localization_interface import ILocalizationService
 from app.utils.date_helper import DateHelper
 from app.utils.format_helper import FormatHelper
+from app.utils.nutrition_helper import NutritionHelper
 from config import settings
 
 
@@ -547,13 +548,22 @@ class DietFormatter(BaseFormatter):
                 calories=day_plan['total_calories']
             )
 
+        # Рассчитываем соотношение если его нет
+
+        macros_ratio = day_plan.get('macros_ratio')
+        if not macros_ratio:
+            calories = day_plan.get('total_calories', 0)
+            proteins = day_plan.get('total_proteins', 0)
+            fats = day_plan.get('total_fats', 0)
+            carbs = day_plan.get('total_carbs', 0)
+            macros_ratio = NutritionHelper.calculate_macros_ratio(calories, proteins, fats, carbs)
+
         # Добавляем информацию о соотношении макронутриентов
-        if "macros_ratio" in day_plan and day_plan["macros_ratio"]:
-            message += self.get_localized_message(
-                f"{prefix}.macro_ratio",
-                lang,
-                ratio=day_plan['macros_ratio']
-            )
+        message += self.get_localized_message(
+            f"{prefix}.macro_ratio",
+            lang,
+            ratio=macros_ratio
+        )
 
         if "total_proteins" in day_plan and "total_fats" in day_plan and "total_carbs" in day_plan:
             message += self.get_localized_message(

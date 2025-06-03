@@ -234,13 +234,14 @@ class LLMCommandExtractor(ICommandExtractor):
         if user:
             # Основная информация о пользователе (минимум)
             enriched.update({
-                "user_name": user.get("name", ""),
-                "user_gender": user.get("gender", ""),
-                "user_weight_goal": user.get("weight_goal", ""),
+                "name": user.get("name", ""),
+                "gender": user.get("gender", ""),
+                "weight_goal": user.get("weight_goal", ""),
                 "current_weight": user.get("current_weight", ""),
                 "target_weight": user.get("target_weight", ""),
                 "budget_limit": user.get("budget_limit", ""),
                 "age": user.get("age", ""),
+                "height": user.get("height", ""),
                 "activity_level": user.get("activity_level", ""),
                 "diet_preference": user.get("diet_preference", ""),
                 "is_onboarding_completed": user.get("is_onboarding_completed", False),
