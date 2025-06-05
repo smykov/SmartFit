@@ -250,7 +250,7 @@ class TestDietService:
         assert "updated_days" in result
 
         # Verify calls
-        diet_service.diet_plan_manager.update_diet_plan.assert_called_once_with(plan_id, update_request)
+        diet_service.diet_plan_manager.update_diet_plan.assert_called_once_with(plan_id, update_request, None)
 
     async def test_update_short_diet_plan_by_request_success(self, diet_service, diet_service_dependencies,
                                                              test_diet_plan_data):

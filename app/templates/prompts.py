@@ -784,15 +784,16 @@ def update_full_diet_user_prompt(user_data: Dict[Any, str], user_request: str, d
     disliked_products = user_data.get("disliked_products", [])
 
     user_prompt = ""
-    # Информация о последних действиях
-    if "last_action" in context:
-        user_prompt += f"- Last action: {context['last_action']}\n"
+    if  context:
+        # Информация о последних действиях
+        if "last_action" in context and context['last_action']:
+            user_prompt += f"- Last action: {context['last_action']}\n"
 
-    if "last_message" in context:
-        user_prompt += f"- Last message: {context['last_message']}\n"
+        if "last_message" in context:
+            user_prompt += f"- Last message: {context['last_message']}\n"
 
-    if "last_response_message" in context:
-        user_prompt += f"- Last response message: {context['last_response_message']}\n"
+        if "last_response_message" in context:
+            user_prompt += f"- Last response message: {context['last_response_message']}\n"
     user_prompt += f"""
     Запрос: "{user_request}"
     ВАЖНО: Если день недели не указан - используй сегодняшний день.
@@ -813,7 +814,7 @@ def update_full_diet_user_prompt(user_data: Dict[Any, str], user_request: str, d
     # Добавляем краткий план к промпту
     user_prompt += f"ТЕКУЩИЙ ПЛАН (сжато):\n{plans_json}"
 
-    if "daily_tracking_history" in context:
+    if context and "daily_tracking_history" in context:
         user_prompt += "Today's Tracking History:\n"
 
         if "tracking_summary" in context:
