@@ -465,7 +465,10 @@ def create_command_extraction_system_prompt() -> str:
     10. general_response - текстовый ответ (response_text)
     
     ПРАВИЛА:
+    - command_type в json не может быть пустой
     - Любые изменения в еде = diet_update
+    - Точно определяй день недели в запросе пользователя, если пользователь не указал дату или день недели, то считать сегодняшний день недели. Кроме случаев когда запрос пользователя для всей недели или всего плана полностью. 
+    - При команде general_response, response_message остается пустой
     - Если пользователь не предоставил достаточно информации по обновлению, задай вопрос и не выполняй команду diet_update.
     - Отчеты о съеденном = meal_compliance + анализ прогресса в response_message
     - Для meal_compliance: анализируй БЖУ съеденного, сравнивай с планом, давай рекомендации
@@ -473,7 +476,6 @@ def create_command_extraction_system_prompt() -> str:
     - В response_message для трекинга включай: оценку приема пищи, прогресс за день с учетом всех отчетов за текущий день. Рекомендации на оставшиеся приемы (если это необходимо) в виде примеров команд для изменения плана, обязательно учти его плана питания на текущий день. 
     - Ответы на вопросы пользователей по питанию и здоровому образу жизни для контроля питания и веса (general_response). Отвечай на вопросы кратко, научно обоснованно, но понятным языком. Если не знаешь ответа, честно признайся в этом.
     - Выдавай максимально полезную информацию для пользователя на основе имеющейся информации в соответствии его запросу
-    - Точно определяй день недели в запросе пользователя, если пользователь не указал дату или день недели, то считать сегодняшний день недели. Кроме случаев когда запрос пользователя для всей недели или всего плана полностью. 
     
     РАСЧЕТ НУТРИЕНТОВ (на 100г):
     Мясо/птица: Б20-30г, Ж1-15г, У0-2г
@@ -506,7 +508,6 @@ def create_command_extraction_user_prompt(user_request: str, context: Dict[str, 
     tomorrow_weekday = DateHelper.get_day_of_week(today + timedelta(days=1))
     # Получаем целевые показатели (предрасчитанные)
     targets = _calculate_weekly_targets(context)
-
     # Преобразуем данные пользователя в текстовый промпт
     gender = context.get("gender", "не указан")
     name = context.get("name", "пользователь")
@@ -521,11 +522,21 @@ def create_command_extraction_user_prompt(user_request: str, context: Dict[str, 
     allergies = context.get("allergies", [])
     disliked_products = context.get("disliked_products", [])
 
+    # Информация о последних действиях
+    if "last_action" in context:
+        user_prompt_parts.append(f"- Last action: {context['last_action']}")
+
+    if "last_message" in context:
+        user_prompt_parts.append(f"- Last message: {context['last_message']}")
+
+    if "last_response_message" in context:
+        user_prompt_parts.append(f"- Last response message: {context['last_response_message']}")
+
     user_prompt_parts.append(f"Запрос: \"{user_request}\"")
     user_prompt_parts.append(f"""Пользователь: {name}, {gender}, {age}лет, {height}см, {current_weight}кг → {target_weight}кг
     Язык: {language}
     Цель: {weight_goal}, активность: {activity_level}
-    Предпочтения: {diet_preference}, аллергии: {', '.join(allergies) if allergies else 'нет'}, не любит: {', '.join(disliked_products) if disliked_products else 'нет'}")
+    Предпочтения в диете: {diet_preference}, аллергии: {', '.join(allergies) if allergies else 'нет'}, не любит: {', '.join(disliked_products) if disliked_products else 'нет'}")
     """)
     user_prompt_parts.append(f"Сегодня: {today} ({today_weekday})")
     user_prompt_parts.append(f"Завтра: {tomorrow_weekday}")
@@ -565,13 +576,6 @@ def create_command_extraction_user_prompt(user_request: str, context: Dict[str, 
                     user_prompt_parts.append(f"- Completed meals: {', '.join(summary['completed_meals'])}")
                 if summary["skipped_meals"]:
                     user_prompt_parts.append(f"- Skipped meals: {', '.join(summary['skipped_meals'])}")
-
-    # Информация о последних действиях
-    if "last_action" in context:
-        user_prompt_parts.append(f"- Last action: {context['last_action']}")
-
-    if "last_message" in context:
-        user_prompt_parts.append(f"- Last message: {context['last_message']}")
 
     if "is_onboarding_completed" in context:
         status = "completed" if context["is_onboarding_completed"] else "not completed"
@@ -647,22 +651,53 @@ def update_full_diet_system_prompt() -> str:
     Returns:
         str: Системный промпт
     """
-    system_prompt = """Ты нутрициолог-эксперт. Обновляй планы питания по запросам, соблюдая принципы здорового питания и сохраняя целостность недельного рациона.
+    system_prompt = """Ты нутрициолог-эксперт. Обновляй планы питания по запросам. Отвечай сразу JSON без объяснений процесса.
 
     ПРИНЦИПЫ:
     - Калории: набор 30-32 ккал/кг, похудение -15-20%, поддержание BMR×активность
     - БЖУ: набор Б25-30%/Ж20-25%/У50-55%, похудение Б30-35%/Ж20-25%/У40-45%
     - Белки: набор 1.8-2.2г/кг, похудение 2.0-2.4г/кг
     - Разнообразие: не повторять блюда в течение недели
+
+    ПРАВИЛА:
+    - Обновлять только запрошенные дни/приемы пищи
+    - Соблюдать общий недельный баланс КБЖУ
+
+     АЛГОРИТМ ОДНОГО ПРОХОДА:
+    1. Определи тип блюда по запросу (завтрак/обед/ужин/перекус)
+    2. Используй стандартные порции - НЕ подбирай индивидуально
+    3. Прими результат как есть - даже если не идеален
+    4. Формируй JSON и отправляй
         
-    АЛГОРИТМ:
-        1. Рассчитай целевые показатели по весу/целям пользователя
-        2. Обнови запрошенные блюда, соблюдая показатели
-        3. Скорректируй порции для достижения целей
-        4. Проверь баланс КБЖУ всей недели
-        5. Скорректируй другие дни при необходимости
-        
-    ВАЖНО: Если день недели не указан - используй сегодняшний день.
+    СТАНДАРТНЫЕ ПОРЦИИ (использовать как есть):
+    - Завтрак высокобелковый: Яйца 2шт + белок 1шт + овощи 100г + каша 30г = ~25г белка, ~300 ккал
+    - Обед с мясом: Мясо 120г + гарнир 80г + овощи 100г = ~45г белка, ~500 ккал  
+    - Ужин легкий: Рыба 100г + овощи 150г + каша 60г = ~35г белка, ~350 ккал
+    - Перекус белковый: Творог 100г + добавки 50г = ~20г белка, ~200 ккал
+
+    ЖЕСТКИЕ ОГРАНИЧЕНИЯ:
+    - НЕ ПОДБИРАЙ порции под конкретные цифры КБЖУ
+    - НЕ РАССЧИТЫВАЙ варианты - бери первый
+    - НЕ КОРРЕКТИРУЙ если блюдо не идеально подходит  
+    - НЕ ИЩИ более точные сочетания
+
+    ДОПУСТИМЫЕ ОТКЛОНЕНИЯ:
+    - Калории: ±100 ккал от цели
+    - Белки: ±10г от нормы
+    - Жиры: ±8г от нормы  
+    - Углеводы: ±15г от нормы
+    
+    ОГРАНИЧЕНИЯ ПОДБОРА:
+    - Используй ПЕРВОЕ подходящее сочетание продуктов
+    - НЕ пересчитывай блюда несколько раз
+    - Приемлемый результат > идеальный результат
+    
+    УПРОЩЕННЫЕ ПРАВИЛА РАЗНООБРАЗИЯ:
+    - НЕ ПРОВЕРЯЙ всю неделю - только указанный день
+    - Допустимы повторы основных (курица, рис, овощи) и предпочитаемых пользователем продуктов
+    - Различай только названия блюд (омлет ≠ яичница, но оба с яйцами = ОК)
+    - Повтор через 3+ дня = разрешен
+    - НЕ ПЕРЕБИРАЙ весь план - работай только с текущим днем
 
     JSON только для измененных дней и приемов:
      {
@@ -683,6 +718,7 @@ def update_full_diet_system_prompt() -> str:
                          ],
                          "preparation": "инструкция по приготовлению",
                          "calories": число, "proteins": число, "fats": число, "carbs": число,
+                         "fiber": число, "vitamins", "minerals"
                          "estimated_price": число
                      }
                  ],
@@ -694,17 +730,19 @@ def update_full_diet_system_prompt() -> str:
          "comment": "краткий комментарий"
      }
 
-     КРИТИЧЕСКИЕ ТРЕБОВАНИЯ К JSON:
-     1. Валидная JSON-структура
-     2. Никаких сокращений, комментариев или заполнителей
-     3. Никаких фраз типа "остальное без изменений"
-     4. Если дни или приемы пищи в днях не менялись, то эти приемы пищи можно не добавлять в json. 
+    ВАЖНО: Валидный JSON без комментариев внутри. Только измененные дни/приемы пищи.
+    - ЗАПРЕЩЕНО СЧИТАТЬ КБЖУ в процессе подбора
+    - ИСПОЛЬЗУЙ ГОТОВЫЕ ЗНАЧЕНИЯ из стандартных порций
+    - НЕ ОБЪЯСНЯЙ процесс подбора
+    - НЕ ПОКАЗЫВАЙ РАСЧЕТЫ - только финальный JSON
+    - Первое решение = финальное решение
     """
 
     return system_prompt
 
 
-def update_full_diet_user_prompt(user_data: Dict[Any, str], user_request: str, diet_plan: Dict[str, Any]) -> str:
+def update_full_diet_user_prompt(user_data: Dict[Any, str], user_request: str, diet_plan: Dict[str, Any],
+                               context: Dict[str, Any] = None) -> str:
     """
     Создает пользовательский промпт для обновления диеты
 
@@ -712,6 +750,7 @@ def update_full_diet_user_prompt(user_data: Dict[Any, str], user_request: str, d
         user_data: Данные пользователя
         user_request: Запрос пользователя на изменение
         diet_plan: План диеты
+        context: Контекст пользователя и разговора
 
     Returns:
         str: Пользовательский промпт
@@ -744,27 +783,48 @@ def update_full_diet_user_prompt(user_data: Dict[Any, str], user_request: str, d
     allergies = user_data.get("allergies", [])
     disliked_products = user_data.get("disliked_products", [])
 
-    user_prompt = f"""
+    user_prompt = ""
+    # Информация о последних действиях
+    if "last_action" in context:
+        user_prompt += f"- Last action: {context['last_action']}\n"
+
+    if "last_message" in context:
+        user_prompt += f"- Last message: {context['last_message']}\n"
+
+    if "last_response_message" in context:
+        user_prompt += f"- Last response message: {context['last_response_message']}\n"
+    user_prompt += f"""
     Запрос: "{user_request}"
-    
+    ВАЖНО: Если день недели не указан - используй сегодняшний день.
     Пользователь: {name}, {gender}, {age}лет, {height}см, {current_weight}кг → {target_weight}кг
     Язык: {language}
     Цель: {weight_goal}, активность: {activity_level}, бюджет: {budget_limit} {currency}
-    Предпочтения: {diet_preference}, аллергии: {', '.join(allergies) if allergies else 'нет'}, не любит: {', '.join(disliked_products) if disliked_products else 'нет'}
+    Предпочтения в диете: {diet_preference}, аллергии: {', '.join(allergies) if allergies else 'нет'}, не любит: {', '.join(disliked_products) if disliked_products else 'нет'}
     """
     user_prompt += f"""Сегодня: {today} ({weekday})
     """
-
-    user_prompt += f"""НЕДЕЛЬНЫЕ ЦЕЛИ:
+    user_prompt += f"""Цели дня:
        - Калории: {targets['daily_calories']} ккал/день ({targets['weekly_calories']} ккал/неделю)
        - КБЖУ: Б{targets['daily_proteins']}г, Ж{targets['daily_fats']}г, У{targets['daily_carbs']}г
        - Бюджет: {targets['daily_budget']} руб/день
     """
+    user_prompt += f"Цели дня: {targets['daily_calories']} ккал/день ({targets['weekly_calories']} ккал/неделю), Б{targets['daily_proteins']}г/день, Ж{targets['daily_fats']}г/день, У{targets['daily_carbs']}г/день, {targets['daily_budget']} руб/день"
+
     # Добавляем краткий план к промпту
     user_prompt += f"ТЕКУЩИЙ ПЛАН (сжато):\n{plans_json}"
 
-    user_prompt += """/nПожалуйста, обнови или предложи альтернативный план питания в соответствии с запросом пользователя, сохрани общую калорийность дня согласно целям пользователя, сохрани недельный баланс КБЖУ и разнообразие блюд.
-    """
+    if "daily_tracking_history" in context:
+        user_prompt += "Today's Tracking History:\n"
+
+        if "tracking_summary" in context:
+            summary = context["tracking_summary"]
+            user_prompt += f"- Calories consumed so far: {summary['total_calories_consumed']} kcal\n"
+            user_prompt += f"- Proteins consumed: {summary['total_proteins_consumed']}g\n"
+            user_prompt += f"- Fats consumed: {summary['total_fats_consumed']}g\n"
+            user_prompt += f"- Carbs consumed: {summary['total_carbs_consumed']}g\n"
+
+            if summary["completed_meals"]:
+                user_prompt += f"- Completed meals: {', '.join(summary['completed_meals'])}\n"
 
     return user_prompt
 

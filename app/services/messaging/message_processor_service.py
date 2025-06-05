@@ -234,6 +234,7 @@ class MessageProcessorService:
                 "message_type": message_type,
                 "messenger_type": messenger_type,
                 "commands": [cmd.dict() for cmd in extraction_result.commands],
+                "response_message": extraction_result.response_message,
                 "fallback_to_ai": extraction_result.fallback_to_ai
             })
 
@@ -420,10 +421,17 @@ class MessageProcessorService:
             action: Действие, которое было выполнено
             data: Дополнительные данные
         """
+        response_message = data.get("response_message", "") if data else ""
+        if "commands" in data:
+            for command in data["commands"]:
+                if command.get("command_type") == "general_response":
+                    if "params" in command and command["params"]:
+                        response_message = command["params"].get("response_message", "")
         context = {
             "last_action": action,
             "last_action_time": DateHelper.get_current_datetime().isoformat(),
             "last_message": data.get("message_text", "") if data else "",
+            "last_response_message": response_message,
             "data": data
         }
 

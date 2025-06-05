@@ -510,13 +510,15 @@ class DietPlanManager(BaseDietService):
             self.logger.error(f"Error getting diet for weekday: {str(e)}")
             return None
 
-    async def update_diet_plan(self, plan_id: str, update_request: str) -> Dict[str, Any]:
+    async def update_diet_plan(self, plan_id: str, update_request: str,
+                               context: Dict[str, Any] = None) -> Dict[str, Any]:
         """
         Обновляет план диеты на основе запроса пользователя
 
         Args:
             plan_id: ID плана диеты
             update_request: Текст запроса пользователя на изменение
+            context: Контекст пользователя и разговора
 
         Returns:
             Dict[str, Any]: Результат обновления
@@ -541,7 +543,7 @@ class DietPlanManager(BaseDietService):
                 return {"error": self.get_localized_message(LK.User.NOT_FOUND, lang)}
 
             # Создаем промпт для обновления
-            user_prompt = update_full_diet_user_prompt(user_data, update_request, diet_plan)
+            user_prompt = update_full_diet_user_prompt(user_data, update_request, diet_plan, context)
 
             # Получаем исторические данные для LLM
             system_prompt = update_full_diet_system_prompt()

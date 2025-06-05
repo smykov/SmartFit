@@ -359,18 +359,20 @@ class DietService(BaseDietService, IDietService):
         """
         return await self.diet_plan_manager.get_diet_for_weekday(user_id, weekday)
 
-    async def update_diet_plan(self, diet_plan_id: str, update_request: str) -> Dict[str, Any]:
+    async def update_diet_plan(self, diet_plan_id: str, update_request: str,
+                               context: Dict[str, Any] = None) -> Dict[str, Any]:
         """
         Обновляет план диеты на основе запроса пользователя
 
         Args:
             diet_plan_id: ID плана диеты
             update_request: Текст запроса пользователя на изменение
+            context: Контекст пользователя и разговора
 
         Returns:
             Dict[str, Any]: Результат обновления
         """
-        return await self.diet_plan_manager.update_diet_plan(diet_plan_id, update_request)
+        return await self.diet_plan_manager.update_diet_plan(diet_plan_id, update_request, context)
 
     async def update_short_diet_plan_by_request(self, plan_id: str, update_request: str) -> Dict[str, Any]:
         """

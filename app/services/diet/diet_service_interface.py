@@ -129,13 +129,15 @@ class IDietService(ABC):
         pass
 
     @abstractmethod
-    async def update_diet_plan(self, diet_plan_id: str, update_request: str) -> Dict[str, Any]:
+    async def update_diet_plan(self, diet_plan_id: str, update_request: str,
+                               context: Dict[str, Any] = None) -> Dict[str, Any]:
         """
         Обновляет план диеты на основе запроса пользователя
 
         Args:
             diet_plan_id: ID плана диеты
             update_request: Текст запроса пользователя на изменение
+            context: Контекст пользователя и разговора
 
         Returns:
             Dict[str, Any]: Результат обновления
