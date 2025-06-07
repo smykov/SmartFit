@@ -626,9 +626,9 @@ class DietPlanManager(BaseDietService):
 
             if calories > 0:
                 # Извлекаем проценты для валидации
-                protein_percent = (proteins * 4 / calories) * 100
-                fat_percent = (fats * 9 / calories) * 100
-                carb_percent = (carbs * 4 / calories) * 100
+                protein_percent = round((proteins * 4 / calories) * 100)
+                fat_percent = round((fats * 9 / calories) * 100)
+                carb_percent = round((carbs * 4 / calories) * 100)
 
                 goal = user_data.get('weight_goal', 'maintain')
                 is_valid, validation_message = NutritionHelper.validate_macros_ratio(
@@ -638,7 +638,8 @@ class DietPlanManager(BaseDietService):
                 # Добавляем информацию о валидации в комментарий (опционально)
                 if not is_valid:
                     current_comment = enriched_response.get('comment', '')
-                    enriched_response['comment'] = f"{current_comment}\nВнимание: {validation_message}"
+                    #TODO переделать на локализацию
+                    enriched_response['comment'] = f"{current_comment}\nВнимание в {day_name}: {validation_message}"
 
         return enriched_response
 
