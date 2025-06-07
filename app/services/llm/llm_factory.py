@@ -43,7 +43,7 @@ class LLMFactory:
             logger.info("Creating DeepSeek LLM service")
             return DeepSeekLLMService(
                 api_key=settings.DEEPSEEK_API_KEY,
-                model=settings.DEEPSEEK_MODEL,
+                model_manager=model_manager,
                 api_base=settings.DEEPSEEK_API_BASE,
                 messenger_service=messenger_service,
             )
@@ -59,7 +59,7 @@ class LLMFactory:
 
             deepseek_service = DeepSeekLLMService(
                 api_key=settings.DEEPSEEK_API_KEY,
-                model=settings.DEEPSEEK_MODEL,
+                model_manager=model_manager,
                 api_base=settings.DEEPSEEK_API_BASE
             )
 
