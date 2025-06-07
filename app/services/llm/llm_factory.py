@@ -31,6 +31,7 @@ class LLMFactory:
             provider = settings.LLM_PROVIDER
 
         provider = provider.lower()
+        model_manager = DeepSeekModelManager.from_settings(settings)
 
         if provider == "openai":
             logger.info("Creating OpenAI LLM service")
