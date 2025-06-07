@@ -27,13 +27,7 @@ def create_short_diet_system_prompt(product_list=None) -> str:
 
     Важные принципы:
     1. Создай план по ДНЯМ НЕДЕЛИ (monday, tuesday, wednesday, thursday, friday, saturday, sunday)
-    2. Включай только название блюда и калории для каждого приема пищи
-    3. ОБЕСПЕЧИВАЙ МАКСИМАЛЬНОЕ РАЗНООБРАЗИЕ - не повторяй блюда в течение недели, используй разные источники белка, жиров и углеводов
     4. Учитывай сезонность и доступность продуктов
-    5. ПРЕДЛАГАЙ ЗАМЕНИТЕЛИ для редких или экзотических продуктов
-    6. Точно рассчитывай калории и макронутриенты в соответствии с целями пользователя для каждого блюда
-    7. Не включай подробные рецепты и списки ингредиентов - только названия блюд
-    8. Напиши персонализированное обращение к пользователю по имени (без приветствия)
     9. Учитывай бюджетные ограничения и предпочтения пользователя
     10. ОБЯЗАТЕЛЬНО УЧИТЫВАЙ СООТНОШЕНИЕ МАКРОНУТРИЕНТОВ: 
         - Для похудения: Белки: 30-35%, Жиры: 20-30%, Углеводы: 40-45%
@@ -41,26 +35,25 @@ def create_short_diet_system_prompt(product_list=None) -> str:
         - Для поддержания веса: Белки: 20-25%, Жиры: 25-35%, Углеводы: 45-55%
     11. Используй принцип "практической реализуемости" - блюда должны быть простыми, требовать минимум времени и специальных навыков
   
-    Формат ответа должен быть в виде JSON-объекта с планом по дням недели (monday, tuesday, wednesday и т.д.), а не по датам:
+    Формат ответа должен быть в виде JSON-объекта:
     {
-        "personalized_note": "персональное обращение к пользователю по имени с учетом его целей",
+        "personalized_note": "персональное обращение к пользователю по имени с учетом его целей (без приветствия)",
         "daily_plans": {
-            "monday": {
+            "day_name": {
                 "meals": [
                     {
                         "type": "breakfast/lunch/dinner/snack",
                         "title": "название блюда",
-                        "calories": примерное_количество_калорий
+                        "calories": число, "proteins": число, "fats": число, "carbs": число,
                     }
                 ],
-                "total_calories": общее_количество_калорий_за_день
+                "total_calories": число, "total_proteins": число,
+                "total_fats": число, "total_carbs": число, 
             },
-            "tuesday": { ... },
-            ...
         },
         "general_recommendations": "общие рекомендации",
-        "caloric_deficit": количество_дефицита_калорий,
-        "caloric_proficit": количество_профицита_калорий
+        "caloric_deficit": число,
+        "caloric_proficit": число
     }
     
     """
@@ -533,7 +526,8 @@ def create_command_extraction_user_prompt(user_request: str, context: Dict[str, 
         user_prompt_parts.append(f"- Last response message: {context['last_response_message']}")
 
     user_prompt_parts.append(f"Запрос: \"{user_request}\"")
-    user_prompt_parts.append(f"""Пользователь: {name}, {gender}, {age}лет, {height}см, {current_weight}кг → {target_weight}кг
+    user_prompt_parts.append(
+        f"""Пользователь: {name}, {gender}, {age}лет, {height}см, {current_weight}кг → {target_weight}кг
     Язык: {language}
     Цель: {weight_goal}, активность: {activity_level}
     Предпочтения в диете: {diet_preference}, аллергии: {', '.join(allergies) if allergies else 'нет'}, не любит: {', '.join(disliked_products) if disliked_products else 'нет'}")
@@ -541,7 +535,8 @@ def create_command_extraction_user_prompt(user_request: str, context: Dict[str, 
     user_prompt_parts.append(f"Сегодня: {today} ({today_weekday})")
     user_prompt_parts.append(f"Завтра: {tomorrow_weekday}")
 
-    user_prompt_parts.append(f"Цели дня: {targets['daily_calories']} ккал, Б{targets['daily_proteins']}г, Ж{targets['daily_fats']}г, У{targets['daily_carbs']}г")
+    user_prompt_parts.append(
+        f"Цели дня: {targets['daily_calories']} ккал, Б{targets['daily_proteins']}г, Ж{targets['daily_fats']}г, У{targets['daily_carbs']}г")
     # Добавляем краткий план к промпту
     if "diet_plan" in context:
         diet_plan = context["diet_plan"]
@@ -558,7 +553,8 @@ def create_command_extraction_user_prompt(user_request: str, context: Dict[str, 
         if "has_plan" not in diet_plan:
             user_prompt_parts.append(f"Нет плана питания")
 
-        if "status" in diet_plan and diet_plan['status'] != "active" and "version" in diet_plan and diet_plan['version'] != "full":
+        if "status" in diet_plan and diet_plan['status'] != "active" and "version" in diet_plan and diet_plan[
+            'version'] != "full":
             user_prompt_parts.append(f"План требует подтверждения")
 
         if "daily_tracking_history" in context:
@@ -742,7 +738,7 @@ def update_full_diet_system_prompt() -> str:
 
 
 def update_full_diet_user_prompt(user_data: Dict[Any, str], user_request: str, diet_plan: Dict[str, Any],
-                               context: Dict[str, Any] = None) -> str:
+                                 context: Dict[str, Any] = None) -> str:
     """
     Создает пользовательский промпт для обновления диеты
 
@@ -784,7 +780,7 @@ def update_full_diet_user_prompt(user_data: Dict[Any, str], user_request: str, d
     disliked_products = user_data.get("disliked_products", [])
 
     user_prompt = ""
-    if  context:
+    if context:
         # Информация о последних действиях
         if "last_action" in context and context['last_action']:
             user_prompt += f"- Last action: {context['last_action']}\n"

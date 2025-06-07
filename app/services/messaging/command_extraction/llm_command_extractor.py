@@ -158,7 +158,8 @@ class LLMCommandExtractor(ICommandExtractor):
 
         # Вызываем LLM
         self.logger.info(f"Calling LLM for command extraction: {message[:50]}...")
-        response = await self.llm_service.generate_completion(system_prompt, user_prompt)
+        # TODO отделить трекинг приемов пищи в отдельный промпт, и тогда убрать smart модель
+        response = await self.llm_service.generate_completion(system_prompt, user_prompt, model="smart")
 
         # Очищаем ответ от маркдауна
         cleaned_response = clean_json_from_markdown(response)

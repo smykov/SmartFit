@@ -48,7 +48,8 @@ class BaseLLMService(ABC):
                                   user_prompt: str,
                                   history_messages: Optional[List[Dict[str, str]]] = None,
                                   temperature: float = 0.7,
-                                  max_tokens: int = 2000) -> str:
+                                  max_tokens: int = 2000,
+                                  model: Optional[str] = None) -> str:
         """
         Генерирует ответ на основе системного и пользовательского промптов.
 
@@ -58,6 +59,7 @@ class BaseLLMService(ABC):
             history_messages: Предыдущие промпты
             temperature: Температура (степень случайности) генерации
             max_tokens: Максимальное количество токенов в ответе
+            model: Конкретная модель ('smart' для умной модели, None для дефолтной)
 
         Returns:
             str: Сгенерированный текст

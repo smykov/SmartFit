@@ -96,7 +96,7 @@ class DietPlanManager(BaseDietService):
             user_prompt = create_short_diet_user_prompt(user_data)
 
             # Используем LLM для генерации
-            response = await self.llm_service.generate_completion(system_prompt, user_prompt)
+            response = await self.llm_service.generate_completion(system_prompt, user_prompt, model="smart")
 
             try:
                 short_plan = json.loads(response)
@@ -672,7 +672,7 @@ class DietPlanManager(BaseDietService):
             system_prompt = create_short_diet_system_prompt()
 
             # Передаем запрос в LLM
-            response = await self.llm_service.generate_completion(system_prompt, user_prompt)
+            response = await self.llm_service.generate_completion(system_prompt, user_prompt, model="smart")
 
             # Парсим результат
             try:

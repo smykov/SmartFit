@@ -1,4 +1,4 @@
-# app/services/llm/deepseek_llm_service.py
+# app/services/llm/enhanced_deepseek_llm_service.py
 
 import asyncio
 import json
@@ -11,406 +11,420 @@ from app.services.llm.base_llm_service import (
     BaseLLMService, LLMServiceError, LLMTimeoutError,
     LLMParseError, LLMServerError
 )
+from app.services.llm.model_config import (
+    DeepSeekModel, DeepSeekModelManager, ModelRetryConfig
+)
 from app.services.messaging.interfaces.message_interface import IMessengerService
 from app.templates.formatting_helpers import clean_json_from_markdown
-from app.templates.prompts import create_nutrition_question_prompt, get_bot_commands_prompt, update_full_diet_user_prompt, \
-    create_shopping_list_user_prompt, create_shopping_list_system_prompt, create_full_diet_system_prompt
+from app.templates.prompts import (
+    create_nutrition_question_prompt, get_bot_commands_prompt,
+    update_full_diet_user_prompt, create_shopping_list_user_prompt,
+    create_shopping_list_system_prompt, create_full_diet_system_prompt
+)
 from config import settings
 
 logger = logging.getLogger(__name__)
 
 
 class DeepSeekLLMService(BaseLLMService):
-    """Сервис для работы с DeepSeek API"""
+    """
+    Улучшенный сервис для работы с DeepSeek API с поддержкой множественных моделей
+    и автоматическим фолбеком при ошибках
+    """
 
     def __init__(self,
                  messenger_service: IMessengerService,
                  api_key: str,
-                 model: str = "deepseek-chat",
                  api_base: str = "https://api.deepseek.com",
-                 timeout: int = 900,
-                 max_retries: int = 2,
-                 ):
+                 model_manager: Optional[DeepSeekModelManager] = None):
         """
-        Инициализация сервиса DeepSeek
+        Инициализация улучшенного сервиса DeepSeek
 
         Args:
+            messenger_service: Сервис для отправки сообщений
             api_key: Ключ API для DeepSeek
-            model: Модель для использования (по умолчанию deepseek-chat)
             api_base: Базовый URL API
-            timeout: Таймаут запроса в секундах (по умолчанию 60)
-            max_retries: Максимальное количество повторных попыток при ошибке
+            model_manager: Менеджер конфигураций моделей
         """
         self.api_key = api_key
-        self.timeout = timeout
-        self.max_retries = max_retries
+        self.api_base = api_base
         self.messenger_service = messenger_service
 
-        # Проверка поддерживаемых моделей с их ограничениями
-        self.MODEL_LIMITS = {
-            "deepseek-chat": {"max_tokens": 8192},
-            "deepseek-reasoner": {"max_tokens": 8192}
-        }
+        # Инициализируем менеджер моделей
+        self.model_manager = model_manager or DeepSeekModelManager.from_settings(settings)
 
-        if model not in self.MODEL_LIMITS:
-            logger.warning(f"Неподдерживаемая модель: {model}, используется deepseek-chat")
-            model = "deepseek-chat"
+        # Кеш для активных сессий (для оптимизации)
+        self._session_cache = {}
 
-        self.model = model
-        self.api_base = api_base
-        self.model_limit = self.MODEL_LIMITS[model]
-        logger.info(f"Инициализирован DeepSeek LLM сервис с моделью {model}")
+        logger.info(f"Инициализирован улучшенный DeepSeek LLM сервис с моделями: "
+                    f"{[model.value for model in DeepSeekModel]}")
 
     async def generate_completion(self,
                                   system_prompt: str,
                                   user_prompt: str,
                                   history_messages: Optional[List[Dict[str, str]]] = None,
                                   temperature: float = 1.3,
-                                  max_tokens: int = 8192) -> str:
+                                  max_tokens: Optional[int] = None,
+                                  model: Optional[str] = None) -> str:
         """
-        Генерирует ответ с использованием DeepSeek API
+        Генерирует ответ с использованием DeepSeek API с поддержкой фолбека
+
         Args:
-            system_prompt: Системный промпт. При наличии history_messages системный промпт будет проигнорирован, если в истории уже есть системный промпт.
+            system_prompt: Системный промпт
             user_prompt: Пользовательский промпт
             history_messages: Предыдущие промпты
             temperature: Температура генерации
             max_tokens: Максимальное количество токенов
+            model: Конкретная модель ('smart' для умной модели, None для дефолтной)
 
         Returns:
             str: Сгенерированный текст
         """
-        retry_count = 0
-        while retry_count <= self.max_retries:
+        # Определяем модель для использования
+        target_model = self._resolve_model(model)
+
+        # Пытаемся выполнить запрос с основной моделью
+        try:
+            return await self._generate_with_model(
+                target_model, system_prompt, user_prompt,
+                history_messages, temperature, max_tokens
+            )
+        except (LLMServiceError, LLMTimeoutError, LLMParseError, LLMServerError) as e:
+            # Если была ошибка и мы не используем дефолтную модель, пробуем фолбек
+            fallback_model = target_model.get_fallback_model()
+
+            if fallback_model != target_model:
+                logger.warning(
+                    f"Ошибка с моделью {target_model.value}: {str(e)}. "
+                    f"Переключаемся на фолбек модель {fallback_model.value}"
+                )
+
+                # Отправляем уведомление в debug чат
+                await self._notify_fallback(target_model, fallback_model, str(e))
+
+                try:
+                    return await self._generate_with_model(
+                        fallback_model, system_prompt, user_prompt,
+                        history_messages, temperature, max_tokens
+                    )
+                except Exception as fallback_error:
+                    logger.error(
+                        f"Фолбек модель {fallback_model.value} также завершилась с ошибкой: {str(fallback_error)}")
+                    # Если и фолбек не сработал, бросаем исходную ошибку
+                    raise e
+            else:
+                # Если уже используется дефолтная модель, просто поднимаем ошибку
+                raise e
+
+    def _resolve_model(self, model_hint: Optional[str]) -> DeepSeekModel:
+        """
+        Определяет модель для использования на основе подсказки
+
+        Args:
+            model_hint: Подсказка модели ('smart' или None)
+
+        Returns:
+            DeepSeekModel: Модель для использования
+        """
+        if model_hint == "smart":
+            return DeepSeekModel.get_smart()
+        elif model_hint is None:
+            return DeepSeekModel.get_default()
+        else:
+            # Пытаемся найти модель по прямому значению
             try:
-                logger.info(f"Calling DeepSeek API with model {self.model}")
+                return DeepSeekModel(model_hint)
+            except ValueError:
+                logger.warning(f"Неизвестная модель '{model_hint}', используется дефолтная")
+                return DeepSeekModel.get_default()
 
-                headers = {
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {self.api_key}"
-                }
-                # Формируем список сообщений
-                messages = []
+    async def _generate_with_model(self,
+                                   model: DeepSeekModel,
+                                   system_prompt: str,
+                                   user_prompt: str,
+                                   history_messages: Optional[List[Dict[str, str]]] = None,
+                                   temperature: float = 1.3,
+                                   max_tokens: Optional[int] = None) -> str:
+        """
+        Выполняет генерацию с конкретной моделью с учетом её настроек повторов
+        """
+        model_config = self.model_manager.get_config(model)
+        retry_config = model_config.retry_config
 
-                # Проверяем, есть ли системное сообщение в истории и перемещаем его в начало
-                has_system_prompt = False
-                system_message = {"role": "system", "content": system_prompt}
+        # Применяем ограничения модели для токенов
+        if max_tokens is None:
+            actual_max_tokens = model_config.max_tokens
+        else:
+            actual_max_tokens = min(max_tokens, model_config.max_tokens)
 
-                if history_messages:
-                    # Ищем системное сообщение в истории
-                    for i, msg in enumerate(history_messages):
-                        if msg.get("role") == "system":
-                            has_system_prompt = True
-                            system_message = msg
-                            # Удаляем системное сообщение из истории, чтобы добавить его в начало
-                            history_messages_copy = history_messages.copy()
-                            history_messages_copy.pop(i)
-                            history_messages = history_messages_copy
-                            break
+        retry_count = 0
+        last_exception = None
 
-                # Добавляем системное сообщение в начало
-                if has_system_prompt:
-                    messages.append(system_message)
-                else:
-                    messages.append({"role": "system", "content": system_prompt})
+        while retry_count <= retry_config.max_retries:
+            try:
+                return await self._make_api_request(
+                    model, system_prompt, user_prompt, history_messages,
+                    temperature, actual_max_tokens
+                )
 
-                # Добавляем оставшуюся историю сообщений
-                if history_messages:
-                    messages.extend(history_messages)
+            except asyncio.TimeoutError as e:
+                last_exception = LLMTimeoutError(
+                    f"Превышено время ожидания для модели {model.value} ({retry_config.timeout} сек)"
+                )
 
-                # Добавляем новый пользовательский запрос в конец
-                messages.append({"role": "user", "content": user_prompt})
+            except (LLMServerError, LLMParseError) as e:
+                last_exception = e
 
-                # Применяем ограничения модели
-                model_max_tokens = self.model_limit["max_tokens"]
-                actual_max_tokens = min(max_tokens, model_max_tokens)
+                # Для определенных ошибок пропускаем повторы
+                if isinstance(e, LLMServerError) and e.status_code not in [503, 502, 500]:
+                    logger.error(f"Критическая ошибка для модели {model.value}: {e.status_code}")
+                    raise e
 
-                payload = {
-                    "model": self.model,
-                    "messages": messages,
-                    "temperature": temperature,
-                    "max_tokens": actual_max_tokens,
-                }
+            except Exception as e:
+                last_exception = LLMServiceError(f"Неожиданная ошибка для модели {model.value}: {str(e)}")
 
-                if temperature != 1.0:
-                    payload["temperature"] = temperature
+            # Увеличиваем счетчик и проверяем, нужна ли еще попытка
+            retry_count += 1
+            if retry_count <= retry_config.max_retries:
+                delay = retry_config.get_delay(retry_count - 1)
+                logger.warning(
+                    f"Повторная попытка {retry_count}/{retry_config.max_retries} "
+                    f"для модели {model.value} через {delay:.1f} сек"
+                )
+                await asyncio.sleep(delay)
 
-                # Для больших запросов можно добавить опцию потоковой обработки
-                if actual_max_tokens > 2000:
-                    payload["stream"] = False  # Выключаем потоковую обработку для больших запросов
+        # Все попытки исчерпаны
+        logger.error(f"Все попытки исчерпаны для модели {model.value}")
+        raise last_exception or LLMServiceError(f"Неизвестная ошибка для модели {model.value}")
 
-                # Определяем, требуется ли формат JSON в ответе
-                requires_json = any("json" in msg.get("content", "").lower() for msg in messages)
-                # Добавляем response_format только если в промпте есть упоминание о json
-                if requires_json and self.model != "deepseek-reasoner":
-                    payload["response_format"] = {"type": "json_object"}
+    async def _make_api_request(self,
+                                model: DeepSeekModel,
+                                system_prompt: str,
+                                user_prompt: str,
+                                history_messages: Optional[List[Dict[str, str]]] = None,
+                                temperature: float = 1.3,
+                                max_tokens: int = 8192) -> str:
+        """
+        Выполняет непосредственный запрос к API
+        """
+        model_config = self.model_manager.get_config(model)
 
-                # Логирование для отладки (без полного содержимого промптов)
-                log_message_roles = [f"{i}: {msg['role']}" for i, msg in enumerate(messages)]
-                logger.info(f"Message structure: {log_message_roles}")
+        logger.info(f"Выполняется запрос к DeepSeek API с моделью {model.value}")
 
-                # Логируем отправляемый запрос (без API ключа)
-                log_payload = payload.copy()
-                log_payload["model"] = f"{self.model} (API base: {self.api_base})"
-                logger.info(f"DeepSeek request payload: {json.dumps(log_payload, ensure_ascii=False)}")
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}"
+        }
 
+        # Формируем сообщения
+        messages = self._build_messages(system_prompt, user_prompt, history_messages)
+
+        # Формируем payload
+        payload = {
+            "model": model_config.model_name,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+
+        # Добавляем JSON режим если поддерживается и требуется
+        requires_json = any("json" in msg.get("content", "").lower() for msg in messages)
+        if requires_json and model_config.supports_json_mode:
+            payload["response_format"] = {"type": "json_object"}
+
+        # Логирование для отладки
+        await self._log_request(model, payload)
+
+        # Выполняем запрос
+        timeout = aiohttp.ClientTimeout(total=model_config.retry_config.timeout)
+
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.post(
+                    f"{self.api_base}/v1/chat/completions",
+                    headers=headers,
+                    json=payload
+            ) as response:
+                return await self._process_response(model, response)
+
+    def _build_messages(self,
+                        system_prompt: str,
+                        user_prompt: str,
+                        history_messages: Optional[List[Dict[str, str]]] = None) -> List[Dict[str, str]]:
+        """Формирует список сообщений для API"""
+        messages = []
+
+        # Обработка системного промпта и истории
+        system_message = {"role": "system", "content": system_prompt}
+
+        if history_messages:
+            # Ищем системное сообщение в истории
+            for i, msg in enumerate(history_messages):
+                if msg.get("role") == "system":
+                    system_message = msg
+                    # Удаляем системное сообщение из истории
+                    history_messages_copy = history_messages.copy()
+                    history_messages_copy.pop(i)
+                    history_messages = history_messages_copy
+                    break
+
+        # Добавляем системное сообщение в начало
+        messages.append(system_message)
+
+        # Добавляем историю сообщений
+        if history_messages:
+            messages.extend(history_messages)
+
+        # Добавляем новый пользовательский запрос
+        messages.append({"role": "user", "content": user_prompt})
+
+        return messages
+
+    async def _process_response(self, model: DeepSeekModel, response) -> str:
+        """Обрабатывает ответ от API"""
+        logger.info(f"DeepSeek API response status: {response.status}")
+        response_text = await response.text()
+
+        # Проверка на пустой ответ
+        if not response_text or response_text.strip() == "" or response_text.strip().lower() == "null":
+            raise LLMParseError(
+                f"Пустой ответ от DeepSeek API для модели {model.value}",
+                raw_response=response_text
+            )
+
+        logger.info(f"DeepSeek API response size: {len(response_text)} bytes")
+
+        # Проверяем статус ответа
+        if response.status >= 400:
+            error_details = {}
+            try:
+                error_details = json.loads(response_text)
+            except:
+                error_details = {"raw_text": response_text}
+
+            logger.error(f"DeepSeek API error for model {model.value}: {json.dumps(error_details)}")
+
+            raise LLMServerError(
+                f"DeepSeek API HTTP error {response.status} для модели {model.value}: {response_text}",
+                status_code=response.status,
+                raw_response=error_details
+            )
+
+        # Парсим JSON ответ
+        try:
+            response_json = json.loads(response_text)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse JSON response for model {model.value}: {str(e)}")
+            raise LLMParseError(
+                f"Ошибка парсинга JSON ответа для модели {model.value}: {str(e)}",
+                raw_response=response_text
+            )
+
+        # Извлекаем контент
+        if "choices" not in response_json or len(response_json["choices"]) == 0:
+            raise LLMParseError(
+                f"Некорректная структура ответа для модели {model.value}: отсутствует 'choices'",
+                raw_response=response_json
+            )
+
+        choice = response_json["choices"][0]
+        if "message" not in choice or "content" not in choice["message"]:
+            raise LLMParseError(
+                f"Некорректная структура ответа для модели {model.value}: отсутствует 'message' или 'content'",
+                raw_response=response_json
+            )
+
+        content = choice["message"]["content"]
+        if not content:
+            raise LLMParseError(f"Пустой контент в ответе для модели {model.value}", raw_response=response_json)
+
+        # Логируем ответ
+        await self._log_response(model, content, response_json)
+
+        # Применяем специальную обработку для reasoner модели
+        if model == DeepSeekModel.SMART:
+            return clean_json_from_markdown(content)
+        else:
+            return content
+
+    async def _log_request(self, model: DeepSeekModel, payload: Dict[str, Any]) -> None:
+        """Логирует запрос для отладки"""
+        log_payload = payload.copy()
+        log_payload["model"] = f"{model.value} (API base: {self.api_base})"
+        logger.info(f"DeepSeek request payload: {json.dumps(log_payload, ensure_ascii=False)}")
+
+        # Отправляем в debug чат
+        await self.messenger_service.send_message(
+            settings.TELEGRAM_DEBUG_CHAT_ID,
+            f"*model:* {model.value}\n #Prompts#",
+            {"bot_type": "debug", "messenger_type": "telegram"},
+            "debug"
+        )
+
+        for message in payload["messages"]:
+            role = message.get("role")
+            content = message.get("content", "")
+            truncated_content = content[:500] if len(content) > 500 else content
+            await self.messenger_service.send_message(
+                settings.TELEGRAM_DEBUG_CHAT_ID,
+                f"*{role}*\n{truncated_content}",
+                {"bot_type": "debug"},
+                "debug"
+            )
+
+    async def _log_response(self, model: DeepSeekModel, content: str, response_json: Dict[str, Any]) -> None:
+        """Логирует ответ для отладки"""
+        logger.info(f"DeepSeek response for {model.value} (truncated): {content[:1500]}...")
+
+        # Отправляем в debug чат
+        await self.messenger_service.send_message(
+            settings.TELEGRAM_DEBUG_CHAT_ID,
+            f"*content ({model.value}):*\n{content}",
+            {"bot_type": "debug"},
+            "debug"
+        )
+
+        # Логируем reasoning_content для умной модели
+        if model == DeepSeekModel.SMART and "choices" in response_json:
+            choice = response_json["choices"][0]
+            if "message" in choice and "reasoning_content" in choice["message"]:
+                reasoning_content = choice["message"]["reasoning_content"]
                 await self.messenger_service.send_message(
                     settings.TELEGRAM_DEBUG_CHAT_ID,
-                    f"*model:* {self.model}\n #Prompts#",
-                    {
-                        "bot_type": "debug",
-                        "messenger_type": "telegram"
-                    },
+                    f"*reasoning_content:*\n{reasoning_content}",
+                    {"bot_type": "debug"},
                     "debug"
                 )
 
-                for message in messages:
-                    role = message.get("role")
-                    content = message.get("content")
-                    await self.messenger_service.send_message(
-                        settings.TELEGRAM_DEBUG_CHAT_ID,
-                        f"*{role}*\n{content:500}",
-                        {
-                            "bot_type": "debug"
-                        },
-                        "debug"
-                    )
+        # Логируем usage
+        if "usage" in response_json:
+            usage = response_json["usage"]
+            await self.messenger_service.send_message(
+                settings.TELEGRAM_DEBUG_CHAT_ID,
+                f"*usage:*\n{json.dumps(usage)}",
+                {"bot_type": "debug"},
+                "debug"
+            )
 
-                # Устанавливаем таймаут
-                timeout = aiohttp.ClientTimeout(total=self.timeout)
-
-                # Используем асинхронные запросы для лучшей обработки таймаутов
-                async with aiohttp.ClientSession(timeout=timeout) as session:
-                    async with session.post(
-                            f"{self.api_base}/v1/chat/completions",
-                            headers=headers,
-                            json=payload
-                    ) as response:
-                        # Логируем статус ответа
-                        logger.info(f"DeepSeek API response status: {response.status}")
-                        # Получаем текст ответа даже при ошибке
-                        response_text = await response.text()
-
-                        # Проверка на пустой ответ или null
-                        if not response_text or response_text.strip() == "" or response_text.strip().lower() == "null":
-                            raise LLMParseError(
-                                "Пустой ответ от DeepSeek API",
-                                raw_response=response_text
-                            )
-
-                        logger.info(f"Full DeepSeek API response: {response_text}")
-
-                        # Проверяем статус ответа
-                        if response.status >= 400:
-                            error_details = {}
-                            try:
-                                error_details = json.loads(response_text)
-                            except:
-                                error_details = {"raw_text": response_text}
-
-                            logger.error(f"DeepSeek API error details: {json.dumps(error_details)}")
-
-                            # Генерируем соответствующее исключение в зависимости от кода ошибки
-                            if response.status == 503:
-                                # Сервис недоступен, следующая попытка может быть успешной
-                                raise LLMServerError(
-                                    f"DeepSeek API сервис недоступен: {response_text}",
-                                    status_code=response.status,
-                                    raw_response=error_details
-                                )
-                            else:
-                                # Другие ошибки HTTP
-                                raise LLMServerError(
-                                    f"DeepSeek API HTTP error {response.status}: {response_text}",
-                                    status_code=response.status,
-                                    raw_response=error_details
-                                )
-
-                        # Логируем размер ответа
-                        logger.info(f"DeepSeek API response size: {len(response_text)} bytes")
-
-                        # Парсим JSON ответ
-                        try:
-                            response_json = json.loads(response_text)
-                        except json.JSONDecodeError as e:
-                            logger.error(f"Failed to parse DeepSeek API response as JSON: {str(e)}")
-                            logger.info(f"Response text: {response_text}")
-                            raise LLMParseError(
-                                f"Ошибка парсинга JSON ответа: {str(e)}",
-                                raw_response=response_text
-                            )
-
-                        # Получаем содержимое из ответа
-                        if "choices" in response_json and len(response_json["choices"]) > 0:
-                            if "message" in response_json["choices"][0] and "content" in response_json["choices"][0][
-                                "message"]:
-                                content = response_json["choices"][0]["message"]["content"]
-
-                                if not content:
-                                    raise LLMParseError("Пустой контент в ответе", raw_response=response_json)
-
-                                # Логируем начало ответа для отладки
-                                logger.info(f"DeepSeek response content (truncated): {content[:1500]}...")
-
-                                await self.messenger_service.send_message(
-                                    settings.TELEGRAM_DEBUG_CHAT_ID,
-                                    f"*content:*\n{content}",
-                                    {
-                                        "bot_type": "debug"
-                                    },
-                                    "debug"
-                                )
-
-                                if "reasoning_content" in response_json["choices"][0]["message"]:
-                                    reasoning_content = response_json["choices"][0]["message"]["reasoning_content"]
-                                    await self.messenger_service.send_message(
-                                        settings.TELEGRAM_DEBUG_CHAT_ID,
-                                        f"*reasoning_content:*\n{reasoning_content}",
-                                        {
-                                            "bot_type": "debug"
-                                        },
-                                        "debug"
-                                    )
-
-                                if "usage" in response_json:
-                                    usage = response_json["usage"]
-                                    await self.messenger_service.send_message(
-                                        settings.TELEGRAM_DEBUG_CHAT_ID,
-                                        f"*usage:*/n{json.dumps(usage)}",
-                                        {
-                                            "bot_type": "debug"
-                                        },
-                                        "debug"
-                                    )
-
-                                if self.model == "deepseek-reasoner":
-                                    # Применить специальную обработку для DeepSeek Reasoner
-                                    return clean_json_from_markdown(content)
-                                else:
-                                    return content
-                            else:
-                                logger.error("Unexpected DeepSeek response structure: missing 'message' or 'content'")
-                                logger.info(f"Response JSON: {json.dumps(response_json)}")
-                                raise LLMParseError(
-                                    "Некорректная структура ответа: отсутствует 'message' или 'content'",
-                                    raw_response=response_json
-                                )
-                        else:
-                            logger.error("Unexpected DeepSeek response structure: missing 'choices'")
-                            raise LLMParseError(
-                                "Некорректная структура ответа: отсутствует 'choices'",
-                                raw_response=response_json
-                            )
-
-            except asyncio.TimeoutError:
-                logger.error(f"DeepSeek API request timed out after {self.timeout} seconds")
-                # Повышаем счетчик попыток и решаем нужно ли пробовать снова
-                retry_count += 1
-                if retry_count > self.max_retries:
-                    raise LLMTimeoutError(
-                        f"Превышено время ожидания ответа от DeepSeek API ({self.timeout} сек)"
-                    )
-                logger.warning(f"Повторная попытка {retry_count}/{self.max_retries}...")
-                # Небольшая задержка перед следующей попыткой
-                await asyncio.sleep(1)
-                continue
-
-            except (LLMServerError, LLMParseError) as e:
-                # Повышаем счетчик попыток, но только для определенных ошибок
-                retry_count += 1
-                if isinstance(e, LLMServerError) and e.status_code == 503 and retry_count <= self.max_retries:
-                    logger.warning(f"Сервис DeepSeek недоступен, повторная попытка {retry_count}/{self.max_retries}...")
-                    # Задержка перед следующей попыткой
-                    await asyncio.sleep(2 ** retry_count)  # Экспоненциальная задержка
-                    continue
-                # Если это не 503 ошибка или уже превышено максимальное количество попыток
-                raise
-
-            except Exception as e:
-                logger.error(f"Error calling DeepSeek API: {str(e)}")
-                raise LLMServiceError(f"Ошибка при вызове DeepSeek API: {str(e)}")
-
-        return "{}"
-
-
-    async def update_diet_plan(self,
-                               diet_plan: Dict[str, Any],
-                               update_request: str) -> Dict[str, Any]:
-        """
-        Обновляет план диеты на основе запроса пользователя с использованием DeepSeek
-
-        Args:
-            diet_plan: Существующий план диеты
-            update_request: Запрос пользователя на изменение плана
-
-        Returns:
-            Dict[str, Any]: Обновленные дни плана и комментарий
-        """
+    async def _notify_fallback(self, failed_model: DeepSeekModel, fallback_model: DeepSeekModel, error: str) -> None:
+        """Уведомляет о переключении на фолбек модель"""
         try:
-            system_prompt = create_full_diet_system_prompt()
-            user_prompt = update_full_diet_user_prompt(update_request)
-
-            history_messages = []
-
-            # Проверяем наличие метаданных генерации
-            if "diet_generation_metadata" in diet_plan and all(key in diet_plan["diet_generation_metadata"]
-                                                               for key in ["system_prompt", "user_prompt", "response"]):
-                metadata = diet_plan["diet_generation_metadata"]
-                # Создаем упрощенную версию плана диеты для истории сообщений
-                simplified_diet_plan = self.create_simplified_diet_plan(diet_plan)
-
-                history_messages = [
-                    # {"role": "system", "content": metadata["system_prompt"]},
-                    {"role": "user", "content": metadata["user_prompt"]},
-                    # {"role": "assistant", "content": metadata["response"]},
-                    {"role": "assistant", "content": json.dumps(simplified_diet_plan, ensure_ascii=False)},
-                ]
-
-            response = await self.generate_completion(system_prompt, user_prompt, history_messages, 1.5)
-
-            # Очищаем ответ от маркдауна, если есть
-            response = clean_json_from_markdown(response)
-
-            # Парсим JSON-ответ
-            try:
-                updates = json.loads(response)
-
-                # Проверяем корректность формата ответа
-                if "updated_days" not in updates:
-                    logger.error(f"Некорректный формат ответа от ИИ: {response}")
-                    return {"error": "Некорректный формат ответа"}
-
-                return updates
-            except json.JSONDecodeError:
-                logger.error(f"Не удалось распарсить ответ ИИ как JSON: {response}")
-                return {"error": "Ошибка при обработке ответа", "raw_response": response}
-
+            await self.messenger_service.send_message(
+                settings.TELEGRAM_DEBUG_CHAT_ID,
+                f"🔄 *Model Fallback*\n"
+                f"Failed: {failed_model.value}\n"
+                f"Fallback: {fallback_model.value}\n"
+                f"Error: {error[:200]}...",
+                {"bot_type": "debug"},
+                "debug"
+            )
         except Exception as e:
-            logger.error(f"Ошибка при обновлении плана диеты: {str(e)}")
-            return {"error": str(e)}
+            logger.error(f"Failed to send fallback notification: {str(e)}")
 
-
-
-    async def answer_nutrition_question(self,
-                                        user_id: str,
-                                        question: str) -> str:
-        """
-        Отвечает на вопрос о питании с использованием DeepSeek
-
-        Args:
-            user_id: ID пользователя
-            question: Вопрос о питании
-
-        Returns:
-            str: Ответ на вопрос
-        """
+    async def answer_nutrition_question(self, user_id: str, question: str) -> str:
+        """Отвечает на вопрос о питании (используется дефолтная модель)"""
         try:
-            # Получаем базовый системный промпт для вопросов о питании
             base_system_prompt = create_nutrition_question_prompt()
-
-            # Получаем промпт с командами
             commands_prompt = get_bot_commands_prompt()
-
-            # Объединяем промпты
             system_prompt = f"{base_system_prompt}\n\n{commands_prompt}"
 
             # Логируем system_prompt для отладки
@@ -426,37 +440,23 @@ class DeepSeekLLMService(BaseLLMService):
 
         except Exception as e:
             logger.error(f"Error answering nutrition question: {str(e)}")
-            return f"Извините, произошла ошибка при обработке вашего вопроса. Пожалуйста, попробуйте еще раз позже."
+            return "Извините, произошла ошибка при обработке вашего вопроса. Пожалуйста, попробуйте еще раз позже."
 
-    async def create_shopping_list(self,
-                                   diet_plan: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """
-        Создает список покупок на основе плана диеты
-TODO добавить отправку как первые сообщения для кеша стсьемный промт для генерации диеты и ответ ии с диетой, чтобы он кешировался и ответ был с учетом плана питания и данными пользователя
-        Args:
-            diet_plan: План диеты
-
-        Returns:
-            List[Dict[str, Any]]: Список покупок
-        """
+    async def create_shopping_list(self, diet_plan: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Создает список покупок (используется дефолтная модель)"""
         try:
-            # Получаем промпты для списка покупок
             system_prompt = create_shopping_list_system_prompt()
             user_prompt = create_shopping_list_user_prompt(diet_plan)
-
-            # Добавляем дополнительную инструкцию для возврата JSON
             system_prompt += "\nВажно: Вернуть только валидный JSON-массив без дополнительного текста."
             logger.info(f"Raw DeepSeek system_prompt: {system_prompt[:1500]}...")
             logger.info(f"Raw DeepSeek user_prompt: {user_prompt[:1500]}...")
 
-            # Вызываем DeepSeek API
             response = await self.generate_completion(system_prompt, user_prompt)
             logger.info(f"Raw DeepSeek response: {response}...")
 
             # Очищаем ответ от маркдауна если они есть
             response = clean_json_from_markdown(response)
 
-            # Парсим JSON-ответ
             try:
                 shopping_list = json.loads(response)
                 return shopping_list

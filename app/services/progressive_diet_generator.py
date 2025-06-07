@@ -161,7 +161,8 @@ class ProgressiveDietGenerator:
                     extra_prompt_for_single_day,
                     [
                         {"role": "user", "content": user_prompt},
-                    ]
+                    ],
+                    model="smart"
                 )
 
                 # Пытаемся распарсить ответ
