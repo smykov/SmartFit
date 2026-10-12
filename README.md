@@ -1,3 +1,7 @@
+> **Archived MVP (April–June 2025), not maintained.** An AI weight-loss assistant in WhatsApp for Guatemala: FastAPI, Firestore, Twilio, OpenAI with model fallback, Spanish/English localization, 118 tests. Kept public as a portfolio piece; dependencies and models are out of date.
+>
+> **MVP 2025, не поддерживается.** Репозиторий открыт как пример проекта; зависимости и модели устарели.
+
 # SmartFit - AI-ассистент для похудения
 
 SmartFit это MVP AI-ассистента для персонализированного контроля веса и здорового образа жизни, учитывающий местные продукты, бюджет и культурные особенности.
